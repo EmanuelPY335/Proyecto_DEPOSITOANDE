@@ -1,0 +1,7 @@
+ flask
+ flask-mysql
+ mysql-connector-python
+ werkzeug 
+ flask-sqlalchemy 
+ flask-cors 
+ flask-socketio 
