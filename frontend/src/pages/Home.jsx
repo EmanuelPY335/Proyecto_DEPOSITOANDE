@@ -1,81 +1,128 @@
-import React, { useState } from "react";
+// Home.jsx - REVISADO
+import React from "react";
 import { Link } from "react-router-dom";
-import { Home as HomeIcon, FileText, Layers, Menu } from "lucide-react";
-import "../styles/Home.css";
+import Sidebar from "../components/Sidebar"; // Se importa el Sidebar
+import "../styles/Home.css"; // Usa el Home.css (estilos ajustados)
+// Íconos de lucide-react:
+import { 
+  Settings, Bell, UserCircle, Search, 
+  Box, TrendingUp, Users, Clipboard, FileText, Layers, Archive 
+} from "lucide-react"; 
 
 const Home = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Simulación de datos para el Navbar
+  const userName = "Oscar Báez";
+  const notificationCount = 99;
 
-  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+  // Componente Navbar: Se mueve dentro para simplificar la composición
+  const DashboardNavbar = () => (
+    <nav className="navbar-dashboard">
+      <div className="navbar-left">
+        {/* Superior Izquierda: SISDEPO */}
+        <Settings size={24} className="navbar-logo-icon" />
+        <span className="navbar-brand-title">SISDEPO</span>
+      </div>
 
-  const navLinks = [
-    { path: "/home", label: "Inicio", icon: <HomeIcon size={18} /> },
-    { path: "/pag1", label: "Página 1", icon: <FileText size={18} /> },
-    { path: "/pag2", label: "Página 2", icon: <Layers size={18} /> },
-  ];
+      <div className="navbar-right"> 
+        {/* Campanita de Notificaciones */}
+        <div className="notification-icon-wrapper">
+          <Bell size={20} />
+          {notificationCount > 0 && <span className="notification-badge">{notificationCount}</span>}
+        </div>
+        
+        {/* Perfil del Usuario con Nombre */}
+        <Link to="/profile" className="navbar-profile-link">
+          <UserCircle size={28} className="profile-icon" />
+          <span className="profile-name">{userName}</span>
+        </Link>
+      </div>
+    </nav>
+  );
+
+  // Componente de Tarjetas 2x3
+  const DashboardCards = () => (
+    <div className="dashboard-content-grid">
+      
+      {/* Fila 1 */}
+      {/* Tarjeta 1: Pag1.jsx */}
+      <div className="card card-pag1">
+        <div className="card-header">
+          <FileText size={30} className="card-main-icon" />
+          <h3>Pag1.jsx</h3>
+        </div>
+        <p>Ver y resumir tus datos principales.</p>
+        <Link to="/pag1" className="card-button primary">Ir a Página 1</Link>
+      </div>
+
+      {/* Tarjeta 2: Pag2.jsx */}
+      <div className="card card-pag2">
+        <div className="card-header">
+          <Layers size={30} className="card-main-icon" />
+          <h3>Pag2.jsx</h3>
+        </div>
+        <p>Administra configuraciones y detalles.</p>
+        <Link to="/pag2" className="card-button secondary">Ir a Página 2</Link>
+      </div>
+      
+      {/* Tarjeta 3: Materiales (Nuevo) */}
+      <div className="card card-materiales">
+        <div className="card-header">
+          <Box size={30} className="card-main-icon" />
+          <h3>Materiales</h3>
+        </div>
+        <p>Control de stock actualizado y gestión de inventario.</p>
+        <Link to="/materiales" className="card-button tertiary">Ver Inventario</Link>
+      </div>
+      
+      {/* Fila 2 */}
+      {/* Tarjeta 4: Movimientos (Nuevo) */}
+      <div className="card card-movimientos">
+        <div className="card-header">
+          <TrendingUp size={30} className="card-main-icon" />
+          <h3>Movimientos</h3>
+        </div>
+        <p>Registro de entradas y salidas del depósito.</p>
+        <Link to="/movimientos" className="card-button quaternary">Registrar</Link>
+      </div>
+
+      {/* Tarjeta 5: Empleados (Nuevo) */}
+      <div className="card card-empleados">
+        <div className="card-header">
+          <Users size={30} className="card-main-icon" />
+          <h3>Empleados</h3>
+        </div>
+        <p>Gestión de usuarios y accesos al sistema.</p>
+        <Link to="/empleados" className="card-button quinary">Gestionar</Link>
+      </div>
+
+      {/* Tarjeta 6: Proveedores (Nuevo) */}
+      <div className="card card-proveedores">
+        <div className="card-header">
+          <Archive size={30} className="card-main-icon" />
+          <h3>Proveedores</h3>
+        </div>
+        <p>Administra la lista de proveedores y contactos.</p>
+        <Link to="/proveedores" className="card-button senary">Ver Lista</Link>
+      </div>
+
+    </div>
+  );
 
   return (
-    <div className="home-container">
-      {/* Navbar para PC */}
-      <nav className="navbar">
-        <div className="logo">Mi App</div>
-        <ul className="nav-links">
-          {navLinks.map((link) => (
-            <li key={link.path}>
-              <Link to={link.path}>
-                {link.icon} {link.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-        <button className="menu-btn" onClick={toggleSidebar}>
-          <Menu size={24} />
-        </button>
-      </nav>
-
-      {/* Sidebar para móvil */}
-      <div className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-        <ul>
-          {navLinks.map((link) => (
-            <li key={link.path} onClick={toggleSidebar}>
-              <Link to={link.path}>
-                {link.icon} {link.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Contenido principal */}
-      <div className="content">
-        <h1>Bienvenido a la Home</h1>
-        <p>Aquí va el contenido principal.</p>
-              {/* Card historial */}
-
-        <div className="cards-container">
-          <div className="card">
-            <h3>📊 Reportes</h3>
-            <p>Consulta estadísticas en tiempo real.</p>
-          </div>
-          <div className="card">
-            <h3>⚙️ Configuración</h3>
-            <p>Administra usuarios y permisos.</p>
-          </div>
-          <div className="card">
-            <h3>📦 Inventario</h3>
-            <p>Control de stock actualizado.</p>
-          </div>
-          <div className="card">
-            <h3>📝 Tareas</h3>
-            <p>Organiza y gestiona actividades.</p>
-          </div>
+    <div className="dashboard-layout">
+      <DashboardNavbar />
+      
+      {/* Contenedor principal con Sidebar y Contenido */}
+      <div className="main-area">
+        <Sidebar /> {/* Sidebar fijo en la izquierda */}
+        
+        <div className="content-dashboard">
+          <h1>Gestión de Depósito</h1>
+          <p className="subtitle">Bienvenido, {userName}.</p>
+          
+          <DashboardCards />
         </div>
       </div>
-             {/* Card historial */}
-        <div className="card historial">
-          <h3>📜 Historial</h3>
-          <p>Aquí se mostrarán las últimas actividades.</p>
-        </div>
     </div>
   );
 };

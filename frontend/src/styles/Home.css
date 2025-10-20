@@ -1,215 +1,305 @@
+/* Home.css - REVISADO */
+
 /* ============================
-   General
+   General & Layout
 ============================ */
-body, .home-container {
+body {
   font-family: 'Poppins', sans-serif;
   margin: 0;
   padding: 0;
-  background: #f4f6fc;
+  background: #f4f6fc; /* Fondo general gris claro */
   color: #333;
 }
 
+/* Contenedor principal: ocupa toda la vista */
+.dashboard-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Área principal (Debajo del Navbar): Sidebar + Contenido */
+.main-area {
+  display: flex;
+  flex-grow: 1;
+  padding-top: 70px; /* Espacio para el Navbar fijo */
+}
+
 /* ============================
-   Navbar general (fijo arriba)
+   Navbar (Superior)
 ============================ */
-.navbar {
-  position: fixed;       /* fijo en la parte superior */
+.navbar-dashboard {
+  position: fixed;
   top: 0;
   left: 0;
-  width: 100%;           /* ocupa todo el ancho */
+  width: 100%;
+  height: 70px; 
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 40px 25px;;
-  background: linear-gradient(90deg, #1e1e2f, #2a2a40);
-  color: #fff;
-  z-index: 10000;        /* por encima de todo */
+  padding: 0 30px;
+  background: #ffffff; /* Fondo blanco (como en la imagen) */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  z-index: 1000;
   box-sizing: border-box;
-  flex-wrap: wrap;
 }
 
-/* Logo */
-.navbar .logo {
-  font-size: 22px;
-  font-weight: 700;
-  white-space: nowrap;   /* evita que se parta en varias líneas */
-}
-
-/* Links */
-.navbar .nav-links {
-  display: flex;
-  gap: 15px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  flex-wrap: wrap;
-}
-
-.navbar .nav-links li a {
-  text-decoration: none;
-  color: #cfcfcf;
-  font-weight: 500;
+.navbar-left {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 14px;
-  transition: all 0.2s ease;
+  gap: 10px;
 }
 
-.navbar .nav-links li a:hover {
-  color: #fff;
-  transform: scale(1.05);
+.navbar-logo-icon {
+  color: #007bff; /* Color del ícono de engranaje */
 }
 
-/* Botón hamburger */
-.menu-btn {
-  display: none;
-  background: none;
+.navbar-brand-title {
+  font-size: 1.3em;
+  font-weight: 700;
+  color: #333;
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+}
+
+/* Estilos de Búsqueda */
+.navbar-search-wrapper {
+  display: flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 20px;
+  background: #f8f9fa;
+}
+
+.search-icon {
+  color: #6c757d;
+  margin-right: 5px;
+}
+
+.search-input {
   border: none;
-  color: #fff;
+  background: transparent;
+  outline: none;
+  font-size: 0.9em;
+  width: 120px;
+}
+
+/* Estilos de Notificaciones */
+.notification-icon-wrapper {
+  position: relative;
+  color: #6c757d;
   cursor: pointer;
 }
 
-/* ============================
-   Sidebar móvil
-============================ */
-.sidebar {
-  position: fixed;
-  top: 0;
-  left: -300px;
-  width: 240px;
-  height: 100%;
-  background: linear-gradient(180deg, #1e1e2f, #2a2a40);
-  padding: 60px 20px 20px 20px;
-  transition: left 0.3s ease;
-  z-index: 9999;
-  display: none; /* oculto por defecto en PC */
-}
-.sidebar.open {
-  left: 0;
+.notification-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background-color: #dc3545;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 0.7em;
+  line-height: 1;
 }
 
-.sidebar ul {
-  list-style: none;
-  padding: 0;
-}
-
-.sidebar ul li {
-  margin: 20px 0;
-}
-
-.sidebar ul li a {
-  text-decoration: none;
-  color: #cfcfcf;
-  font-weight: 500;
+/* Estilos de Perfil */
+.navbar-profile-link {
   display: flex;
   align-items: center;
-  gap: 8px;
-  transition: all 0.3s ease;
+  gap: 10px;
+  text-decoration: none;
+  color: #333;
+  font-weight: 500;
 }
 
-.sidebar ul li a:hover {
-  color: #fff;
-  transform: translateX(5px);
-}
-
-@media (max-width: 768px) {
-  .sidebar {
-    display: block;
-  }
-
-  .sidebar.open {
-    left: 0;
-  }
+.profile-icon {
+  color: #007bff; /* Color de ícono de perfil */
 }
 
 /* ============================
-   Contenido principal
+   Sidebar (Izquierda)
 ============================ */
-.content {
-  flex: 1;
-  padding: 0px 40px 40px 40px;
+.sidebar-dashboard {
+  width: 180px; /* Ancho fijo */
+  padding: 20px 0;
+  background: #ffffff; /* Fondo blanco */
+  box-shadow: 2px 0 4px rgba(0,0,0,0.02);
+  flex-shrink: 0;
+  height: calc(100vh - 70px); /* Ocupa el espacio restante bajo el navbar */
+  position: sticky; /* Fijo en la posición */
+  top: 70px;
 }
 
-.historial {
-  margin-bottom: 30px;
-  background: linear-gradient(145deg, #fdfdfd, #f2f2f5);
+.sidebar-nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
-.content h1 {
-  margin-bottom: 20px;
-  font-size: 30px;
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  text-decoration: none;
+  color: #555;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border-left: 4px solid transparent;
+}
+
+.sidebar-link:hover {
+  background-color: #f0f2f5;
+  color: #007bff;
+}
+
+.sidebar-link.active {
+  background-color: #e6f7ff; /* Fondo para activo */
+  color: #007bff; /* Color de texto para activo */
+  border-left-color: #007bff; /* Indicador azul para el activo */
   font-weight: 600;
 }
 
-.cards-container {
+/* ============================
+   Contenido Principal
+============================ */
+.content-dashboard {
+  flex-grow: 1;
+  padding: 30px;
+  background: #f4f6fc; /* Fondo de la zona de contenido */
+}
+
+/* ============================
+   Tarjetas (Cards) - Estructura 2x3
+============================ */
+.dashboard-content-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 25px;
+  grid-template-columns: repeat(3, 1fr); /* 3 columnas */
+  gap: 20px;
 }
 
 .card {
-  background: linear-gradient(145deg, #ffffff, #f1f3f6);
-  border-radius: 16px;
+  background: #ffffff;
+  border-radius: 12px;
   padding: 25px;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
-  opacity: 0;
-  transform: translateY(20px);
-  animation: fadeInUp 0.6s forwards;
 }
-
-
-/* Animaciones */
-.card:nth-child(1) { animation-delay: 0.1s; }
-.card:nth-child(2) { animation-delay: 0.2s; }
-.card:nth-child(3) { animation-delay: 0.3s; }
-.card:nth-child(4) { animation-delay: 0.4s; }
 
 .card:hover {
-  transform: translateY(-10px) scale(1.05);
-  box-shadow: 0 12px 25px rgba(0,0,0,0.2);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 15px rgba(0,0,0,0.1);
 }
 
-@keyframes fadeInUp {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
-/* Responsivo: en móviles se apilan */
-@media (max-width: 768px) {
-  .cards-container {
-    grid-template-columns: 1fr; /* solo una columna */
-  }
+.card-header h3 {
+  font-size: 1.1em;
+  margin: 0;
+  color: #333;
 }
+
+.card-main-icon {
+  /* Estilo general del icono, se redefine en colores abajo */
+}
+
+.card-pag1 .card-main-icon { color: #007bff; }
+.card-pag2 .card-main-icon { color: #28a745; }
+.card-materiales .card-main-icon { color: #ffc107; }
+.card-movimientos .card-main-icon { color: #fd7e14; }
+.card-empleados .card-main-icon { color: #6f42c1; }
+.card-proveedores .card-main-icon { color: #dc3545; }
+
+.card p {
+  font-size: 0.9em;
+  color: #6c757d;
+  margin-bottom: 15px;
+}
+
+.card-button {
+  display: inline-block;
+  padding: 8px 15px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 0.9em;
+  font-weight: 600;
+  text-align: center;
+  transition: background-color 0.2s ease;
+}
+
+/* Colores de los botones de las tarjetas */
+.card-button.primary { background-color: #007bff; color: white; }
+.card-button.secondary { background-color: #28a745; color: white; }
+.card-button.tertiary { background-color: #ffc107; color: #333; }
+.card-button.quaternary { background-color: #fd7e14; color: white; }
+.card-button.quinary { background-color: #6f42c1; color: white; }
+.card-button.senary { background-color: #dc3545; color: white; }
+
+
 /* ============================
    Responsividad
 ============================ */
-@media (max-width: 768px) {
-  .navbar .nav-links {
-    display: none;  /* ocultamos links en móvil */
-  }
-
-  .menu-btn {
-    display: block; /* mostramos botón hamburguesa */
-  }
-
-  .content {
-    padding: 100px 20px 20px 20px; /* padding top suficiente para navbar fijo */
+@media (max-width: 1024px) {
+  .dashboard-content-grid {
+    grid-template-columns: repeat(2, 1fr); /* 2 columnas en tablets */
   }
 }
 
-@media (max-width: 500px) {
-  .cards-container {
-    display: flex;
-    overflow-x: auto;
-    gap: 15px;
+@media (max-width: 768px) {
+  /* Diseño adaptado a móvil: Sidebar se convierte en horizontal */
+  .main-area {
+    flex-direction: column;
+    padding-top: 60px;
   }
 
-  .card {
-    min-width: 200px;
-    flex: 0 0 auto;
+  .navbar-dashboard {
+    height: 60px;
+  }
+  
+  .sidebar-dashboard {
+    width: 100%;
+    height: auto;
+    position: relative;
+    top: auto;
+    padding: 10px 0;
+  }
+  
+  .sidebar-nav ul {
+    display: flex;
+    justify-content: space-around;
+  }
+
+  .sidebar-link {
+    border-left: none;
+    border-bottom: 3px solid transparent;
+    padding: 10px 5px;
+  }
+  
+  .sidebar-link.active {
+    border-left-color: transparent;
+    border-bottom-color: #007bff;
+  }
+  
+  .sidebar-label {
+    display: none; /* Ocultar el texto en el sidebar móvil */
+  }
+
+  .content-dashboard {
+    padding: 20px;
+  }
+
+  .dashboard-content-grid {
+    grid-template-columns: 1fr; /* 1 columna en móviles */
   }
 }
