@@ -1,32 +1,37 @@
-// Sidebar.jsx - REVISADO
+// Sidebar.jsx
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
-// Íconos necesarios: Home (Casita), Settings (Engranaje)
-import { Home, Settings, HelpCircle, FileText } from "lucide-react"; 
+import { Link, useLocation, useNavigate } from "react-router-dom"; // <--- CAMBIO: Importar useNavigate
+// <--- CAMBIO: Importar icono de Logout --->
+import { Home, Settings, HelpCircle, FileText, LogOut } from "lucide-react"; 
 
 const Sidebar = () => {
-  const location = useLocation(); // Hook para saber qué enlace está activo
+  const location = useLocation();
+  const navigate = useNavigate(); // <--- CAMBIO: Hook para navegar
 
-  // Links de la Sidebar, según la imagen
+  // <--- CAMBIO: Función de Logout --->
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("user_nombre");
+    navigate("/"); // Redirigir al login
+  };
+
+  // Links de la Sidebar
   const sidebarLinks = [
-    // El primer icono es la Casita para el Home/Pantalla principal
-    { path: "/Home", label: "Home", icon: <Home size={18} /> }, 
-    // El segundo icono es el Engranaje para Configuración
+    { path: "/home", label: "Home", icon: <Home size={18} /> }, 
     { path: "/config", label: "Configuración", icon: <Settings size={18} /> }, 
     { path: "/help", label: "Ayuda", icon: <HelpCircle size={18} /> },
     { path: "/reports", label: "Informes", icon: <FileText size={18} /> },
   ];
 
   return (
-    // La clase 'sidebar-dashboard' recibe los nuevos estilos
     <div className="sidebar-dashboard">
       <nav className="sidebar-nav">
+        {/* Usamos <ul> separados para empujar el logout al fondo */}
         <ul>
           {sidebarLinks.map((link) => (
             <li key={link.path}>
               <Link 
                 to={link.path} 
-                // La clase 'active' resalta el enlace actual
                 className={`sidebar-link ${location.pathname === link.path ? 'active' : ''}`}
               >
                 {link.icon} 
@@ -34,6 +39,21 @@ const Sidebar = () => {
               </Link>
             </li>
           ))}
+        </ul>
+        
+        {/* <--- CAMBIO: Botón de Logout ---> */}
+        <ul style={{marginTop: 'auto'}}> {/* Empuja al fondo */}
+           <li>
+              {/* Usamos un botón para semántica, pero con la clase de link */}
+              <button 
+                onClick={handleLogout} 
+                className="sidebar-link"
+                style={{width: '100%', background: 'none', border: 'none', cursor: 'pointer'}}
+              >
+                <LogOut size={18} /> 
+                <span className="sidebar-label">Cerrar Sesión</span>
+              </button>
+            </li>
         </ul>
       </nav>
     </div>

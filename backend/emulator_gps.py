@@ -5,21 +5,22 @@ import random
 from datetime import datetime, timezone
 
 class GPSEmulator:
-    def __init__(self, camion_id, backend_url):
-        self.camion_id = camion_id
+    # --- CAMBIO: ID_VEHICULO en mayúscula ---
+    def __init__(self, ID_VEHICULO, backend_url):
+        self.ID_VEHICULO = ID_VEHICULO
         self.backend_url = backend_url
-        self.lat = -27.2924466
-        self.lng = -55.868871
+        self.lat = -27.2924466 # Coordenadas base
+        self.lng = -55.868871 # Coordenadas base
         
     def generate_gps_data(self):
-        # 🔽 Cambia a variación MUY pequeña
         self.lat += random.uniform(-0.0001, 0.0001)  
         self.lng += random.uniform(-0.0001, 0.0001)  
         
+        # --- CAMBIO: Nombres de claves actualizados al SQL (MAYÚSCULAS) ---
         return {
-            "camion_id": self.camion_id,
-            "lat": round(self.lat, 7),  
-            "lng": round(self.lng, 7), 
+            "ID_VEHICULO": self.ID_VEHICULO,
+            "LATITUD": round(self.lat, 7),  
+            "LONGITUD": round(self.lng, 7), 
             "timestamp": datetime.now(timezone.utc).isoformat() 
         }
     
@@ -33,7 +34,7 @@ class GPSEmulator:
                 headers={"Content-Type": "application/json"},
                 timeout=5
             )
-            print(f"✅ Datos enviados | Status: {response.status_code}")
+            print(f"✅ Datos GPS enviados | Vehículo: {self.ID_VEHICULO} | Status: {response.status_code}")
         except Exception as e:
             print(f"❌ Error enviando datos: {e}")
     
@@ -45,8 +46,9 @@ class GPSEmulator:
 
 # Uso
 if __name__ == "__main__":
-    emulator = GPSEmulator(1, "http://localhost:5000")
-    print("🚀 Emulador GPS iniciado. Presiona Ctrl+C para detener.")
+    # ¡Asegúrate de tener un VEHICULO con ID_VEHICULO=1 en tu base de datos!
+    emulator = GPSEmulator(1, "http://localhost:5000") 
+    print("🚀 Emulador GPS iniciado (Vehículo 1). Presiona Ctrl+C para detener.")
     try:
         emulator.run_emulation(interval=30)
     except KeyboardInterrupt:

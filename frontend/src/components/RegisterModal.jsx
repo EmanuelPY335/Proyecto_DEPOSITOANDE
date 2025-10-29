@@ -1,7 +1,35 @@
-import React from "react";
-import styles from "../styles/Login.module.css"; // 👈 Mismo archivo CSS
+// proyecto_gemi/frontend/src/components/RegisterModal.jsx
+
+import React, { useState, useEffect } from "react"; // <--- CAMBIO: Importar hooks
+import styles from "../styles/Login.module.css";
 
 const RegisterModal = ({ registro, handleRegistroChange, handleRegistroSubmit, onClose }) => {
+  
+  // <--- CAMBIO: Nuevo estado para guardar la lista de depósitos
+  const [depositosList, setDepositosList] = useState([]);
+
+  // <--- CAMBIO: useEffect para cargar los depósitos desde el backend
+  useEffect(() => {
+    async function fetchDepositos() {
+      try {
+        // Llamamos a la nueva ruta del backend
+        const response = await fetch("http://127.0.0.1:5000/api/depositos");
+        const data = await response.json();
+        
+        if (response.ok) {
+          setDepositosList(data); // Guardamos la lista en el estado
+        } else {
+          console.error("Error al cargar depósitos:", data.error);
+        }
+      } catch (error) {
+        console.error("Error de red al cargar depósitos:", error);
+      }
+    }
+    
+    fetchDepositos(); // Ejecutamos la función al cargar el modal
+  }, []); // El array vacío [] significa que se ejecuta solo 1 vez
+
+
   return (
     <div 
       className={styles.modal} 
@@ -47,16 +75,23 @@ const RegisterModal = ({ registro, handleRegistroChange, handleRegistroSubmit, o
             className={styles.modalInput}
           />
           
+          {/* <--- CAMBIO: Select de Cargo eliminado ---> */}
+
+          {/* <--- CAMBIO: Añadimos el <select> de Depósitos ---> */}
           <select 
-            name="cargo" 
-            value={registro.cargo} 
+            name="deposito" 
+            value={registro.deposito} // Esto guardará el ID_DEPOSITO
             onChange={handleRegistroChange} 
             required 
             className={styles.modalSelect}
           >
-            <option value="">--Selecciona un cargo--</option>
-            <option value="Empleado">Empleado</option>
-            <option value="Contratista">Contratista</option>
+            <option value="">-- Selecciona tu Depósito --</option>
+            
+            {depositosList.map((deposito) => (
+              <option key={deposito.ID_DEPOSITO} value={deposito.ID_DEPOSITO}>
+                {deposito.NOMBRE}
+              </option>
+            ))}
           </select>
 
           <input 

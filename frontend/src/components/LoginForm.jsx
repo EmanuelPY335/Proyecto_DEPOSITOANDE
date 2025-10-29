@@ -1,6 +1,8 @@
+// LoginForm.jsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import RegisterModal from "./RegisterModal"; 
+import ForgotPassModal from "./ForgotPassModal"; // Asumiendo que mantienes la recuperación
 import styles from "../styles/Login.module.css";
 
 const LoginForm = () => {
@@ -8,9 +10,10 @@ const LoginForm = () => {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false); 
 
   const [registro, setRegistro] = useState({
-    nombre: "", apellido: "", fecha: "", cedula: "", cargo: "",
+    nombre: "", apellido: "", fecha: "", cedula: "", deposito: "",
     telefono: "", correo: "", contrasena: "", confirmar: "",
   });
 
@@ -24,11 +27,16 @@ const LoginForm = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
+      
       const data = await response.json();
-      if (data.success) {
+      
+      // <--- CAMBIO: Guardar el token en localStorage --->
+      if (data.access_token) {
+        localStorage.setItem("access_token", data.access_token);
+        localStorage.setItem("user_nombre", data.nombre); // Opcional: guardar nombre
         navigate("/home");
       } else {
-        setMessage(data.message);
+        setMessage(data.message || "Correo o contraseña incorrectos");
       }
     } catch (error) {
       setMessage("Ocurrió un error en el servidor");
@@ -41,6 +49,7 @@ const LoginForm = () => {
 
   const handleRegistroSubmit = async (e) => {
     e.preventDefault();
+    // (Lógica de registro sin cambios)
     try {
       const response = await fetch("http://127.0.0.1:5000/api/registro", {
         method: "POST",
@@ -60,7 +69,6 @@ const LoginForm = () => {
   };
 
   return (
-    /* 👇 CAMBIO PRINCIPAL: usar loginWrapper en lugar de body */
     <div className={styles.loginWrapper}>
       <div className={styles.loginContainer}>
         <h2>Inicia Sesión</h2>
@@ -94,9 +102,13 @@ const LoginForm = () => {
           >
             Crear cuenta
           </button>
-          <a href="/recuperar-contrasena" className={styles.forgotLink}>
+          <button
+            type="button"
+            className={styles.forgotLink}
+            onClick={() => setShowForgotModal(true)}
+          >
             Olvidé la contraseña
-          </a>
+          </button>
         </div>
 
         {message && <p className={styles.loginMessage}>{message}</p>}
@@ -109,6 +121,11 @@ const LoginForm = () => {
             onClose={() => setShowModal(false)}
           />
         )}
+        
+        {showForgotModal && (
+          <ForgotPassModal onClose={() => setShowForgotModal(false)} />
+        )}
+
       </div>
     </div>
   );

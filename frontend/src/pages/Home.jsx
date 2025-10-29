@@ -1,36 +1,30 @@
 // Home.jsx - REVISADO
 import React from "react";
 import { Link } from "react-router-dom";
-import Sidebar from "../components/Sidebar"; // Se importa el Sidebar
-import "../styles/Home.css"; // Usa el Home.css (estilos ajustados)
-// Íconos de lucide-react:
+import Sidebar from "../components/Sidebar"; 
+import "../styles/Home.css"; 
 import { 
-  Settings, Bell, UserCircle, Search, 
-  Box, TrendingUp, Users, Clipboard, FileText, Layers, Archive 
+  Settings, Bell, UserCircle, 
+  Box, TrendingUp, Users, Clipboard, FileText, Layers 
+  // --- CAMBIO: 'Archive' (Proveedores) eliminado, 'Clipboard' (Órdenes) ya estaba ---
 } from "lucide-react"; 
 
 const Home = () => {
-  // Simulación de datos para el Navbar
-  const userName = "Oscar Báez";
-  const notificationCount = 99;
+  const userName = "Oscar Báez"; // Simulación
+  const notificationCount = 99; // Simulación
 
-  // Componente Navbar: Se mueve dentro para simplificar la composición
+  // (Componente DashboardNavbar sin cambios)
   const DashboardNavbar = () => (
     <nav className="navbar-dashboard">
       <div className="navbar-left">
-        {/* Superior Izquierda: SISDEPO */}
         <Settings size={24} className="navbar-logo-icon" />
         <span className="navbar-brand-title">SISDEPO</span>
       </div>
-
       <div className="navbar-right"> 
-        {/* Campanita de Notificaciones */}
         <div className="notification-icon-wrapper">
           <Bell size={20} />
           {notificationCount > 0 && <span className="notification-badge">{notificationCount}</span>}
         </div>
-        
-        {/* Perfil del Usuario con Nombre */}
         <Link to="/profile" className="navbar-profile-link">
           <UserCircle size={28} className="profile-icon" />
           <span className="profile-name">{userName}</span>
@@ -39,22 +33,22 @@ const Home = () => {
     </nav>
   );
 
-  // Componente de Tarjetas 2x3
+  // (Componente DashboardCards CON CAMBIOS)
   const DashboardCards = () => (
     <div className="dashboard-content-grid">
       
       {/* Fila 1 */}
-      {/* Tarjeta 1: Pag1.jsx */}
+      {/* --- CAMBIO: Tarjeta 1 actualizada para el Mapa GPS --- */}
       <div className="card card-pag1">
         <div className="card-header">
           <FileText size={30} className="card-main-icon" />
-          <h3>Pag1.jsx</h3>
+          <h3>Mapa de Vehículos</h3>
         </div>
-        <p>Ver y resumir tus datos principales.</p>
-        <Link to="/pag1" className="card-button primary">Ir a Página 1</Link>
+        <p>Monitoreo en tiempo real de la flota.</p>
+        <Link to="/pag1" className="card-button primary">Ver Mapa</Link>
       </div>
 
-      {/* Tarjeta 2: Pag2.jsx */}
+      {/* Tarjeta 2: Pag2.jsx (Sin cambios) */}
       <div className="card card-pag2">
         <div className="card-header">
           <Layers size={30} className="card-main-icon" />
@@ -64,7 +58,7 @@ const Home = () => {
         <Link to="/pag2" className="card-button secondary">Ir a Página 2</Link>
       </div>
       
-      {/* Tarjeta 3: Materiales (Nuevo) */}
+      {/* Tarjeta 3: Materiales (Sin cambios) */}
       <div className="card card-materiales">
         <div className="card-header">
           <Box size={30} className="card-main-icon" />
@@ -75,7 +69,7 @@ const Home = () => {
       </div>
       
       {/* Fila 2 */}
-      {/* Tarjeta 4: Movimientos (Nuevo) */}
+      {/* Tarjeta 4: Movimientos (Sin cambios) */}
       <div className="card card-movimientos">
         <div className="card-header">
           <TrendingUp size={30} className="card-main-icon" />
@@ -85,7 +79,7 @@ const Home = () => {
         <Link to="/movimientos" className="card-button quaternary">Registrar</Link>
       </div>
 
-      {/* Tarjeta 5: Empleados (Nuevo) */}
+      {/* Tarjeta 5: Empleados (Sin cambios) */}
       <div className="card card-empleados">
         <div className="card-header">
           <Users size={30} className="card-main-icon" />
@@ -95,14 +89,14 @@ const Home = () => {
         <Link to="/empleados" className="card-button quinary">Gestionar</Link>
       </div>
 
-      {/* Tarjeta 6: Proveedores (Nuevo) */}
-      <div className="card card-proveedores">
+      {/* --- CAMBIO: Tarjeta 6 'Proveedores' reemplazada por 'Órdenes de Trabajo' --- */}
+      <div className="card card-ordenes"> {/* Clase CSS opcional nueva */}
         <div className="card-header">
-          <Archive size={30} className="card-main-icon" />
-          <h3>Proveedores</h3>
+          <Clipboard size={30} className="card-main-icon" />
+          <h3>Órdenes de Trabajo</h3>
         </div>
-        <p>Administra la lista de proveedores y contactos.</p>
-        <Link to="/proveedores" className="card-button senary">Ver Lista</Link>
+        <p>Asignar y monitorear tareas del personal.</p>
+        <Link to="/ordenes-trabajo" className="card-button senary">Ver Órdenes</Link>
       </div>
 
     </div>
@@ -111,15 +105,11 @@ const Home = () => {
   return (
     <div className="dashboard-layout">
       <DashboardNavbar />
-      
-      {/* Contenedor principal con Sidebar y Contenido */}
       <div className="main-area">
-        <Sidebar /> {/* Sidebar fijo en la izquierda */}
-        
+        <Sidebar />
         <div className="content-dashboard">
           <h1>Gestión de Depósito</h1>
           <p className="subtitle">Bienvenido, {userName}.</p>
-          
           <DashboardCards />
         </div>
       </div>
