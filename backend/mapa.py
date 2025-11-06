@@ -1,36 +1,24 @@
 # mapa.py
 from flask import Blueprint, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
 import datetime
-from flask_jwt_extended import jwt_required # <--- CAMBIO: Importar
+from flask_jwt_extended import jwt_required 
+
+# --- IMPORTACIONES MODIFICADAS ---
+# Importamos 'db' y los modelos que necesitamos desde db.py
+from db import db, Vehiculo, PosicionGps
+# --- FIN DE MODIFICACIÓN ---
 
 mapa_bp = Blueprint("mapa", __name__)
-db = SQLAlchemy()
+
+# SocketIO se define aquí, pero se inicializa en main.py
 socketio = SocketIO()
 
-# ... (Modelos Vehiculo y PosicionGps sin cambios) ...
-class Vehiculo(db.Model):
-    __tablename__ = "VEHICULO"
-    ID_VEHICULO = db.Column(db.Integer, primary_key=True)
-    ID_EMPLEADO = db.Column(db.Integer, db.ForeignKey("EMPLEADO.ID_EMPLEADO"), nullable=False)
-    MATRICULA = db.Column(db.String(10), nullable=False, unique=True)
-    MARCA = db.Column(db.String(40))
-    MODELO = db.Column(db.String(30))
-    posiciones = db.relationship('PosicionGps', backref='vehiculo', lazy=True)
-
-class PosicionGps(db.Model):
-    __tablename__ = "REGISTRO_GPS"
-    ID_REGISTRO_GPS = db.Column(db.Integer, primary_key=True)
-    ID_VEHICULO = db.Column(db.Integer, db.ForeignKey("VEHICULO.ID_VEHICULO"), nullable=False)
-    LATITUD = db.Column(db.DECIMAL(10, 7))
-    LONGITUD = db.Column(db.DECIMAL(10, 7))
-    FECHA_HORA = db.Column(db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+# --- LOS MODELOS (Vehiculo, PosicionGps) FUERON ELIMINADOS DE AQUÍ ---
 
 # ---------------- RUTAS GPS ----------------
 
 @mapa_bp.route("/gps/tracking", methods=["POST"])
-# --- (SIN @jwt_required() - Esta ruta es para el dispositivo GPS) ---
 def receive_gps_data():
     """Recibe datos GPS del Raspberry Pi o emulador"""
     try:
@@ -38,6 +26,7 @@ def receive_gps_data():
         if not data or 'ID_VEHICULO' not in data or 'LATITUD' not in data or 'LONGITUD' not in data:
             return jsonify({'error': 'Datos incompletos. Se requieren ID_VEHICULO, LATITUD y LONGITUD'}), 400
         
+        # Esta lógica ahora funciona porque el modelo está centralizado
         pos = PosicionGps(
             ID_VEHICULO=data['ID_VEHICULO'],
             LATITUD=data['LATITUD'],
@@ -52,20 +41,20 @@ def receive_gps_data():
             "LATITUD": float(data['LATITUD']), 
             "LONGITUD": float(data['LONGITUD']),
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
-        }, broadcast=True)
+        }, room='/')
         
         return jsonify({'message': 'Datos GPS recibidos correctamente', 'id': pos.ID_REGISTRO_GPS}), 201
     
     except Exception as e:
         db.session.rollback()
+        print(f"Error en /gps/tracking: {e}") # Añadido para mejor depuración
         return jsonify({'error': str(e)}), 500
 
 @mapa_bp.route("/vehicles/active", methods=["GET"])
-@jwt_required() # <--- CAMBIO: Ruta protegida
+@jwt_required()
 def get_active_vehicles():
     """Obtiene vehículos activos en las últimas 2 horas"""
     try:
-        # ... (lógica interna sin cambios) ...
         from datetime import timedelta
         two_hours_ago = datetime.datetime.now(datetime.timezone.utc) - timedelta(hours=2)
         
@@ -101,10 +90,11 @@ def get_active_vehicles():
         return jsonify(result)
     
     except Exception as e:
+        print(f"Error en /vehicles/active: {e}") # Añadido para mejor depuración
         return jsonify({'error': str(e)}), 500
 
 @mapa_bp.route("/vehicles/<int:id_vehiculo>/location", methods=["GET"])
-@jwt_required() # <--- CAMBIO: Ruta protegida
+@jwt_required()
 def get_vehicle_location(id_vehiculo):
     """Obtiene la última ubicación de un vehículo específico"""
     latest_position = PosicionGps.query.filter_by(ID_VEHICULO=id_vehiculo)\

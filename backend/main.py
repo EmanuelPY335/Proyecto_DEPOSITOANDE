@@ -1,326 +1,292 @@
-# main.py
+# sisdepo/backend/main.py
 from flask import Flask, request, jsonify
-from werkzeug.security import generate_password_hash, check_password_hash
-import mysql.connector
+from sqlalchemy.exc import IntegrityError
 from flask_cors import CORS
-import secrets # Para generar la clave secreta
-from datetime import datetime, timedelta # Para la expiración del token de reseteo
+import secrets
+import datetime
+from flask_jwt_extended import (
+    create_access_token, jwt_required, JWTManager, get_jwt
+)
+from flask_mail import Mail, Message
 
-# Importar JWT
-from flask_jwt_extended import create_access_token, jwt_required, JWTManager, get_jwt
+# --- IMPORTACIONES INTERNAS ---
+from mapa import mapa_bp, socketio
+from perfil import perfil_bp
+from roles_permisos import role_required, asignar_rol, crear_rol, obtener_roles
+from db import (
+    db, Usuario, Empleado, Deposito,
+    Material, PasswordResetToken, Rol,
+    Vehiculo, PosicionGps
+)
 
-# Importar Flask-Mail
-from flask_mail import Mail, Message  
-
-# Importar componentes del mapa
-from mapa import mapa_bp, db, socketio
-
-
+# -----------------------------------------------------------------
+# 🔧 CONFIGURACIÓN PRINCIPAL
+# -----------------------------------------------------------------
 app = Flask(__name__)
-# Permitir peticiones desde tu frontend (React corre en puerto 3000 por defecto)
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
 
-# Configuración de JWT
-app.config["JWT_SECRET_KEY"] = secrets.token_hex(32) 
+# --- CORS ---
+CORS(
+    app,
+    resources={r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}},
+    supports_credentials=True,
+    allow_headers=["Authorization", "Content-Type"]
+)
+
+# --- JWT ---
+app.config["JWT_SECRET_KEY"] = "clave_super_segura_sisdepo_2025"
+app.config["JWT_TOKEN_LOCATION"] = ["headers"]
+app.config["JWT_HEADER_NAME"] = "Authorization"
+app.config["JWT_HEADER_TYPE"] = "Bearer"
 jwt = JWTManager(app)
 
-# Configuración de Flask-Mail (Usando tu App Password)
-app.config['MAIL_SERVER']='smtp.gmail.com'
-app.config['MAIL_PORT'] = 465
-app.config['MAIL_USERNAME'] = 'obaezemanuel@gmail.com'
-app.config['MAIL_PASSWORD'] = 'gcipahijdcpvjika'         
-app.config['MAIL_USE_TLS'] = False
-app.config['MAIL_USE_SSL'] = True
+# --- FLASK-MAIL ---
+app.config.update(
+    MAIL_SERVER='smtp.gmail.com',
+    MAIL_PORT=465,
+    MAIL_USERNAME='obaezemanuel@gmail.com',
+    MAIL_PASSWORD='gcipahijdcpvjika',
+    MAIL_USE_TLS=False,
+    MAIL_USE_SSL=True
+)
 mail = Mail(app)
 
-# Configuración de SQLAlchemy (Base de Datos)
+# --- SQLALCHEMY ---
 app.config["SQLALCHEMY_DATABASE_URI"] = "mysql+mysqlconnector://root:@127.0.0.1/SISDEPO"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 
-# Inicializar SocketIO
-socketio.init_app(app, cors_allowed_origins="http://localhost:3000")
+# --- SOCKET.IO ---
+socketio.init_app(
+    app,
+    cors_allowed_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    cors_allowed_headers=["Authorization", "Content-Type"]
+)
 
-# Registrar Blueprints (rutas del mapa)
+# --- BLUEPRINTS ---
 app.register_blueprint(mapa_bp, url_prefix="/api")
+app.register_blueprint(perfil_bp, url_prefix="/api")
 
-# Función helper para conectar a la BBDD
-def get_db_connection():
-    return mysql.connector.connect(
-        host="127.0.0.1", user="root", password="", database="SISDEPO"
-    )
-
-# --- RUTAS DE AUTENTICACIÓN ---
-
+# -----------------------------------------------------------------
+# 🧩 AUTENTICACIÓN Y REGISTRO
+# -----------------------------------------------------------------
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.json
     email = data.get("email")
     contrasena = data.get("password")
-
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        # Obtenemos ID_ROL para incluirlo en el token
-        cursor.execute("""
-            SELECT 
-                u.ID_USUARIO, 
-                u.CONTRASENA, 
-                e.NOMBRE,
-                e.ID_EMPLEADO,
-                u.ID_ROL 
-            FROM USUARIO u
-            JOIN EMPLEADO e ON u.ID_EMPLEADO = e.ID_EMPLEADO
-            WHERE u.CORREO = %s
-        """, (email,))
-        
-        user = cursor.fetchone()
-
-        if user and check_password_hash(user["CONTRASENA"], contrasena):
-            # Creamos el token JWT incluyendo el ROL
+        user = Usuario.query.filter_by(CORREO=email).first()
+        if user and user.check_password(contrasena):
             access_token = create_access_token(
-                identity=user["ID_USUARIO"], 
-                additional_claims={"rol": user["ID_ROL"]}
+                identity=str(user.ID_USUARIO),
+                additional_claims={
+                    "rol_id": user.ID_ROL,
+                    "rol_nombre": user.rol.NOMBRE_ROL
+                }
             )
-            return jsonify(
-                access_token=access_token, 
-                nombre=user["NOMBRE"]
-            )
-        else:
-            return jsonify({"message": "Correo o contraseña incorrectos"}), 401
-            
-    finally:
-        if conn and conn.is_connected():
-            cursor.close()
-            conn.close()
+            return jsonify({
+                "access_token": access_token,
+                "user_nombre": user.empleado.NOMBRE if user.empleado else "Usuario",
+                "rol": user.rol.NOMBRE_ROL
+            }), 200
+        return jsonify({"message": "Correo o contraseña incorrectos"}), 401
+    except Exception as e:
+        print(f"Error en login: {e}")
+        return jsonify({"message": "Error interno del servidor"}), 500
+
 
 @app.route("/api/registro", methods=["POST"])
 def registro():
     data = request.json
-    nombre = data.get("nombre")
-    apellido = data.get("apellido")
-    fecha_nacimiento = data.get("fecha")
-    cedula_identidad = data.get("cedula")
-    telefono = data.get("telefono")
-    email = data.get("correo")
-    contrasena = data.get("contrasena")
-    id_deposito = data.get("deposito") 
-
-    if not id_deposito:
-        return jsonify({"success": False, "message": "Debe seleccionar un depósito."}), 400
-
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        # Rol base por defecto: Empleado (se crea si no existe)
+        rol_empleado = Rol.query.filter_by(NOMBRE_ROL="Empleado").first()
+        if not rol_empleado:
+            rol_empleado = Rol(NOMBRE_ROL="Empleado")
+            db.session.add(rol_empleado)
+            db.session.commit()
 
-        id_rol_a_asignar = 1 # Rol Empleado por defecto
-        estado_activo = 1
+        nuevo_empleado = Empleado(
+            ID_DEPOSITO=data.get("deposito"),
+            NUMERO_DOCUMENTO=data.get("cedula"),
+            NOMBRE=data.get("nombre"),
+            APELLIDO=data.get("apellido"),
+            ESTADO_ACTIVO=True,
+            TELEFONO=data.get("telefono"),
+            FECHA_NACIMIENTO=data.get("fecha")
+        )
 
-        # Insertar Empleado (sin ID_CARGO)
-        cursor.execute("""
-            INSERT INTO EMPLEADO (ID_DEPOSITO, NUMERO_DOCUMENTO, NOMBRE, APELLIDO, ESTADO_ACTIVO, TELEFONO, FECHA_NACIMIENTO)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (id_deposito, cedula_identidad, nombre, apellido, estado_activo, telefono, fecha_nacimiento))
-        
-        id_empleado_creado = cursor.lastrowid
-        hashed_password = generate_password_hash(contrasena)
+        nuevo_usuario = Usuario(
+            ID_ROL=rol_empleado.ID_ROL,
+            CORREO=data.get("correo")
+        )
+        nuevo_usuario.set_password(data.get("contrasena"))
+        nuevo_usuario.empleado = nuevo_empleado
 
-        # Insertar Usuario con el ROL por defecto
-        cursor.execute("""
-            INSERT INTO USUARIO (ID_ROL, ID_EMPLEADO, CORREO, CONTRASENA)
-            VALUES (%s, %s, %s, %s)
-        """, (id_rol_a_asignar, id_empleado_creado, email, hashed_password))
-        
-        conn.commit()
-        return jsonify({"success": True, "message": "Usuario registrado exitosamente"})
+        db.session.add(nuevo_empleado)
+        db.session.add(nuevo_usuario)
+        db.session.commit()
 
-    except mysql.connector.Error as err:
-        if err.errno == 1062: 
-             return jsonify({"success": False, "message": "El correo o número de documento ya está en uso."})
-        if err.errno == 1452:
-             return jsonify({"success": False, "message": "Error de datos. Asegúrate de que el depósito o rol existan."})
-        return jsonify({"success": False, "message": str(err)})
+        return jsonify({"success": True, "message": "Usuario registrado exitosamente."}), 201
+
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"success": False, "message": "El correo, número de documento o teléfono ya está en uso."}), 400
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)})
+        db.session.rollback()
+        print(f"Error en registro: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
 
-    finally:
-        if conn and conn.is_connected():
-            cursor.close()
-            conn.close()
+# -----------------------------------------------------------------
+# 🔐 ROLES Y PERMISOS
+# -----------------------------------------------------------------
+@app.route("/api/me", methods=["GET"])
+@jwt_required()
+def me():
+    """
+    Devuelve info básica del usuario logueado a partir del JWT.
+    Útil en el frontend para saber rol y mostrar/ocultar vistas.
+    """
+    claims = get_jwt()
+    return jsonify({
+        "rol_id": claims.get("rol_id"),
+        "rol_nombre": claims.get("rol_nombre")
+    }), 200
 
-# --- RUTAS DE RECUPERACIÓN DE CONTRASEÑA ---
 
+@app.route("/api/roles", methods=["GET"])
+@jwt_required()
+@role_required("Master_Admin")
+def listar_roles():
+    return jsonify(obtener_roles()), 200
+
+
+@app.route("/api/asignar-rol", methods=["PUT"])
+@jwt_required()
+@role_required("Master_Admin")
+def cambiar_rol():
+    data = request.get_json()
+    user_id = data.get("usuario_id")
+    nuevo_rol = data.get("rol")
+    resp, status = asignar_rol(user_id, nuevo_rol)
+    return jsonify(resp), status
+
+# -----------------------------------------------------------------
+# 🔁 RECUPERACIÓN DE CONTRASEÑA
+# -----------------------------------------------------------------
 @app.route("/api/forgot-password", methods=["POST"])
 def forgot_password():
     data = request.json
     email = data.get("email")
-
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        cursor.execute("SELECT ID_USUARIO FROM USUARIO WHERE CORREO = %s", (email,))
-        user = cursor.fetchone()
-
+        user = Usuario.query.filter_by(CORREO=email).first()
         if not user:
-            # Por seguridad, no revelamos si existe o no
-            return jsonify({"message": "Si tu correo está registrado, se intentará enviar un enlace."})
+            return jsonify({"success": False, "message": "El correo no está registrado."}), 404
 
-        # Generar token y fecha de expiración
         token = secrets.token_hex(32)
-        expires_at = datetime.now() + timedelta(hours=1) # Válido por 1 hora
+        expires_at = datetime.datetime.now() + datetime.timedelta(hours=1)
+        nuevo_token = PasswordResetToken(EMAIL=email, TOKEN=token, EXPIRES_AT=expires_at)
+        db.session.add(nuevo_token)
+        db.session.commit()
 
-        # Guardar token en BBDD
-        cursor.execute("""
-            INSERT INTO password_reset_tokens (EMAIL, TOKEN, EXPIRES_AT)
-            VALUES (%s, %s, %s)
-        """, (email, token, expires_at))
-        conn.commit()
-
-        # Crear enlace y enviar correo
-        reset_link = f"http://localhost:3000/reset-password/{token}" 
-        
+        reset_link = f"http://localhost:3000/reset-password/{token}"
         msg = Message(
             'Restablecimiento de Contraseña - SISDEPO',
-            sender=app.config['MAIL_USERNAME'], # Usa el correo configurado
-            recipients=[email]
+            sender=app.config['MAIL_USERNAME'], recipients=[email]
         )
-        msg.body = f"Para restablecer tu contraseña, haz clic en el siguiente enlace:\n\n{reset_link}\n\nEste enlace expira en 1 hora.\nSi no solicitaste esto, ignora este mensaje."
-        
-        mail.send(msg) # Enviar correo
-
-        return jsonify({"message": "Si tu correo está registrado, se intentará enviar un enlace."})
-
+        msg.body = (
+            f"Para restablecer tu contraseña, haz clic en el siguiente enlace:\n\n"
+            f"{reset_link}\n\nEste enlace expira en 1 hora.\n"
+            "Si no solicitaste esto, ignora este mensaje."
+        )
+        mail.send(msg)
+        return jsonify({"message": "Se envió un enlace de restablecimiento al correo registrado."}), 200
     except Exception as e:
-        print(f"Error en forgot_password: {e}") # Log del error real en consola
+        db.session.rollback()
+        print(f"Error en forgot_password: {e}")
         return jsonify({"error": "Hubo un problema al procesar la solicitud."}), 500
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
+
 
 @app.route("/api/reset-password", methods=["POST"])
 def reset_password():
     data = request.json
     token = data.get("token")
     new_password = data.get("password")
-
-    if not token or not new_password:
-        return jsonify({"success": False, "message": "Faltan datos (token o contraseña)."}), 400
-
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        token_data = PasswordResetToken.query.filter_by(TOKEN=token).first()
+        if not token_data or datetime.datetime.now() > token_data.EXPIRES_AT:
+            if token_data:
+                db.session.delete(token_data)
+                db.session.commit()
+            return jsonify({"success": False, "message": "Token inválido o expirado."}), 400
 
-        # Validar el token y que no haya expirado
-        cursor.execute("SELECT EMAIL, EXPIRES_AT FROM password_reset_tokens WHERE TOKEN = %s", (token,))
-        token_data = cursor.fetchone()
+        usuario = Usuario.query.filter_by(CORREO=token_data.EMAIL).first()
+        if not usuario:
+            return jsonify({"success": False, "message": "Usuario no encontrado."}), 404
 
-        if not token_data:
-            return jsonify({"success": False, "message": "Token inválido."}), 400
-        
-        if datetime.now() > token_data["EXPIRES_AT"]:
-            # Opcional: Borrar token expirado
-            cursor.execute("DELETE FROM password_reset_tokens WHERE TOKEN = %s", (token,))
-            conn.commit()
-            return jsonify({"success": False, "message": "El token ha expirado."}), 400
-        
-        email = token_data["EMAIL"]
-
-        # Actualizar contraseña del usuario
-        hashed_password = generate_password_hash(new_password)
-        cursor.execute("UPDATE USUARIO SET CONTRASENA = %s WHERE CORREO = %s", (hashed_password, email))
-        
-        # Eliminar el token usado
-        cursor.execute("DELETE FROM password_reset_tokens WHERE TOKEN = %s", (token,))
-        
-        conn.commit()
-        return jsonify({"success": True, "message": "Contraseña actualizada exitosamente."})
-
+        usuario.set_password(new_password)
+        db.session.delete(token_data)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Contraseña actualizada exitosamente."}), 200
     except Exception as e:
-        print(f"Error en reset_password: {e}") # Log del error real
+        db.session.rollback()
+        print(f"Error en reset_password: {e}")
         return jsonify({"success": False, "message": "Error al actualizar la contraseña."}), 500
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
 
-# --- RUTAS PÚBLICAS AUXILIARES ---
-
+# -----------------------------------------------------------------
+# 📦 DEPÓSITOS Y MATERIALES (ejemplo con permisos)
+# -----------------------------------------------------------------
 @app.route("/api/depositos", methods=["GET"])
 def get_depositos():
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT ID_DEPOSITO, NOMBRE FROM DEPOSITO ORDER BY NOMBRE")
-        depositos = cursor.fetchall()
-        return jsonify(depositos)
+        depositos = Deposito.query.order_by(Deposito.NOMBRE).all()
+        return jsonify([d.to_dict() for d in depositos]), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    finally:
-        if conn and conn.is_connected():
-            cursor.close()
-            conn.close()
 
-# --- RUTAS PROTEGIDAS (Requieren Login) ---
 
 @app.route("/api/materiales", methods=["GET"])
-@jwt_required() # Protegida
+@jwt_required()
+@role_required("Personal_Inventario")
 def get_materiales():
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT ID_MATERIAL, CODIGO_UNICO, NOMBRE FROM MATERIAL ORDER BY NOMBRE")
-        materiales = cursor.fetchall()
-        return jsonify(materiales)
+        materiales = Material.query.order_by(Material.NOMBRE).all()
+        return jsonify([m.to_dict() for m in materiales]), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    finally:
-        if conn and conn.is_connected():
-            cursor.close()
-            conn.close()
+
 
 @app.route("/api/materiales", methods=["POST"])
-@jwt_required() # Protegida
+@jwt_required()
+@role_required("Personal_Inventario")
 def add_material():
-    # Opcional: Verificar rol admin
-    # claims = get_jwt()
-    # if claims.get("rol") != 99: return jsonify({"message": "Acceso denegado"}), 403
-            
     data = request.json
-    codigo_unico = data.get("codigo_unico")
-    nombre = data.get("nombre")
-
-    if not codigo_unico or not nombre:
-        return jsonify({"success": False, "message": "Código y Nombre son requeridos"}), 400
-
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("INSERT INTO MATERIAL (CODIGO_UNICO, NOMBRE) VALUES (%s, %s)", (codigo_unico, nombre))
-        
-        conn.commit()
-        return jsonify({"success": True, "message": "Material creado exitosamente", "id": cursor.lastrowid})
-
-    except mysql.connector.Error as err:
-        if err.errno == 1062: return jsonify({"success": False, "message": "El Código Único ya existe."})
-        return jsonify({"success": False, "message": str(err)})
+        nuevo_material = Material(CODIGO_UNICO=data.get("codigo_unico"), NOMBRE=data.get("nombre"))
+        db.session.add(nuevo_material)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Material creado exitosamente."}), 201
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"success": False, "message": "El código único ya existe."}), 400
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)})
-    finally:
-        if conn and conn.is_connected():
-            cursor.close()
-            conn.close()
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
 
-# --- RUTAS DE ADMIN (Protegidas y requieren Rol 99) ---
-# (Aquí irían las rutas /api/admin/usuarios y /api/admin/force-reset si las necesitas ahora)
+# -----------------------------------------------------------------
+# 🚀 EJECUCIÓN PRINCIPAL (siembra de roles incluida)
+# -----------------------------------------------------------------
+ROLES_BASE = ["Empleado", "Chofer", "Personal_Inventario", "Master_Admin"]
 
-# --- EJECUCIÓN PRINCIPAL ---
 if __name__ == "__main__":
     with app.app_context():
-        # Puedes añadir db.create_all() aquí si quieres que SQLAlchemy cree las tablas del mapa
-        # si no existen al iniciar, aunque ya las creaste con SQL.
-        pass 
+        db.create_all()  # Asegura tablas
+        # Siembra de roles (idempotente; si ya existen, no rompe)
+        for nombre in ROLES_BASE:
+            try:
+                resp = crear_rol(nombre)  # usa el helper; evita que 'crear_rol' quede "apagado"
+            except Exception:
+                # Si ya existe o falla por duplicado, seguimos
+                pass
+
     socketio.run(app, host="0.0.0.0", port=5000, debug=True)

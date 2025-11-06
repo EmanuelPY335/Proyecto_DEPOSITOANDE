@@ -47,7 +47,7 @@ class GPSEmulator:
 # Uso
 if __name__ == "__main__":
     # ¡Asegúrate de tener un VEHICULO con ID_VEHICULO=1 en tu base de datos!
-    emulator = GPSEmulator(1, "http://localhost:5000") 
+    emulator = GPSEmulator(3, "http://localhost:5000") 
     print("🚀 Emulador GPS iniciado (Vehículo 1). Presiona Ctrl+C para detener.")
     try:
         emulator.run_emulation(interval=30)

@@ -1,19 +1,18 @@
-// Home.jsx - REVISADO
+// Home.jsx
 import React from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "../components/Sidebar"; 
 import "../styles/Home.css"; 
 import { 
   Settings, Bell, UserCircle, 
-  Box, TrendingUp, Users, Clipboard, FileText, Layers 
-  // --- CAMBIO: 'Archive' (Proveedores) eliminado, 'Clipboard' (Órdenes) ya estaba ---
+  Box, TrendingUp, Users, Clipboard, FileText, Layers, Shield
 } from "lucide-react"; 
 
 const Home = () => {
-  const userName = "Oscar Báez"; // Simulación
-  const notificationCount = 99; // Simulación
+  const userName = localStorage.getItem("user_nombre") || "Usuario";
+  const userRole = localStorage.getItem("user_rol") || "";  // <-- NUEVO
+  const notificationCount = 0;
 
-  // (Componente DashboardNavbar sin cambios)
   const DashboardNavbar = () => (
     <nav className="navbar-dashboard">
       <div className="navbar-left">
@@ -33,12 +32,9 @@ const Home = () => {
     </nav>
   );
 
-  // (Componente DashboardCards CON CAMBIOS)
   const DashboardCards = () => (
     <div className="dashboard-content-grid">
-      
-      {/* Fila 1 */}
-      {/* --- CAMBIO: Tarjeta 1 actualizada para el Mapa GPS --- */}
+      {/* 1) Mapa */}
       <div className="card card-pag1">
         <div className="card-header">
           <FileText size={30} className="card-main-icon" />
@@ -48,17 +44,17 @@ const Home = () => {
         <Link to="/pag1" className="card-button primary">Ver Mapa</Link>
       </div>
 
-      {/* Tarjeta 2: Pag2.jsx (Sin cambios) */}
+      {/* 2) Gastos */}
       <div className="card card-pag2">
         <div className="card-header">
           <Layers size={30} className="card-main-icon" />
-          <h3>Pag2.jsx</h3>
+          <h3>Gestionar Gastos</h3>
         </div>
-        <p>Administra configuraciones y detalles.</p>
-        <Link to="/pag2" className="card-button secondary">Ir a Página 2</Link>
+        <p>Gestión de gastos dentro del depósito.</p>
+        <Link to="/pag2" className="card-button secondary">Ver Gastos</Link>
       </div>
-      
-      {/* Tarjeta 3: Materiales (Sin cambios) */}
+
+      {/* 3) Materiales */}
       <div className="card card-materiales">
         <div className="card-header">
           <Box size={30} className="card-main-icon" />
@@ -67,9 +63,8 @@ const Home = () => {
         <p>Control de stock actualizado y gestión de inventario.</p>
         <Link to="/materiales" className="card-button tertiary">Ver Inventario</Link>
       </div>
-      
-      {/* Fila 2 */}
-      {/* Tarjeta 4: Movimientos (Sin cambios) */}
+
+      {/* 4) Movimientos */}
       <div className="card card-movimientos">
         <div className="card-header">
           <TrendingUp size={30} className="card-main-icon" />
@@ -79,18 +74,18 @@ const Home = () => {
         <Link to="/movimientos" className="card-button quaternary">Registrar</Link>
       </div>
 
-      {/* Tarjeta 5: Empleados (Sin cambios) */}
+      {/* 5) Empleados */}
       <div className="card card-empleados">
         <div className="card-header">
           <Users size={30} className="card-main-icon" />
           <h3>Empleados</h3>
         </div>
         <p>Gestión de usuarios y accesos al sistema.</p>
-        <Link to="/empleados" className="card-button quinary">Gestionar</Link>
+        <Link to="/empleados" className="card-button quinary">Ver Empleados</Link>
       </div>
 
-      {/* --- CAMBIO: Tarjeta 6 'Proveedores' reemplazada por 'Órdenes de Trabajo' --- */}
-      <div className="card card-ordenes"> {/* Clase CSS opcional nueva */}
+      {/* 6) Órdenes */}
+      <div className="card card-ordenes">
         <div className="card-header">
           <Clipboard size={30} className="card-main-icon" />
           <h3>Órdenes de Trabajo</h3>
@@ -99,6 +94,17 @@ const Home = () => {
         <Link to="/ordenes-trabajo" className="card-button senary">Ver Órdenes</Link>
       </div>
 
+      {/* ✅ 7) SOLO GERENTE: Roles y Permisos */}
+      {userRole === "Master_Admin" && (
+        <div className="card" style={{gridColumn: '1 / -1'}}>
+          <div className="card-header">
+            <Shield size={30} className="card-main-icon" />
+            <h3>Roles y Permisos</h3>
+          </div>
+          <p>Asigná o cambiá los roles de los usuarios.</p>
+          <Link to="/roles" className="card-button primary">Administrar Roles</Link>
+        </div>
+      )}
     </div>
   );
 
