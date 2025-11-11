@@ -33,7 +33,7 @@ const LoginForm = () => {
       // <--- CAMBIO: Guardar el token en localStorage --->
       if (data.access_token) {
         localStorage.setItem("access_token", data.access_token);
-        localStorage.setItem("user_nombre", data.nombre); // Opcional: guardar nombre
+        localStorage.setItem("user_nombre", data.user_nombre); // Opcional: guardar nombre
         localStorage.setItem("user_rol", data.rol);
         navigate("/home");
       } else {

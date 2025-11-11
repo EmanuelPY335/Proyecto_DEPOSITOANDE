@@ -1,5 +1,4 @@
 /* === Roles.css === */
-/* Inspirado en Home.css con tipografía y colores similares */
 
 .content-dashboard h1 {
   font-size: 1.8rem;
@@ -18,19 +17,31 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   padding: 1.5rem;
   transition: box-shadow 0.3s ease;
+  margin-bottom: 2rem; /* Añadido espacio entre contenedores */
 }
 
 .form-container:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
-table {
+/* Limita el ancho en la tabla de usuarios que es más ancha */
+.form-container-responsive {
+  max-width: 1000px;
+}
+
+/* Wrapper para que las tablas sean responsivas horizontalmente */
+.table-wrapper {
+  overflow-x: auto;
+}
+
+/* Estilo de tabla unificado, reemplaza los estilos en línea */
+.roles-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 1rem;
 }
 
-th {
+.roles-table th {
   background-color: #f7f8fa;
   color: #333;
   padding: 12px;
@@ -38,14 +49,21 @@ th {
   font-weight: 600;
 }
 
-td {
+.roles-table td {
   border-bottom: 1px solid #eee;
   padding: 10px;
   font-size: 0.95rem;
+  vertical-align: middle; /* Centra verticalmente el contenido */
 }
 
-tr:hover {
+.roles-table tr:hover {
   background-color: #f3f6f9;
+}
+
+.empty-table-row {
+  padding: 10px;
+  color: #777;
+  text-align: center;
 }
 
 select {
@@ -62,18 +80,134 @@ select:focus {
   border-color: #1d72b8;
 }
 
+/* --- Nuevos estilos para Gestión de Roles --- */
+
+.roles-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.roles-header h2 {
+  margin: 0;
+}
+
+.roles-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* --- Estilos de Botones --- */
+.btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: #1d72b8;
+  color: white;
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: #185a96;
+}
+
+.btn-secondary {
+  background-color: #f0f0f0;
+  color: #333;
+  border: 1px solid #ccc;
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.btn-danger {
+  background-color: #d9534f;
+  color: white;
+}
+.btn-danger:hover:not(:disabled) {
+  background-color: #c9302c;
+}
+
+/* --- Estilos del Modal --- */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 1.5rem 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 450px;
+}
+
+.modal-content h2 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #555;
+}
+
+.form-group input[type="text"] {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-sizing: border-box; /* Asegura que el padding no afecte el ancho */
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+
+/* --- Mensajes de Feedback --- */
 .msg-success {
   color: #157347;
   background-color: #d1e7dd;
   border-radius: 6px;
-  padding: 8px 12px;
-  margin-bottom: 1rem;
+  padding: 10px 14px;
+  margin-bottom: 1.5rem;
 }
 
 .msg-error {
   color: #842029;
   background-color: #f8d7da;
   border-radius: 6px;
-  padding: 8px 12px;
-  margin-bottom: 1rem;
+  padding: 10px 14px;
+  margin-bottom: 1.5rem;
 }
