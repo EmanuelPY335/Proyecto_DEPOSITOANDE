@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify
 from sqlalchemy.exc import IntegrityError
 from flask_cors import CORS
 import secrets
-import datetime
+from datetime import datetime, timezone, timedelta
 from flask_jwt_extended import (
     create_access_token, jwt_required, JWTManager, get_jwt
 )
@@ -12,7 +12,9 @@ from flask_mail import Mail, Message
 # --- IMPORTACIONES INTERNAS ---
 from mapa import mapa_bp, socketio
 from perfil import perfil_bp
-from roles_permisos import role_required, asignar_rol, crear_rol, obtener_roles
+from personal import personal_bp
+# ⬇️ [CAMBIO 1] Importamos el Blueprint y las funciones que SÍ se usan
+from roles_permisos import role_required, crear_rol, roles_bp
 from db import (
     db, Usuario, Empleado, Deposito,
     Material, PasswordResetToken, Rol,
@@ -24,10 +26,17 @@ from db import (
 # -----------------------------------------------------------------
 app = Flask(__name__)
 
-# --- CORS ---
+# --- CORS (Con soporte para React y Raspberry Pi) ---
 CORS(
     app,
-    resources={r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}},
+    resources={r"/api/*": {
+        "origins": [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://192.168.100.*",
+            "http://192.168.0.*"
+        ]
+    }},
     supports_credentials=True,
     allow_headers=["Authorization", "Content-Type"]
 )
@@ -55,22 +64,30 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "mysql+mysqlconnector://root:@127.0.0.1/
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 
-# --- SOCKET.IO ---
+# --- SOCKET.IO (Con soporte para React y Raspberry Pi) ---
 socketio.init_app(
     app,
-    cors_allowed_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    cors_allowed_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://192.168.100.*",
+        "http://192.168.0.*"
+    ],
     cors_allowed_headers=["Authorization", "Content-Type"]
 )
 
 # --- BLUEPRINTS ---
 app.register_blueprint(mapa_bp, url_prefix="/api")
 app.register_blueprint(perfil_bp, url_prefix="/api")
+app.register_blueprint(personal_bp, url_prefix="/api")
+app.register_blueprint(roles_bp, url_prefix="/api") # <--- [CAMBIO 2] Registramos el nuevo Blueprint
 
 # -----------------------------------------------------------------
 # 🧩 AUTENTICACIÓN Y REGISTRO
 # -----------------------------------------------------------------
 @app.route("/api/login", methods=["POST"])
 def login():
+    # ... (sin cambios)
     data = request.json
     email = data.get("email")
     contrasena = data.get("password")
@@ -97,6 +114,7 @@ def login():
 
 @app.route("/api/registro", methods=["POST"])
 def registro():
+    # ... (sin cambios)
     data = request.json
     try:
         # Rol base por defecto: Empleado (se crea si no existe)
@@ -143,39 +161,23 @@ def registro():
 @app.route("/api/me", methods=["GET"])
 @jwt_required()
 def me():
-    """
-    Devuelve info básica del usuario logueado a partir del JWT.
-    Útil en el frontend para saber rol y mostrar/ocultar vistas.
-    """
+    # ... (sin cambios)
     claims = get_jwt()
     return jsonify({
         "rol_id": claims.get("rol_id"),
         "rol_nombre": claims.get("rol_nombre")
     }), 200
 
+# ⬇️ [CAMBIO 3] HEMOS BORRADO LAS RUTAS /api/roles y /api/asignar-rol DE AQUÍ
+#               (Porque ahora viven en roles_permisos.py)
 
-@app.route("/api/roles", methods=["GET"])
-@jwt_required()
-@role_required("Master_Admin")
-def listar_roles():
-    return jsonify(obtener_roles()), 200
-
-
-@app.route("/api/asignar-rol", methods=["PUT"])
-@jwt_required()
-@role_required("Master_Admin")
-def cambiar_rol():
-    data = request.get_json()
-    user_id = data.get("usuario_id")
-    nuevo_rol = data.get("rol")
-    resp, status = asignar_rol(user_id, nuevo_rol)
-    return jsonify(resp), status
 
 # -----------------------------------------------------------------
 # 🔁 RECUPERACIÓN DE CONTRASEÑA
 # -----------------------------------------------------------------
 @app.route("/api/forgot-password", methods=["POST"])
 def forgot_password():
+    # ... (sin cambios)
     data = request.json
     email = data.get("email")
     try:
@@ -184,7 +186,7 @@ def forgot_password():
             return jsonify({"success": False, "message": "El correo no está registrado."}), 404
 
         token = secrets.token_hex(32)
-        expires_at = datetime.datetime.now() + datetime.timedelta(hours=1)
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
         nuevo_token = PasswordResetToken(EMAIL=email, TOKEN=token, EXPIRES_AT=expires_at)
         db.session.add(nuevo_token)
         db.session.commit()
@@ -209,12 +211,16 @@ def forgot_password():
 
 @app.route("/api/reset-password", methods=["POST"])
 def reset_password():
+    # ... (sin cambios)
     data = request.json
     token = data.get("token")
     new_password = data.get("password")
     try:
         token_data = PasswordResetToken.query.filter_by(TOKEN=token).first()
-        if not token_data or datetime.datetime.now() > token_data.EXPIRES_AT:
+        
+        is_expired = not token_data or datetime.now(timezone.utc) > token_data.EXPIRES_AT
+
+        if is_expired:
             if token_data:
                 db.session.delete(token_data)
                 db.session.commit()
@@ -238,6 +244,7 @@ def reset_password():
 # -----------------------------------------------------------------
 @app.route("/api/depositos", methods=["GET"])
 def get_depositos():
+    # ... (sin cambios)
     try:
         depositos = Deposito.query.order_by(Deposito.NOMBRE).all()
         return jsonify([d.to_dict() for d in depositos]), 200
@@ -249,6 +256,7 @@ def get_depositos():
 @jwt_required()
 @role_required("Personal_Inventario")
 def get_materiales():
+    # ... (sin cambios)
     try:
         materiales = Material.query.order_by(Material.NOMBRE).all()
         return jsonify([m.to_dict() for m in materiales]), 200
@@ -260,6 +268,7 @@ def get_materiales():
 @jwt_required()
 @role_required("Personal_Inventario")
 def add_material():
+    # ... (sin cambios)
     data = request.json
     try:
         nuevo_material = Material(CODIGO_UNICO=data.get("codigo_unico"), NOMBRE=data.get("nombre"))
@@ -272,6 +281,7 @@ def add_material():
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
+
 
 # -----------------------------------------------------------------
 # 🚀 EJECUCIÓN PRINCIPAL (siembra de roles incluida)
@@ -289,4 +299,12 @@ if __name__ == "__main__":
                 # Si ya existe o falla por duplicado, seguimos
                 pass
 
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    # ⚙️ Ejecución mejorada
+    socketio.run(
+        app,
+        host="0.0.0.0",
+        port=5000,
+        debug=True,
+        allow_unsafe_werkzeug=True,
+        use_reloader=False
+    )

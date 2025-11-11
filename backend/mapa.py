@@ -1,68 +1,93 @@
 # mapa.py
 from flask import Blueprint, request, jsonify
 from flask_socketio import SocketIO
-import datetime
-from flask_jwt_extended import jwt_required 
-
-# --- IMPORTACIONES MODIFICADAS ---
-# Importamos 'db' y los modelos que necesitamos desde db.py
+from datetime import datetime, timezone, timedelta # Imports modernos y centralizados
+from flask_jwt_extended import jwt_required
 from db import db, Vehiculo, PosicionGps
-# --- FIN DE MODIFICACIÓN ---
 
 mapa_bp = Blueprint("mapa", __name__)
-
-# SocketIO se define aquí, pero se inicializa en main.py
 socketio = SocketIO()
 
-# --- LOS MODELOS (Vehiculo, PosicionGps) FUERON ELIMINADOS DE AQUÍ ---
-
-# ---------------- RUTAS GPS ----------------
-
+# ---------------- RUTA GPS (Raspberry Pi) ----------------
 @mapa_bp.route("/gps/tracking", methods=["POST"])
 def receive_gps_data():
-    """Recibe datos GPS del Raspberry Pi o emulador"""
+    """
+    Recibe los datos GPS enviados desde la Raspberry Pi (agente).
+    Guarda las coordenadas en la base y emite la posición actualizada al mapa.
+    """
     try:
         data = request.get_json()
-        if not data or 'ID_VEHICULO' not in data or 'LATITUD' not in data or 'LONGITUD' not in data:
-            return jsonify({'error': 'Datos incompletos. Se requieren ID_VEHICULO, LATITUD y LONGITUD'}), 400
-        
-        # Esta lógica ahora funciona porque el modelo está centralizado
+        if not data:
+            return jsonify({'error': 'No se recibieron datos JSON'}), 400
+
+        id_vehiculo = data.get("ID_VEHICULO")
+        lat = data.get("LATITUD")
+        lon = data.get("LONGITUD")
+
+        # Validar campos
+        if id_vehiculo is None or lat is None or lon is None:
+            return jsonify({
+                'error': 'Datos incompletos. Se requieren ID_VEHICULO, LATITUD y LONGITUD'
+            }), 400
+
+        # Validar que el vehículo exista antes de insertar
+        vehiculo = Vehiculo.query.get(id_vehiculo)
+        if not vehiculo:
+            return jsonify({'error': f'El vehículo {id_vehiculo} no existe en la base de datos'}), 400
+
+        # Conversión segura a float
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except ValueError:
+            return jsonify({'error': 'LATITUD y LONGITUD deben ser valores numéricos'}), 400
+
+        # Usamos datetime.now(timezone.utc) en lugar de utcnow()
+        ahora_utc = datetime.now(timezone.utc)
+
+        # Registrar posición en la base
         pos = PosicionGps(
-            ID_VEHICULO=data['ID_VEHICULO'],
-            LATITUD=data['LATITUD'],
-            LONGITUD=data['LONGITUD'],
-            FECHA_HORA=datetime.datetime.now(datetime.timezone.utc)
+            ID_VEHICULO=id_vehiculo,
+            LATITUD=lat,
+            LONGITUD=lon,
+            FECHA_HORA=ahora_utc
         )
         db.session.add(pos)
         db.session.commit()
-        
+
+        # Emitir la actualización en tiempo real
         socketio.emit("position_update", {
-            "ID_VEHICULO": data['ID_VEHICULO'],
-            "LATITUD": float(data['LATITUD']), 
-            "LONGITUD": float(data['LONGITUD']),
-            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
-        }, room='/')
-        
-        return jsonify({'message': 'Datos GPS recibidos correctamente', 'id': pos.ID_REGISTRO_GPS}), 201
-    
+            "ID_VEHICULO": id_vehiculo,
+            "LATITUD": lat,
+            "LONGITUD": lon,
+            "timestamp": ahora_utc.isoformat()
+        })
+
+        return jsonify({
+            'message': f'Coordenadas recibidas correctamente para vehículo {id_vehiculo}',
+            'id_registro': pos.ID_REGISTRO_GPS
+        }), 201
+
     except Exception as e:
         db.session.rollback()
-        print(f"Error en /gps/tracking: {e}") # Añadido para mejor depuración
-        return jsonify({'error': str(e)}), 500
+        print(f"[ERROR /gps/tracking] {e}")
+        return jsonify({'error': 'Error interno del servidor', 'details': str(e)}), 500
 
+
+# ---------------- VEHÍCULOS ACTIVOS ----------------
 @mapa_bp.route("/vehicles/active", methods=["GET"])
 @jwt_required()
 def get_active_vehicles():
     """Obtiene vehículos activos en las últimas 2 horas"""
     try:
-        from datetime import timedelta
-        two_hours_ago = datetime.datetime.now(datetime.timezone.utc) - timedelta(hours=2)
-        
+        # Usamos datetime.now(timezone.utc) para el cálculo
+        two_hours_ago = datetime.now(timezone.utc) - timedelta(hours=2)
+
         latest_positions = db.session.query(
             PosicionGps.ID_VEHICULO,
             db.func.max(PosicionGps.FECHA_HORA).label('max_timestamp')
         ).group_by(PosicionGps.ID_VEHICULO).subquery()
-        
+
         active_vehiculos = db.session.query(
             Vehiculo, PosicionGps
         ).join(
@@ -74,7 +99,7 @@ def get_active_vehicles():
         ).filter(
             PosicionGps.FECHA_HORA >= two_hours_ago
         ).all()
-        
+
         result = []
         for vehiculo, position in active_vehiculos:
             result.append({
@@ -86,29 +111,42 @@ def get_active_vehicles():
                 'LONGITUD': float(position.LONGITUD),
                 'last_update': position.FECHA_HORA.isoformat()
             })
-        
-        return jsonify(result)
-    
+
+        return jsonify(result), 200
+
     except Exception as e:
-        print(f"Error en /vehicles/active: {e}") # Añadido para mejor depuración
+        print(f"[ERROR /vehicles/active] {e}")
         return jsonify({'error': str(e)}), 500
 
+
+# ---------------- ÚLTIMA UBICACIÓN DE UN VEHÍCULO ----------------
 @mapa_bp.route("/vehicles/<int:id_vehiculo>/location", methods=["GET"])
 @jwt_required()
 def get_vehicle_location(id_vehiculo):
-    """Obtiene la última ubicación de un vehículo específico"""
-    latest_position = PosicionGps.query.filter_by(ID_VEHICULO=id_vehiculo)\
-        .order_by(PosicionGps.FECHA_HORA.desc()).first()
-    
-    if not latest_position:
-        return jsonify({'error': 'Camión no encontrado'}), 404
-    
-    vehiculo = Vehiculo.query.get(id_vehiculo)
-    
-    return jsonify({
-        'ID_VEHICULO': id_vehiculo,
-        'MATRICULA': vehiculo.MATRICULA if vehiculo else 'Desconocido',
-        'LATITUD': float(latest_position.LATITUD),
-        'LONGITUD': float(latest_position.LONGITUD),
-        'timestamp': latest_position.FECHA_HORA.isoformat()
-    })
+    """Obtiene la última ubicación registrada de un vehículo específico"""
+    try:
+        latest_position = PosicionGps.query.filter_by(ID_VEHICULO=id_vehiculo)\
+            .order_by(PosicionGps.FECHA_HORA.desc()).first()
+
+        if not latest_position:
+            return jsonify({'error': 'No se encontraron registros GPS para este vehículo'}), 404
+
+        vehiculo = Vehiculo.query.get(id_vehiculo)
+
+        # 🔹 Conversión a hora local Paraguay
+        from datetime import timezone, timedelta
+        PY_TZ = timezone(timedelta(hours=-3))
+        fecha_local = latest_position.FECHA_HORA.astimezone(PY_TZ)
+
+        return jsonify({
+            'ID_VEHICULO': id_vehiculo,
+            'MATRICULA': vehiculo.MATRICULA if vehiculo else 'Desconocido',
+            'LATITUD': float(latest_position.LATITUD),
+            'LONGITUD': float(latest_position.LONGITUD),
+            'timestamp_utc': latest_position.FECHA_HORA.isoformat(),
+            'timestamp_local': fecha_local.isoformat()
+        }), 200
+
+    except Exception as e:
+        print(f"[ERROR /vehicles/<id>/location] {e}")
+        return jsonify({'error': str(e)}), 500
