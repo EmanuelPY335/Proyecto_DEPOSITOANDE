@@ -94,8 +94,10 @@ def login():
     try:
         user = Usuario.query.filter_by(CORREO=email).first()
         if user and user.check_password(contrasena):
+            expires = timedelta(hours=8)
             access_token = create_access_token(
                 identity=str(user.ID_USUARIO),
+                expires_delta=expires,
                 additional_claims={
                     "rol_id": user.ID_ROL,
                     "rol_nombre": user.rol.NOMBRE_ROL
@@ -286,7 +288,7 @@ def add_material():
 # -----------------------------------------------------------------
 # 🚀 EJECUCIÓN PRINCIPAL (siembra de roles incluida)
 # -----------------------------------------------------------------
-ROLES_BASE = ["Empleado", "Chofer", "Personal_Inventario", "Master_Admin"]
+ROLES_BASE = ["Empleado", "Chofer", "Personal_Inventario","Admin", "Master_Admin"]
 
 if __name__ == "__main__":
     with app.app_context():

@@ -1,6 +1,6 @@
 // Home.jsx
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom"; // <--- CAMBIO: Importar useLocation
 import Sidebar from "../components/Sidebar"; 
 import "../styles/Home.css"; 
 import { 
@@ -9,8 +9,9 @@ import {
 } from "lucide-react"; 
 
 const Home = () => {
-  const userName = localStorage.getItem("user_nombre") || "Usuario";
-  const userRole = localStorage.getItem("user_rol") || "";  // <-- NUEVO
+  const userName = sessionStorage.getItem("user_nombre") || "Usuario";
+  const userRole = sessionStorage.getItem("user_rol") || "";
+  const location = useLocation(); // <--- CAMBIO: Hook de ubicación
   const notificationCount = 0;
 
   const DashboardNavbar = () => (
@@ -95,7 +96,7 @@ const Home = () => {
       </div>
 
       {/* ✅ 7) SOLO GERENTE: Roles y Permisos */}
-      {userRole === "Master_Admin" && (
+      {(userRole === "Admin" || userRole === "Master_Admin") && (
         <div className="card" style={{gridColumn: '1 / -1'}}>
           <div className="card-header">
             <Shield size={30} className="card-main-icon" />
@@ -114,6 +115,17 @@ const Home = () => {
       <div className="main-area">
         <Sidebar />
         <div className="content-dashboard">
+        
+          {/* --- CAMBIO: Añadir este bloque --- */}
+          {/* Muestra el mensaje de error si existe en el state de la ubicación */}
+          {location.state?.message && (
+            // Asumiendo que 'msg-error' está definido en Home.css o un CSS global
+            <p className="msg-error" style={{ marginBottom: '1.5rem' }}>
+              {location.state.message}
+            </p>
+          )}
+          {/* --- FIN DEL CAMBIO --- */}
+
           <h1>Gestión de Depósito</h1>
           <p className="subtitle">Bienvenido, {userName}.</p>
           <DashboardCards />

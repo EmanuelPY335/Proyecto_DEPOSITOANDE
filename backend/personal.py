@@ -13,7 +13,7 @@ personal_bp = Blueprint("personal", __name__)
 # 2. Creamos la ruta para obtener todos los empleados
 @personal_bp.route("/empleados", methods=["GET"])
 @jwt_required()
-@role_required("Master_Admin") # Solo los Master_Admin pueden ver esta lista
+@role_required("Admin") 
 def get_empleados():
     """
     Obtiene la lista completa de empleados con su usuario y rol.

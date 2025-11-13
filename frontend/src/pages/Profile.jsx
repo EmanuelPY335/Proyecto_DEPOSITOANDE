@@ -102,7 +102,7 @@ const ProfileStyles = () => (
 
 const Profile = () => {
   const navigate = useNavigate();
-  const [userName, setUserName] = useState(localStorage.getItem("user_nombre") || "Usuario");
+  const [userName, setUserName] = useState(sessionStorage.getItem("user_nombre") || "Usuario");
 
   const [profileData, setProfileData] = useState({
     NOMBRE: "",
@@ -135,7 +135,7 @@ const Profile = () => {
           setProfileData(data);
           // Sincronizamos el nombre en la Navbar
           if (data.NOMBRE) {
-            localStorage.setItem("user_nombre", data.NOMBRE);
+            sessionStorage.setItem("user_nombre", data.NOMBRE);
             setUserName(data.NOMBRE);
           }
         } else {
@@ -177,7 +177,7 @@ const Profile = () => {
 
       if (data.success) {
         setSuccess(data.message);
-        localStorage.setItem("user_nombre", profileData.NOMBRE);
+        sessionStorage.setItem("user_nombre", profileData.NOMBRE);
         setUserName(profileData.NOMBRE);
       } else {
         setError(data.message || "Error al actualizar.");

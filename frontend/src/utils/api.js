@@ -4,7 +4,7 @@
  * Obtiene el token de localStorage.
  */
 const getToken = () => {
-  return localStorage.getItem("access_token");
+  return sessionStorage.getItem("access_token");
 };
 
 /**
@@ -43,8 +43,8 @@ export const apiFetch = async (url, options = {}) => {
       // 422 = Token faltante (Unprocessable Entity)
       
       console.error("Error de Token (401/422):", response.status);
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("user_nombre");
+      sessionStorage.removeItem("access_token");
+      sessionStorage.removeItem("user_nombre");
       // Redirigir al login
       window.location.href = '/'; 
       throw new Error("Sesión expirada. Por favor, inicie sesión de nuevo.");
@@ -54,7 +54,7 @@ export const apiFetch = async (url, options = {}) => {
         // Intentar parsear el error del backend
         const errorData = await response.json();
         // Usamos data.message (de Flask) o data.error
-        throw new Error(errorData.message || errorData.error || response.statusText);
+        throw new Error(errorData.message || errorData.error || errorData.msg || response.statusText);
     }
 
     // Si la respuesta no tiene contenido (ej. un PUT exitoso sin respuesta)

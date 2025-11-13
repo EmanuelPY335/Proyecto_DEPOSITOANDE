@@ -1,8 +1,8 @@
 // LoginForm.jsx
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react"; // <--- CAMBIO: Importar useEffect
+import { useNavigate, useLocation } from "react-router-dom"; // <--- CAMBIO: Importar useLocation
 import RegisterModal from "./RegisterModal"; 
-import ForgotPassModal from "./ForgotPassModal"; // Asumiendo que mantienes la recuperación
+import ForgotPassModal from "./ForgotPassModal";
 import styles from "../styles/Login.module.css";
 
 const LoginForm = () => {
@@ -18,9 +18,33 @@ const LoginForm = () => {
   });
 
   const navigate = useNavigate();
+  const location = useLocation(); // <--- CAMBIO: Hook de ubicación
+  const isLoggedIn = () => !!sessionStorage.getItem("access_token");
+
+  // 2. Este useEffect es la solución
+  useEffect(() => {
+    // Si el usuario ya está logueado (en sessionStorage),
+    // no debe ver esta página. ¡Lo mandamos a /home!
+    if (isLoggedIn()) {
+      navigate("/home", { replace: true });
+    }
+    // El 'replace: true' es para que la página de Login
+    // no se quede en el historial y no puedas volver con la flecha "atrás".
+  }, [navigate]);
+  // --- CAMBIO: Añadir este useEffect ---
+  // Revisa si fuimos redirigidos a esta página con un mensaje
+  useEffect(() => {
+    if (location.state?.message) {
+      setMessage(location.state.message);
+      // Limpiamos el state para que el mensaje no se quede si el usuario recarga
+      window.history.replaceState({}, document.title)
+    }
+  }, [location]); // Se ejecuta cada vez que la ubicación cambia
+  // --- FIN DEL CAMBIO ---
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
+    setMessage(""); // <--- CAMBIO: Limpiar mensaje en un nuevo intento
     try {
       const response = await fetch("http://127.0.0.1:5000/api/login", {
         method: "POST",
@@ -30,13 +54,15 @@ const LoginForm = () => {
       
       const data = await response.json();
       
-      // <--- CAMBIO: Guardar el token en localStorage --->
       if (data.access_token) {
-        localStorage.setItem("access_token", data.access_token);
-        localStorage.setItem("user_nombre", data.user_nombre); // Opcional: guardar nombre
-        localStorage.setItem("user_rol", data.rol);
-        navigate("/home");
-      } else {
+            
+              sessionStorage.setItem("access_token", data.access_token);
+              sessionStorage.setItem("user_nombre", data.user_nombre);
+              sessionStorage.setItem("user_rol", data.rol);
+            
+              navigate("/home");
+            } else {
+
         setMessage(data.message || "Correo o contraseña incorrectos");
       }
     } catch (error) {
@@ -112,6 +138,7 @@ const LoginForm = () => {
           </button>
         </div>
 
+        {/* Esta línea ya existía y mostrará el mensaje */}
         {message && <p className={styles.loginMessage}>{message}</p>}
 
         {showModal && (

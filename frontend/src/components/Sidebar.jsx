@@ -10,8 +10,8 @@ const Sidebar = () => {
 
   // <--- CAMBIO: Función de Logout --->
   const handleLogout = () => {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("user_nombre");
+    sessionStorage.removeItem("access_token");
+    sessionStorage.removeItem("user_nombre");
     navigate("/"); // Redirigir al login
   };
 

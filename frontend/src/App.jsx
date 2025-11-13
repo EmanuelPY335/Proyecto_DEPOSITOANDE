@@ -11,16 +11,56 @@ import Roles from "./pages/Roles";          // crea este archivo (lo que te pas�
 import Empleados from "./pages/Empleados";  // crea este archivo (lo que te pasé)
 
 // --- Guards ---
-const isLoggedIn = () => !!localStorage.getItem("access_token");
-const isAdmin = () => localStorage.getItem("user_rol") === "Master_Admin";
+const isLoggedIn = () => !!sessionStorage.getItem("access_token");
 
-const ProtectedRoute = ({ children }) => {
-  return isLoggedIn() ? children : <Navigate to="/" replace />;
+const isAdmin = () => {
+  const userRole = sessionStorage.getItem("user_rol");
+  // Ahora permite pasar al Gerente (Admin) O al Desarrollador (Master_Admin)
+  return userRole === "Admin" || userRole === "Master_Admin";
 };
 
+
+// --- CAMBIO 1: ProtectedRoute ---
+const ProtectedRoute = ({ children }) => {
+  if (!isLoggedIn()) {
+    // Escenario 1: No ha iniciado sesión
+    return (
+      <Navigate 
+        to="/" 
+        replace 
+        state={{ message: "Error: Ingrese con un correo y contraseña válida." }} 
+      />
+    );
+  }
+  return children;
+};
+
+
+// --- CAMBIO 2: AdminRoute ---
 const AdminRoute = ({ children }) => {
-  if (!isLoggedIn()) return <Navigate to="/" replace />;
-  return isAdmin() ? children : <Navigate to="/home" replace />;
+  if (!isLoggedIn()) {
+    // Caso A: Ni siquiera ha iniciado sesión
+    return (
+      <Navigate 
+        to="/" 
+        replace 
+        state={{ message: "Error: Ingrese con un correo y contraseña válida." }} 
+      />
+    );
+  }
+
+  if (!isAdmin()) {
+    // Escenario 2: Inició sesión pero no tiene permisos
+    return (
+      <Navigate 
+        to="/home" 
+        replace 
+        state={{ message: "No tienes permisos para acceder a esa dirección." }} 
+      />
+    );
+  }
+
+  return children;
 };
 
 function App() {

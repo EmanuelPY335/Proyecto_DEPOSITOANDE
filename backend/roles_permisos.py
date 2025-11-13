@@ -39,7 +39,7 @@ def role_required(*roles_permitidos):
 
 @roles_bp.route("/roles", methods=["GET"])
 @jwt_required()
-@role_required("Master_Admin")
+@role_required("Admin")
 def listar_roles():
     """
     Ruta para obtener la lista de todos los roles.
@@ -48,7 +48,7 @@ def listar_roles():
 
 @roles_bp.route("/roles", methods=["POST"])
 @jwt_required()
-@role_required("Master_Admin")
+@role_required("Admin")
 def manejar_crear_rol():
     """
     Ruta para crear un nuevo rol.
@@ -64,7 +64,7 @@ def manejar_crear_rol():
 
 @roles_bp.route("/roles/<int:id_rol>", methods=["PUT"])
 @jwt_required()
-@role_required("Master_Admin")
+@role_required("Admin")
 def manejar_actualizar_rol(id_rol):
     """
     Ruta para actualizar (renombrar) un rol existente.
@@ -89,7 +89,7 @@ def manejar_actualizar_rol(id_rol):
 
 @roles_bp.route("/roles/<int:id_rol>", methods=["DELETE"])
 @jwt_required()
-@role_required("Master_Admin")
+@role_required("Admin")
 def manejar_eliminar_rol(id_rol):
     """
     Ruta para eliminar un rol.
@@ -117,7 +117,7 @@ def manejar_eliminar_rol(id_rol):
 
 @roles_bp.route("/asignar-rol", methods=["PUT"])
 @jwt_required()
-@role_required("Master_Admin")
+@role_required("Admin")
 def cambiar_rol():
     """
     Ruta para asignar un nuevo rol a un usuario.
