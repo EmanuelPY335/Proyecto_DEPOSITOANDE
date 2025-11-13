@@ -1,9 +1,31 @@
+/* === styles/index.css (NUEVO CONTENIDO) === */
 
+/* 1. Variables Globales (Basadas en Home.css y Roles.css) */
+:root {
+  --color-primary: #007bff; /* Azul principal (Home.css) */
+  --color-primary-dark: #0056b3;
+  --color-secondary: #6c757d;
+  --color-success: #28a745;
+  --color-danger: #dc3545;
+  --color-warning: #ffc107;
+  --color-light-bg: #f4f6fc; /* Fondo general (Home.css) */
+  --color-white: #ffffff;
+  --color-text: #333;
+  --color-text-light: #6c757d;
+  --border-radius-sm: 6px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 10px rgba(0,0,0,0.08);
+}
+
+/* 2. Reset Básico y Fuente (Usa la fuente de Home.css) */
 body {
+  font-family: 'Poppins', sans-serif;
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  padding: 0;
+  background-color: var(--color-light-bg);
+  color: var(--color-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -13,3 +35,145 @@ code {
     monospace;
 }
 
+/* 3. Estilos de Botones ÚNICOS */
+.btn {
+  padding: 0.8rem 1.2rem;
+  border: none;
+  border-radius: var(--border-radius-md);
+  font-size: 1em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: var(--color-white);
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--color-primary-dark);
+}
+
+.btn-secondary {
+  background-color: #f0f0f0;
+  color: #333;
+  border: 1px solid #ccc;
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.btn-danger {
+  background-color: var(--color-danger);
+  color: var(--color-white);
+}
+.btn-danger:hover:not(:disabled) {
+  background-color: #c9302c;
+}
+
+/* 4. Estilos de Formularios ÚNICOS */
+.form-container {
+  background: var(--color-white);
+  padding: 2rem;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.form-container h2 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #555;
+}
+
+.input-field,
+.select-field {
+  width: 100%;
+  padding: 0.8rem;
+  border: 1px solid #ccc;
+  border-radius: var(--border-radius-md);
+  font-size: 1em;
+  box-sizing: border-box;
+}
+
+.input-field:focus,
+.select-field:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.2);
+}
+
+/* 5. Estilos de Tablas ÚNICOS */
+.table-wrapper {
+  overflow-x: auto;
+  background-color: var(--color-white);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 1rem;
+}
+
+.styled-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.styled-table th {
+  background-color: #f7f8fa;
+  color: #333;
+  padding: 14px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid #eee;
+}
+
+.styled-table td {
+  border-bottom: 1px solid #eee;
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  vertical-align: middle;
+}
+
+.styled-table tbody tr:hover {
+  background-color: #f3f6f9;
+}
+
+/* 6. Mensajes de Feedback ÚNICOS */
+.msg {
+  border-radius: var(--border-radius-md);
+  padding: 12px 16px;
+  margin-bottom: 1.5rem;
+  border: 1px solid transparent;
+  font-weight: 500;
+}
+
+.msg-error {
+  color: #842029;
+  background-color: #f8d7da;
+  border-color: #f5c2c7;
+}
+
+.msg-success {
+  color: #157347;
+  background-color: #d1e7dd;
+  border-color: #badbcc;
+}

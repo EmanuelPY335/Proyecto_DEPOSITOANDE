@@ -9,32 +9,36 @@ db = SQLAlchemy()
 # 2. Definir TODOS los Modelos aquí
 
 class Empleado(db.Model):
-    """ Modelo para la tabla EMPLEADO """
-    __tablename__ = 'EMPLEADO'
-    
-    # --- ¡ESTA ES LA LÍNEA QUE FALTABA Y CAUSABA EL ERROR! ---
+    """ Modelo para la tabla empleado """
+    __tablename__ = 'empleado'   # 🔥 CORREGIDO (antes: 'EMPLEADO')
+
     ID_EMPLEADO = db.Column(db.Integer, primary_key=True)
-    
     ID_DEPOSITO = db.Column(db.Integer, db.ForeignKey('DEPOSITO.ID_DEPOSITO'))
-    NUMERO_DOCUMENTO = db.Column(db.Integer, unique=True) 
+    NUMERO_DOCUMENTO = db.Column(db.Integer)
     NOMBRE = db.Column(db.String(60))
     APELLIDO = db.Column(db.String(60))
     ESTADO_ACTIVO = db.Column(db.Boolean, default=True)
-    TELEFONO = db.Column(db.BigInteger, unique=True)
-    FECHA_NACIMIENTO = db.Column(db.Date, nullable=True) 
+    TELEFONO = db.Column(db.BigInteger)
+    FECHA_NACIMIENTO = db.Column(db.Date, nullable=True)
+
     usuario = db.relationship('Usuario', back_populates='empleado', uselist=False)
     deposito = db.relationship('Deposito')
+
 
 class Usuario(db.Model):
     """ Modelo para la tabla USUARIO """
     __tablename__ = 'USUARIO'
     ID_USUARIO = db.Column(db.Integer, primary_key=True)
     ID_ROL = db.Column(db.Integer, db.ForeignKey('ROL.ID_ROL'))
-    ID_EMPLEADO = db.Column(db.Integer, db.ForeignKey('EMPLEADO.ID_EMPLEADO'), unique=True)
+    
+    # 🔥 CORREGIDO
+    ID_EMPLEADO = db.Column(db.Integer, db.ForeignKey('empleado.ID_EMPLEADO'), unique=True)
+    
     CORREO = db.Column(db.String(80), unique=True, nullable=False)
     CONTRASENA = db.Column(db.String(255), nullable=False) 
     empleado = db.relationship('Empleado', back_populates='usuario')
     rol = db.relationship('Rol')
+
 
     def set_password(self, password):
         self.CONTRASENA = generate_password_hash(password)

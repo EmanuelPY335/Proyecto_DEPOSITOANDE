@@ -1,6 +1,6 @@
 // LoginForm.jsx
-import React, { useState, useEffect } from "react"; // <--- CAMBIO: Importar useEffect
-import { useNavigate, useLocation } from "react-router-dom"; // <--- CAMBIO: Importar useLocation
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import RegisterModal from "./RegisterModal"; 
 import ForgotPassModal from "./ForgotPassModal";
 import styles from "../styles/Login.module.css";
@@ -18,33 +18,20 @@ const LoginForm = () => {
   });
 
   const navigate = useNavigate();
-  const location = useLocation(); // <--- CAMBIO: Hook de ubicación
-  const isLoggedIn = () => !!sessionStorage.getItem("access_token");
+  const location = useLocation();
 
-  // 2. Este useEffect es la solución
-  useEffect(() => {
-    // Si el usuario ya está logueado (en sessionStorage),
-    // no debe ver esta página. ¡Lo mandamos a /home!
-    if (isLoggedIn()) {
-      navigate("/home", { replace: true });
-    }
-    // El 'replace: true' es para que la página de Login
-    // no se quede en el historial y no puedas volver con la flecha "atrás".
-  }, [navigate]);
-  // --- CAMBIO: Añadir este useEffect ---
   // Revisa si fuimos redirigidos a esta página con un mensaje
   useEffect(() => {
     if (location.state?.message) {
       setMessage(location.state.message);
-      // Limpiamos el state para que el mensaje no se quede si el usuario recarga
+      // Limpiamos el state para que el mensaje no se quede
       window.history.replaceState({}, document.title)
     }
-  }, [location]); // Se ejecuta cada vez que la ubicación cambia
-  // --- FIN DEL CAMBIO ---
+  }, [location]);
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    setMessage(""); // <--- CAMBIO: Limpiar mensaje en un nuevo intento
+    setMessage(""); // Limpiar mensaje en un nuevo intento
     try {
       const response = await fetch("http://127.0.0.1:5000/api/login", {
         method: "POST",
@@ -55,14 +42,13 @@ const LoginForm = () => {
       const data = await response.json();
       
       if (data.access_token) {
+            // --- CAMBIO: Usamos sessionStorage ---
+            sessionStorage.setItem("access_token", data.access_token);
+            sessionStorage.setItem("user_nombre", data.user_nombre);
+            sessionStorage.setItem("user_rol", data.rol);
             
-              sessionStorage.setItem("access_token", data.access_token);
-              sessionStorage.setItem("user_nombre", data.user_nombre);
-              sessionStorage.setItem("user_rol", data.rol);
-            
-              navigate("/home");
-            } else {
-
+            navigate("/home");
+      } else {
         setMessage(data.message || "Correo o contraseña incorrectos");
       }
     } catch (error) {

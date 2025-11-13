@@ -1,0 +1,33 @@
+/* src/styles/Profile.css (SIMPLIFICADO) */
+
+/* 1. Estilos de layout que SÓLO se usan en Profile.jsx */
+.profile-forms-column {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+/* * 2. Estilo para el botón 'Cambiar Contraseña'.
+ * Hereda de .btn y .btn-primary, y solo cambia el color.
+ */
+.btn-alternate {
+  background-color: #6f42c1;
+}
+.btn-alternate:hover:not(:disabled) {
+  background-color: #59369a;
+}
+
+/* 3. Media query de layout que SÓLO se usa en Profile.jsx */
+@media (min-width: 992px) {
+  .profile-forms-column {
+    flex-direction: row; /* Lado a lado en pantallas grandes */
+    align-items: flex-start;
+  }
+  .form-container {
+    flex: 1; /* Cada formulario toma la mitad del espacio */
+  }
+}
+
+/* ¡TODO LO DEMÁS (.form-container, .btn-guardar, .msg-error, etc.) 
+  SE BORRÓ DE AQUÍ PORQUE AHORA ESTÁ EN styles/index.css!
+*/

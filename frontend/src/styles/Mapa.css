@@ -1,0 +1,61 @@
+/* Pag1.css (ACTUALIZADO) */
+
+/* Esta es la nueva área de contenido del mapa.
+  Ocupará el 100% del alto menos el navbar (70px).
+  Crece para llenar el espacio restante al lado del sidebar.
+*/
+.content-dashboard-map {
+  flex-grow: 1;
+  height: calc(100vh - 70px); /* Alto total menos Navbar */
+  position: relative;
+  background: #eee; /* Fondo mientras carga el mapa */
+}
+
+/* El contenedor de Leaflet debe llenar el 100%
+  de su padre (.content-dashboard-map)
+*/
+.leaflet-map-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Fix para el contenedor del mapa */
+.leaflet-container {
+  height: 100% !important;
+  width: 100% !important;
+  font-family: inherit;
+}
+
+/* Loading spinner (sin cambios) */
+.loading-map {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%; /* Llenará el .content-dashboard-map */
+  width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1000; /* Por encima del mapa vacío */
+}
+
+.spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 2s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ELIMINAMOS .map-page Y LAS REGLAS DE html, body y #root
+  porque ahora la página se comporta como un layout normal
+  y depende de los estilos de Home.css.
+*/

@@ -1,67 +1,78 @@
+// src/App.jsx
+
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
-import Pag1 from "./pages/Pag1";
+
+// 👈 CAMBIO IMPORTANTE: respeta mayúsculas/minúsculas del archivo
+import Mapa from "./pages/Mapa";
+
 import Pag2 from "./pages/Pag2";
 import ResetPassword from "./pages/ResetPassword";
 import Profile from "./pages/Profile";
+import Roles from "./pages/Roles";
+import Empleados from "./pages/Empleados";
 
-// NUEVO: páginas admin
-import Roles from "./pages/Roles";          // crea este archivo (lo que te pasé)
-import Empleados from "./pages/Empleados";  // crea este archivo (lo que te pasé)
+import Layout from "./components/Layout";
 
 // --- Guards ---
 const isLoggedIn = () => !!sessionStorage.getItem("access_token");
 
 const isAdmin = () => {
   const userRole = sessionStorage.getItem("user_rol");
-  // Ahora permite pasar al Gerente (Admin) O al Desarrollador (Master_Admin)
   return userRole === "Admin" || userRole === "Master_Admin";
 };
 
-
-// --- CAMBIO 1: ProtectedRoute ---
+// Usa Layout
 const ProtectedRoute = ({ children }) => {
   if (!isLoggedIn()) {
-    // Escenario 1: No ha iniciado sesión
     return (
-      <Navigate 
-        to="/" 
-        replace 
-        state={{ message: "Error: Ingrese con un correo y contraseña válida." }} 
+      <Navigate
+        to="/"
+        replace
+        state={{ message: "Error: Ingrese con un correo y contraseña válida." }}
+      />
+    );
+  }
+  return <Layout>{children}</Layout>;
+};
+
+// SOLO verifica login (sin Layout) → para el mapa
+const AuthenticatedRoute = ({ children }) => {
+  if (!isLoggedIn()) {
+    return (
+      <Navigate
+        to="/"
+        replace
+        state={{ message: "Error: Ingrese con un correo y contraseña válida." }}
       />
     );
   }
   return children;
 };
 
-
-// --- CAMBIO 2: AdminRoute ---
 const AdminRoute = ({ children }) => {
   if (!isLoggedIn()) {
-    // Caso A: Ni siquiera ha iniciado sesión
     return (
-      <Navigate 
-        to="/" 
-        replace 
-        state={{ message: "Error: Ingrese con un correo y contraseña válida." }} 
+      <Navigate
+        to="/"
+        replace
+        state={{ message: "Error: Ingrese con un correo y contraseña válida." }}
       />
     );
   }
-
   if (!isAdmin()) {
-    // Escenario 2: Inició sesión pero no tiene permisos
     return (
-      <Navigate 
-        to="/home" 
-        replace 
-        state={{ message: "No tienes permisos para acceder a esa dirección." }} 
+      <Navigate
+        to="/home"
+        replace
+        state={{ message: "No tienes permisos para acceder a esa dirección." }}
       />
     );
   }
-
-  return children;
+  return <Layout>{children}</Layout>;
 };
+// --- Fin Guards ---
 
 function App() {
   return (
@@ -71,7 +82,7 @@ function App() {
         <Route path="/" element={<Login />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-        {/* Protegidas (requieren login) */}
+        {/* Protegidas (requieren login + Layout) */}
         <Route
           path="/home"
           element={
@@ -80,14 +91,17 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Mapa: requiere login, pero SIN Layout principal */}
         <Route
-          path="/pag1"
+          path="/mapa"
           element={
-            <ProtectedRoute>
-              <Pag1 />
-            </ProtectedRoute>
+            <AuthenticatedRoute>
+              <Mapa />
+            </AuthenticatedRoute>
           }
         />
+
         <Route
           path="/pag2"
           element={
@@ -105,7 +119,7 @@ function App() {
           }
         />
 
-        {/* Solo Gerente (Master_Admin) */}
+        {/* Solo Admin/Master_Admin */}
         <Route
           path="/roles"
           element={

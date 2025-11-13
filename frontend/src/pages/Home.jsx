@@ -1,48 +1,33 @@
 // Home.jsx
 import React from "react";
-import { Link, useLocation } from "react-router-dom"; // <--- CAMBIO: Importar useLocation
-import Sidebar from "../components/Sidebar"; 
+import { Link, useLocation } from "react-router-dom";
+// --- CAMBIO: Ya no se importa Sidebar ---
 import "../styles/Home.css"; 
 import { 
-  Settings, Bell, UserCircle, 
+  // --- CAMBIO: Ya no se importan Settings, Bell, UserCircle ---
   Box, TrendingUp, Users, Clipboard, FileText, Layers, Shield
 } from "lucide-react"; 
 
 const Home = () => {
-  const userName = sessionStorage.getItem("user_nombre") || "Usuario";
+  const fullName = sessionStorage.getItem("user_nombre") || "Usuario";
+  const [firstName = "", lastName = ""] = fullName.split(" ");
   const userRole = sessionStorage.getItem("user_rol") || "";
-  const location = useLocation(); // <--- CAMBIO: Hook de ubicación
-  const notificationCount = 0;
+  const location = useLocation();
+// Obtener nombre y apellido corto
 
-  const DashboardNavbar = () => (
-    <nav className="navbar-dashboard">
-      <div className="navbar-left">
-        <Settings size={24} className="navbar-logo-icon" />
-        <span className="navbar-brand-title">SISDEPO</span>
-      </div>
-      <div className="navbar-right"> 
-        <div className="notification-icon-wrapper">
-          <Bell size={20} />
-          {notificationCount > 0 && <span className="notification-badge">{notificationCount}</span>}
-        </div>
-        <Link to="/profile" className="navbar-profile-link">
-          <UserCircle size={28} className="profile-icon" />
-          <span className="profile-name">{userName}</span>
-        </Link>
-      </div>
-    </nav>
-  );
+
+  // --- CAMBIO: Eliminamos el componente DashboardNavbar (ya está en Layout) ---
 
   const DashboardCards = () => (
     <div className="dashboard-content-grid">
       {/* 1) Mapa */}
-      <div className="card card-pag1">
+      <div className="card card-mapa">
         <div className="card-header">
           <FileText size={30} className="card-main-icon" />
           <h3>Mapa de Vehículos</h3>
         </div>
         <p>Monitoreo en tiempo real de la flota.</p>
-        <Link to="/pag1" className="card-button primary">Ver Mapa</Link>
+        <Link to="/Mapa" className="card-button primary">Ver Mapa</Link>
       </div>
 
       {/* 2) Gastos */}
@@ -109,29 +94,31 @@ const Home = () => {
     </div>
   );
 
+  // --- CAMBIO: El return es mucho más simple ---
   return (
-    <div className="dashboard-layout">
-      <DashboardNavbar />
-      <div className="main-area">
-        <Sidebar />
-        <div className="content-dashboard">
-        
-          {/* --- CAMBIO: Añadir este bloque --- */}
-          {/* Muestra el mensaje de error si existe en el state de la ubicación */}
-          {location.state?.message && (
-            // Asumiendo que 'msg-error' está definido en Home.css o un CSS global
-            <p className="msg-error" style={{ marginBottom: '1.5rem' }}>
-              {location.state.message}
-            </p>
-          )}
-          {/* --- FIN DEL CAMBIO --- */}
+    // El Layout ya provee el <div className="content-dashboard">
+    <>
+      {/* Muestra el mensaje de error si existe (de App.jsx) */}
+      {location.state?.message && (
+        <p 
+          className="msg-error" 
+          style={{ 
+            marginBottom: '1.5rem', 
+            backgroundColor: '#f8d7da', // Estilos para asegurar visibilidad
+            color: '#842029', 
+            padding: '10px', 
+            borderRadius: '5px' 
+          }}
+        >
+          {location.state.message}
+        </p>
+      )}
 
-          <h1>Gestión de Depósito</h1>
-          <p className="subtitle">Bienvenido, {userName}.</p>
-          <DashboardCards />
-        </div>
-      </div>
-    </div>
+      <h1>Gestión de Depósito</h1>
+      <p className="subtitle">Bienvenido, {firstName} {lastName}.</p>
+
+      <DashboardCards />
+    </>
   );
 };
 

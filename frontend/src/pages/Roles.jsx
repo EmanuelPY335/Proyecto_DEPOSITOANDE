@@ -1,6 +1,5 @@
 // src/pages/Roles.jsx
 import React, { useEffect, useState }from "react";
-import Sidebar from "../components/Sidebar";
 import { apiFetch } from "../utils/api";
 import "../styles/Roles.css";
 
@@ -176,7 +175,7 @@ const Roles = () => {
   return (
     <div className="dashboard-layout">
       <div className="main-area">
-        <Sidebar />
+        
         <div className="content-dashboard">
           <h1>Roles y Permisos</h1>
           <p className="subtitle">Solo visible para el Gerente (Master_Admin).</p>
