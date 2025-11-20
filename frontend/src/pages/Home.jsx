@@ -116,7 +116,8 @@ const Home = () => {
 
       <h1>Gestión de Depósito</h1>
       <p className="subtitle">Bienvenido, {firstName} {lastName}.</p>
-
+      <br />
+      <br />
       <DashboardCards />
     </>
   );

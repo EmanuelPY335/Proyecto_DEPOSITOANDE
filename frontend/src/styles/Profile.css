@@ -1,33 +1,130 @@
-/* src/styles/Profile.css (SIMPLIFICADO) */
+/* src/styles/Profile.css */
 
-/* 1. Estilos de layout que SÓLO se usan en Profile.jsx */
-.profile-forms-column {
-  display: flex;
-  flex-direction: column;
-  gap: 30px;
+.profile-grid {
+    display: grid;
+    grid-template-columns: 1fr 400px; /* Izquierda flexible, Derecha fija */
+    gap: 40px;
+    align-items: start;
 }
 
-/* * 2. Estilo para el botón 'Cambiar Contraseña'.
- * Hereda de .btn y .btn-primary, y solo cambia el color.
- */
-.btn-alternate {
-  background-color: #6f42c1;
-}
-.btn-alternate:hover:not(:disabled) {
-  background-color: #59369a;
-}
-
-/* 3. Media query de layout que SÓLO se usa en Profile.jsx */
-@media (min-width: 992px) {
-  .profile-forms-column {
-    flex-direction: row; /* Lado a lado en pantallas grandes */
-    align-items: flex-start;
-  }
-  .form-container {
-    flex: 1; /* Cada formulario toma la mitad del espacio */
-  }
+/* Tarjetas de configuración */
+.settings-card {
+    background: #fff;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
+    border: 1px solid #eee;
 }
 
-/* ¡TODO LO DEMÁS (.form-container, .btn-guardar, .msg-error, etc.) 
-  SE BORRÓ DE AQUÍ PORQUE AHORA ESTÁ EN styles/index.css!
-*/
+.settings-card h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 1.1rem;
+    color: #2c2f33;
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid #f0f0f0;
+    padding-bottom: 10px;
+}
+
+.form-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
+}
+
+/* Inputs estilo moderno */
+.input-field {
+    width: 100%; padding: 10px;
+    border: 1px solid #ddd; border-radius: 8px;
+    background: #f9f9f9; color: #333;
+    box-sizing: border-box;
+}
+.input-field:focus {
+    border-color: #5865F2; background: #fff; outline: none;
+}
+
+/* Color Picker Personalizado */
+.color-picker-wrapper {
+    display: flex; align-items: center; gap: 10px;
+}
+.input-color {
+    width: 50px; height: 40px; border: none; background: none; cursor: pointer;
+}
+.color-code {
+    font-family: monospace; color: #666; background: #eee; padding: 5px 8px; border-radius: 4px;
+}
+
+/* Botón Subir Archivo */
+.file-upload-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: #444950; color: white;
+    padding: 8px 16px; border-radius: 8px;
+    cursor: pointer; font-size: 0.9rem; font-weight: 500;
+    transition: background 0.2s;
+}
+.file-upload-btn:hover { background: #000; }
+
+/* Botón Guardar Gigante */
+.btn-save-profile {
+    width: 100%;
+    padding: 15px;
+    background: #23a559; /* Verde guardar */
+    color: white; border: none; border-radius: 8px;
+    font-size: 1rem; font-weight: 700;
+    cursor: pointer; display: flex; justify-content: center; gap: 10px;
+    transition: transform 0.1s;
+}
+.btn-save-profile:hover { 
+  background: #2c2f33; transform: translateY(-2px); 
+}
+
+/* --- VISTA PREVIA --- */
+.profile-preview-column {
+    position: sticky; top: 100px; /* Se queda fijo al scrollear */
+}
+.preview-title { margin-top: 0; margin-bottom: 5px; font-size: 1.1rem; }
+.preview-subtitle { color: #777; margin-bottom: 20px; font-size: 0.9rem; }
+
+/* Ajustes extra para la tarjeta en modo preview */
+.preview-card {
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    animation: none; /* Sin pop-up animation aquí */
+}
+
+/* Avatar Imagen */
+.img-avatar {
+    object-fit: cover; /* Para que no se deforme */
+    border: 5px solid #fff;
+}
+
+.preview-info-row {
+    margin-bottom: 10px; color: #555; font-size: 0.9rem;
+}
+
+@media (max-width: 1000px) {
+    .profile-grid { grid-template-columns: 1fr; }
+    .profile-preview-column { display: none; /* Ocultar preview en móviles */ }
+}
+
+/* src/styles/Profile.css (AGREGAR AL FINAL) */
+
+.security-card {
+    border: 1px solid #e3e5e8; /* Un borde sutil */
+}
+
+.btn-save-password {
+    width: 100%;
+    padding: 12px;
+    background-color: #23a559; /* Gris oscuro para diferenciarlo del verde principal */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 15px;
+    transition: background 0.2s;
+}
+
+.btn-save-password:hover {
+    background-color: #2c2f33; /* Más oscuro al pasar el mouse */
+}

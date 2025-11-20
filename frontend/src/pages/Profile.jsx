@@ -1,101 +1,95 @@
-// sisdepo/frontend/src/pages/Profile.jsx (ACTUALIZADO AHORA SÍ)
 import React, { useState, useEffect } from "react";
 import { apiFetch } from "../utils/api";
-import "../styles/index.css";
-// --- CAMBIO: Ya no importamos Home.css ---
-import "../styles/Profile.css"; // Este se queda para el layout
+import { Camera, Save, Lock, User, Palette, Mail, Phone } from "lucide-react";
+import "../styles/Profile.css";
+import "../styles/EmployeeModal.css"; 
 
 const API_URL = "http://127.0.0.1:5000";
 
 const Profile = () => {
-  const [profileData, setProfileData] = useState({
-    NOMBRE: "",
-    APELLIDO: "",
-    TELEFONO: "",
-    CORREO: "",
+  // Estado del Perfil (Datos + Apariencia)
+  const [profile, setProfile] = useState({
+    NOMBRE: "", APELLIDO: "", TELEFONO: "", CORREO: "",
+    BANNER_COLOR: "#5865F2", AVATAR: null
+  });
+  
+  // Estado de Contraseñas
+  const [passwords, setPasswords] = useState({ 
+    current_password: "", 
+    new_password: "", 
+    confirm_password: "" 
   });
 
-  const [passwords, setPasswords] = useState({
-    current_password: "",
-    new_password: "",
-    confirm_password: "",
-  });
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [previewAvatar, setPreviewAvatar] = useState(null);
+  const [msg, setMsg] = useState({ type: "", text: "" });
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  // (Tu lógica de useEffect y handlers de submit no cambia...)
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        setLoading(true);
-        setError("");
-
-        const data = await apiFetch(`${API_URL}/api/profile`);
-
-        if (data) {
-          setProfileData(data);
-          if (data.NOMBRE) {
-            sessionStorage.setItem("user_nombre", data.NOMBRE);
-            window.dispatchEvent(new Event("storage"));
-          }
-        } else {
-          throw new Error("No se recibieron datos del perfil.");
-        }
-      } catch (err) {
-        console.error("Error en fetchProfile:", err);
-        if (err.message && err.message.includes("Failed to fetch")) {
-          setError("No se pudo conectar con el servidor.");
-        } else {
-          setError(err.message || "Error al cargar el perfil.");
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProfile();
+    loadProfile();
   }, []);
 
-  const handleProfileChange = (e) => {
-    setProfileData({ ...profileData, [e.target.name]: e.target.value });
-  };
-
-  const handlePasswordChange = (e) => {
-    setPasswords({ ...passwords, [e.target.name]: e.target.value });
-  };
-
-  const handleProfileSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
-
+  const loadProfile = async () => {
     try {
-      const data = await apiFetch(`${API_URL}/api/profile`, {
-        method: "PUT",
-        body: JSON.stringify(profileData),
-      });
+      const data = await apiFetch(`${API_URL}/api/profile`);
+      setProfile(data);
+      if (data.AVATAR) setPreviewAvatar(`${API_URL}${data.AVATAR}`);
+    } catch (err) { console.error(err); }
+  };
 
-      if (data.success) {
-        setSuccess(data.message);
-        sessionStorage.setItem("user_nombre", profileData.NOMBRE);
-        window.dispatchEvent(new Event("storage"));
-      } else {
-        setError(data.message || "Error al actualizar.");
-      }
-    } catch (err) {
-      setError(err.message || "Error al actualizar.");
+  // --- MANEJADORES ---
+  const handleChange = (e) => setProfile({...profile, [e.target.name]: e.target.value});
+  
+  const handlePassChange = (e) => setPasswords({...passwords, [e.target.name]: e.target.value});
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setAvatarFile(file);
+      setPreviewAvatar(URL.createObjectURL(file)); 
     }
   };
 
+  // 1. Guardar Perfil (Info + Avatar)
+  const handleSaveChanges = async (e) => {
+    e.preventDefault();
+    setMsg({ type: "", text: "" });
+
+    try {
+      if (avatarFile) {
+        const formData = new FormData();
+        formData.append("file", avatarFile);
+        const token = sessionStorage.getItem("access_token");
+        await fetch(`${API_URL}/api/profile/avatar`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}` },
+          body: formData
+        });
+      }
+
+      const resp = await apiFetch(`${API_URL}/api/profile`, {
+        method: "PUT",
+        body: JSON.stringify(profile)
+      });
+
+      if (resp.success) {
+        setMsg({ type: "success", text: "¡Perfil actualizado con éxito!" });
+        sessionStorage.setItem("user_nombre", profile.NOMBRE);
+        window.dispatchEvent(new Event("storage"));
+        loadProfile(); 
+        setAvatarFile(null);
+      }
+    } catch (err) {
+      setMsg({ type: "error", text: "Error al actualizar perfil." });
+    }
+  };
+
+  // 2. Guardar Contraseña (Separado por seguridad)
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
+    setMsg({ type: "", text: "" });
 
     if (passwords.new_password !== passwords.confirm_password) {
-      setError("Las nuevas contraseñas no coinciden.");
+      setMsg({ type: "error", text: "Las nuevas contraseñas no coinciden." });
       return;
     }
 
@@ -109,163 +103,202 @@ const Profile = () => {
       });
 
       if (data.success) {
-        setSuccess(data.message);
-        setPasswords({
-          current_password: "",
-          new_password: "",
-          confirm_password: "",
-        });
+        setMsg({ type: "success", text: "Contraseña actualizada correctamente." });
+        setPasswords({ current_password: "", new_password: "", confirm_password: "" });
       } else {
-        setError(data.message || "Error al cambiar contraseña.");
+        setMsg({ type: "error", text: data.message || "Error al cambiar contraseña." });
       }
     } catch (err) {
-      setError(err.message || "Error al cambiar contraseña.");
+      setMsg({ type: "error", text: err.message || "Error de conexión." });
     }
   };
 
-
   return (
-    <>
-      {/* ESTOS TÍTULOS ESTABAN OCULTOS EN TU CAPTURA, 
-        ASEGÚRATE DE QUE SE VEAN 
-      */}
-      <h1>Mi Perfil</h1>
-      <p className="subtitle">Edita tu información personal y de seguridad.</p>
+      <div className="dashboard-layout">
+              <div className="content-dashboard">
 
-      {loading && <p>Cargando perfil...</p>}
-
-      <div className="profile-forms-column">
-        {/* Formulario 1: Datos Personales */}
-        <div className="form-container">
-          <h2>Datos Personales</h2>
-          <form onSubmit={handleProfileSubmit}>
-            {/* <--- CAMBIO: Añadido .form-group --- */}
-            <div className="form-group"> 
-              <label htmlFor="nombre">Nombre</label>
-              <input
-                type="text"
-                id="nombre"
-                name="NOMBRE"
-                value={profileData.NOMBRE}
-                onChange={handleProfileChange}
-                required
-                className="input-field" // <--- CAMBIO
-              />
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="apellido">Apellido</label>
-              <input
-                type="text"
-                id="apellido"
-                name="APELLIDO"
-                value={profileData.APELLIDO}
-                onChange={handleProfileChange}
-                required
-                className="input-field" // <--- CAMBIO
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="telefono">Teléfono</label>
-              <input
-                type="tel"
-                id="telefono"
-                name="TELEFONO"
-                value={profileData.TELEFONO}
-                onChange={handleProfileChange}
-                required
-                className="input-field" // <--- CAMBIO
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="correo">Correo Electrónico</label>
-              <input
-                type="email"
-                id="correo"
-                name="CORREO"
-                value={profileData.CORREO}
-                onChange={handleProfileChange}
-                required
-                className="input-field" // <--- CAMBIO
-              />
-            </div>
-
-            {/* <--- CAMBIO: .btn y .btn-primary --- */}
-            <button type="submit" className="btn btn-primary"> 
-              Actualizar Datos
-            </button>
-          </form>
+              <div className="profile-header-section">
+                  <h1>Mi Perfil</h1>
+                  <p className="subtitle">Personaliza tu identidad dentro de SISDEPO.</p>
+                  <br />
         </div>
 
-        {/* Formulario 2: Cambiar Contraseña */}
-        <div className="form-container">
-          <h2>Cambiar Contraseña</h2>
-          <form onSubmit={handlePasswordSubmit}>
-            <div className="form-group">
-              <label htmlFor="current_password">Contraseña Actual</label>
-              <input
-                type="password"
-                id="current_password"
-                name="current_password"
-                value={passwords.current_password}
-                onChange={handlePasswordChange}
-                required
-                className="input-field" // <--- CAMBIO
-              />
+            <div className="profile-grid">
+              
+              {/* ------------------------------------------------------ */}
+              {/* 🟦 COLUMNA IZQUIERDA — 3 TARJETAS UNA DEBAJO DE OTRA   */}
+              {/* ------------------------------------------------------ */}
+              <div className="profile-edit-column">
+
+                {/* --- 1. DATOS PERSONALES --- */}
+                <div className="settings-card">
+                  <h3><User size={18}/> Datos Personales</h3>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Nombre</label>
+                      <input type="text" name="NOMBRE" value={profile.NOMBRE} onChange={handleChange} className="input-field"/>
+                    </div>
+                    <div className="form-group">
+                      <label>Apellido</label>
+                      <input type="text" name="APELLIDO" value={profile.APELLIDO} onChange={handleChange} className="input-field"/>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Correo</label>
+                    <input type="email" name="CORREO" value={profile.CORREO} onChange={handleChange} className="input-field"/>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Teléfono</label>
+                    <input type="text" name="TELEFONO" value={profile.TELEFONO} onChange={handleChange} className="input-field"/>
+                  </div>
+
+                  <button className="btn-save-profile" onClick={handleSaveChanges}>
+                    Guardar Cambios
+                  </button>
+                </div>
+
+
+                {/* --- 2. SEGURIDAD --- */}
+                <div className="settings-card security-card">
+                  <h3><Lock size={18}/> Seguridad</h3>
+
+                  <div className="form-group">
+                    <label>Contraseña Actual</label>
+                    <input 
+                      type="password" 
+                      name="current_password" 
+                      value={passwords.current_password} 
+                      onChange={handlePassChange} 
+                      className="input-field"
+                      placeholder="••••••••"
+                    />
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Nueva Contraseña</label>
+                      <input 
+                        type="password" 
+                        name="new_password" 
+                        value={passwords.new_password} 
+                        onChange={handlePassChange} 
+                        className="input-field"
+                        placeholder="Nueva clave"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Confirmar</label>
+                      <input 
+                        type="password" 
+                        name="confirm_password" 
+                        value={passwords.confirm_password} 
+                        onChange={handlePassChange} 
+                        className="input-field"
+                        placeholder="Repetir clave"
+                      />
+                    </div>
+                  </div>
+
+                  <button className="btn-save-password" onClick={handlePasswordSubmit}>
+                    Actualizar Contraseña
+                  </button>
+                </div>
+
+
+                {/* --- 3. APARIENCIA --- */}
+                <div className="settings-card">
+                  <h3><Palette size={18}/> Apariencia</h3>
+
+                  <div className="form-group">
+                    <label>Color del Banner</label>
+                    <div className="color-picker-wrapper">
+                      <input 
+                        type="color" 
+                        name="BANNER_COLOR" 
+                        value={profile.BANNER_COLOR || "#5865F2"} 
+                        onChange={handleChange}
+                        className="input-color"
+                      />
+                      <span className="color-code">{profile.BANNER_COLOR}</span>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Avatar</label>
+                    <label className="file-upload-btn">
+                      <Camera size={16} /> Cambiar Imagen
+                      <input type="file" accept="image/*" onChange={handleAvatarChange} hidden />
+                    </label>
+                  </div>
+                </div>
+
+              </div> {/* Fin perfil-edit-column */}
+
+
+
+              {/* ------------------------------------------------------ */}
+              {/* 🟩 COLUMNA DERECHA — VISTA PREVIA                      */}
+              {/* ------------------------------------------------------ */}
+              <div className="profile-preview-column">
+
+                <h3 className="preview-title">Vista Previa</h3>
+                <p className="preview-subtitle">Así te verán los administradores.</p>
+                
+                <div className="discord-card preview-card">
+                  
+                  {/* Banner */}
+                  <div className="card-banner" style={{background: profile.BANNER_COLOR}}></div>
+
+                  {/* Avatar */}
+                  <div className="card-header-content">
+                    {previewAvatar ? (
+                      <img src={previewAvatar} alt="Avatar" className="avatar-circle img-avatar" />
+                    ) : (
+                      <div className="avatar-circle">
+                        {profile.NOMBRE?.charAt(0)}{profile.APELLIDO?.charAt(0)}
+                        <span className="status-dot online" />
+                      </div>
+                    )}
+
+                    <div className="header-text">
+                      <h2>{profile.NOMBRE} {profile.APELLIDO}</h2>
+                      <span className="username-tag">
+                        @{profile.NOMBRE?.toLowerCase()}_{profile.APELLIDO?.toLowerCase()}
+                      </span>
+                    </div>
+                  </div>
+
+
+                  <div className="card-body" style={{overflow: "hidden"}}>
+                    <div className="section-title">CONTACTO</div>
+
+                    <div className="preview-info-row">
+                      <Mail size={14} style={{marginRight: 8}}/> {profile.CORREO}
+                    </div>
+
+                    <div className="preview-info-row">
+                      <Phone size={14} style={{marginRight: 8}}/> {profile.TELEFONO || "Sin teléfono"}
+                    </div>
+
+                    <div className="card-actions">
+                      <button className="btn-save" disabled style={{opacity: 0.7, cursor: 'default'}}>
+                        Ejemplo
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
             </div>
 
-            <div className="form-group">
-              <label htmlFor="new_password">Nueva Contraseña</label>
-              <input
-                type="password"
-                id="new_password"
-                name="new_password"
-                value={passwords.new_password}
-                onChange={handlePasswordChange}
-                required
-                className="input-field" // <--- CAMBIO
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="confirm_password">Confirmar Nueva Contraseña</label>
-              <input
-                type="password"
-                id="confirm_password"
-                name="confirm_password"
-                value={passwords.confirm_password}
-                onChange={handlePasswordChange}
-                required
-                className="input-field" // <--- CAMBIO
-              />
-            </div>
-
-            {/* <--- CAMBIO: Usamos clases de index.css + la de Profile.css --- */}
-            <button
-              type="submit"
-              className="btn btn-primary btn-alternate"
-            >
-              Cambiar Contraseña
-            </button>
-          </form>
+          </div>
         </div>
-      </div>
 
-      {/* Mensajes de éxito o error */}
-      <div
-        style={{
-          marginTop: "20px",
-          maxWidth: "1024px",
-          margin: "20px auto 0 auto",
-        }}
-      >
-        {/* <--- CAMBIO: Añadimos la clase base 'msg' --- */}
-        {error && <p className="msg msg-error">{error}</p>}
-        {success && <p className="msg msg-success">{success}</p>}
-      </div>
-    </>
   );
 };
 

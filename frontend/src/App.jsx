@@ -1,21 +1,25 @@
 // src/App.jsx
-
+import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+
+// --- Contextos ---
+import { ThemeProvider } from "./context/ThemeContext"; // <--- IMPORTANTE PARA MODO OSCURO
+
+// --- Páginas ---
 import Login from "./pages/Login";
 import Home from "./pages/Home";
-
-// 👈 CAMBIO IMPORTANTE: respeta mayúsculas/minúsculas del archivo
 import Mapa from "./pages/Mapa";
-
 import Pag2 from "./pages/Pag2";
 import ResetPassword from "./pages/ResetPassword";
 import Profile from "./pages/Profile";
 import Roles from "./pages/Roles";
 import Empleados from "./pages/Empleados";
+import Config from "./pages/Config"; // <--- NUEVA PÁGINA
 
+// --- Componentes ---
 import Layout from "./components/Layout";
 
-// --- Guards ---
+// --- Guards (Lógica de Protección) ---
 const isLoggedIn = () => !!sessionStorage.getItem("access_token");
 
 const isAdmin = () => {
@@ -23,7 +27,7 @@ const isAdmin = () => {
   return userRole === "Admin" || userRole === "Master_Admin";
 };
 
-// Usa Layout
+// 1. Ruta Protegida (Cualquier usuario logueado + Layout)
 const ProtectedRoute = ({ children }) => {
   if (!isLoggedIn()) {
     return (
@@ -37,7 +41,7 @@ const ProtectedRoute = ({ children }) => {
   return <Layout>{children}</Layout>;
 };
 
-// SOLO verifica login (sin Layout) → para el mapa
+// 2. Ruta Autenticada (Solo login, SIN Layout - Ej: Mapa pantalla completa)
 const AuthenticatedRoute = ({ children }) => {
   if (!isLoggedIn()) {
     return (
@@ -51,6 +55,7 @@ const AuthenticatedRoute = ({ children }) => {
   return children;
 };
 
+// 3. Ruta Admin (Solo Gerentes + Layout)
 const AdminRoute = ({ children }) => {
   if (!isLoggedIn()) {
     return (
@@ -72,75 +77,92 @@ const AdminRoute = ({ children }) => {
   }
   return <Layout>{children}</Layout>;
 };
-// --- Fin Guards ---
 
+// --- APP PRINCIPAL ---
 function App() {
   return (
-    <Router>
-      <Routes>
-        {/* Público */}
-        <Route path="/" element={<Login />} />
-        <Route path="/reset-password/:token" element={<ResetPassword />} />
+    // Envolvemos toda la app en el ThemeProvider para que los colores funcionen
+    <ThemeProvider>
+      <Router>
+        <Routes>
+          
+          {/* --- RUTAS PÚBLICAS --- */}
+          <Route path="/" element={<Login />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-        {/* Protegidas (requieren login + Layout) */}
-        <Route
-          path="/home"
-          element={
-            <ProtectedRoute>
-              <Home />
-            </ProtectedRoute>
-          }
-        />
+          {/* --- RUTAS GENERALES (Cualquier empleado) --- */}
+          <Route
+            path="/home"
+            element={
+              <ProtectedRoute>
+                <Home />
+              </ProtectedRoute>
+            }
+          />
+          
+          <Route
+            path="/pag2"
+            element={
+              <ProtectedRoute>
+                <Pag2 />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Mapa: requiere login, pero SIN Layout principal */}
-        <Route
-          path="/mapa"
-          element={
-            <AuthenticatedRoute>
-              <Mapa />
-            </AuthenticatedRoute>
-          }
-        />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/pag2"
-          element={
-            <ProtectedRoute>
-              <Pag2 />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <Profile />
-            </ProtectedRoute>
-          }
-        />
+          {/* Nueva Ruta de Configuración */}
+          <Route
+            path="/config"
+            element={
+              <ProtectedRoute>
+                <Config /> 
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Solo Admin/Master_Admin */}
-        <Route
-          path="/roles"
-          element={
-            <AdminRoute>
-              <Roles />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/empleados"
-          element={
-            <AdminRoute>
-              <Empleados />
-            </AdminRoute>
-          }
-        />
+          {/* --- RUTAS ESPECIALES (Sin Layout) --- */}
+          <Route
+            path="/mapa"
+            element={
+              <AuthenticatedRoute>
+                <Mapa />
+              </AuthenticatedRoute>
+            }
+          />
 
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/home" replace />} />
-      </Routes>
-    </Router>
+          {/* --- RUTAS DE ADMINISTRADOR --- */}
+          <Route
+            path="/roles"
+            element={
+              <AdminRoute>
+                <Roles />
+              </AdminRoute>
+            }
+          />
+          
+          <Route
+            path="/empleados"
+            element={
+              <AdminRoute>
+                <Empleados />
+              </AdminRoute>
+            }
+          />
+
+          {/* --- FALLBACK (Error 404) --- */}
+          <Route path="*" element={<Navigate to="/home" replace />} />
+          
+        </Routes>
+      </Router>
+    </ThemeProvider>
   );
 }
 
