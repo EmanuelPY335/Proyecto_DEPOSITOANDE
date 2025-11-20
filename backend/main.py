@@ -94,7 +94,7 @@ def login():
     try:
         user = Usuario.query.filter_by(CORREO=email).first()
         if user and user.check_password(contrasena):
-            expires = timedelta(hours=8)
+            expires = timedelta(minutes=30)
             access_token = create_access_token(
                 identity=str(user.ID_USUARIO),
                 expires_delta=expires,
