@@ -178,7 +178,7 @@ const Roles = () => {
         
         <div className="content-dashboard">
           <h1>Roles y Permisos</h1>
-          <p className="subtitle">Solo visible para el Gerente (Master_Admin).</p>
+          <br />
 
           {msg && (
             <p
@@ -240,58 +240,6 @@ const Roles = () => {
               </table>
             </div>
           </div>
-
-
-          {/* --- 2. Sección de Asignación de Usuarios --- */}
-          <div className="form-container form-container-responsive">
-            <h2>Asignación de Usuarios</h2>
-            <div className="table-wrapper">
-              <table className="roles-table">
-                <thead>
-                  <tr>
-                    <th>Empleado</th>
-                    <th>Correo</th>
-                    <th>Rol actual</th>
-                    <th>Asignar nuevo rol</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {empleados.map((u) => (
-                    <tr key={u.id}>
-                      <td>
-                        {u.nombre} {u.apellido}
-                      </td>
-                      <td>{u.correo}</td>
-                      <td>{u.rol}</td>
-                      <td>
-                        <select
-                          defaultValue={u.rol}
-                          onChange={(e) =>
-                            handleChangeRol(u.id, e.target.value)
-                          }
-                          disabled={savingUser}
-                        >
-                          {roles.map((r) => (
-                            <option key={r.id} value={r.nombre}>
-                              {r.nombre}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
-                  {empleados.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="empty-table-row">
-                        No hay usuarios.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
         </div>
       </div>
       

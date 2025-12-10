@@ -40,8 +40,9 @@ body {
   padding: 0 30px;
   background: #ffffff; /* Fondo blanco (como en la imagen) */
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  z-index: 1000;
+  z-index: 100;
   box-sizing: border-box;
+  
 }
 
 .navbar-left {

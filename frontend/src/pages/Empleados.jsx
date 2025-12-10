@@ -1,252 +1,281 @@
-// frontend/src/pages/Empleados.jsx
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { apiFetch } from "../utils/api";
 import EmployeeModal from "../components/EmployeeModal";
 import RegisterModal from "../components/RegisterModal";
-import { MoreHorizontal, UserPlus, Search, ChevronDown, X, Check } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { UserPlus, MoreHorizontal, AlertTriangle, Search, X, ChevronDown, Loader2, User } from "lucide-react"; // Agregué User icon
 import "../styles/Empleados.css";
 
 const API = "http://127.0.0.1:5000";
 
 const Empleados = () => {
-  // --- DATOS ---
   const [empleados, setEmpleados] = useState([]);
   const [depositos, setDepositos] = useState([]);
   const [roles, setRoles] = useState([]);
-  
-  // --- UI ---
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [msg, setMsg] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
-  // --- BUSCADOR INTELIGENTE ---
+  // Buscador
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchType, setSearchType] = useState("nombre"); 
-  const [showOptions, setShowOptions] = useState(false); // Controla si se ve la lista
-  const searchContainerRef = useRef(null); // Para detectar click fuera
+  const [searchType, setSearchType] = useState("nombre");
 
-  // --- NUEVO EMPLEADO ---
-  const [registro, setRegistro] = useState({
-    nombre: "", apellido: "", fecha: "", cedula: "", deposito: "",
-    telefono: "", correo: "", contrasena: "", confirmar: "",
-  });
+  // Asignación
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [ordenPendiente, setOrdenPendiente] = useState(null);
 
-  // 1. Cargar datos
+  useEffect(() => {
+    loadData();
+    if (location.state?.assigningOrden) {
+      setOrdenPendiente(location.state.assigningOrden);
+    }
+  }, [location]);
+  
+  
   const loadData = async () => {
+    setIsLoading(true);
     try {
       const [empData, depData, rolData] = await Promise.all([
         apiFetch(`${API}/api/empleados`),
         apiFetch(`${API}/api/depositos`),
-        apiFetch(`${API}/api/roles`)
+        apiFetch(`${API}/api/roles`),
       ]);
       setEmpleados(empData || []);
       setDepositos(depData || []);
       setRoles(rolData || []);
-    } catch (err) { setMsg(err.message); }
+    } catch (e) {
+      console.error("Error cargando datos:", e);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  useEffect(() => { loadData(); }, []);
+// Helper para mayúsculas en CADA palabra (Ej: "oscar emanuel" -> "Oscar Emanuel")
+  const formatText = (text) => {
+    if (!text) return "";
+    
+    return text
+      .toString()
+      .toLowerCase()       // 1. Convertimos todo a minúscula primero
+      .split(" ")          // 2. Separamos el texto por espacios
+      .map((word) =>       // 3. Recorremos cada palabra...
+        word.charAt(0).toUpperCase() + word.slice(1) // ...y ponemos mayúscula solo a la primera letra
+      )
+      .join(" ");          // 4. Unimos todo de nuevo con espacios
+  };
 
-  // Cerrar opciones al hacer clic fuera
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
-        setShowOptions(false);
-      }
+  // --- NUEVO: Lógica para el Avatar ---
+  const getAvatarColor = (name) => {
+    const colors = ["#ef4444", "#f97316", "#f59e0b", "#10b981", "#3b82f6", "#6366f1", "#8b5cf6", "#ec4899"];
+    const charCode = name ? name.charCodeAt(0) : 0;
+    return colors[charCode % colors.length];
+  };
+
+// --- FUNCIÓN RENDER AVATAR CORREGIDA ---
+  const renderAvatar = (empleado) => {
+    // 1. CORRECCIÓN: La propiedad en tu consola es "AVATAR" (mayúsculas)
+    if (empleado.AVATAR) {
+      // 2. CORRECCIÓN: Tu BD ya devuelve "/api/uploads/...", así que solo unimos con el host
+      // Resultado: http://127.0.0.1:5000/api/uploads/avatars/avatar_4.jpg
+      const imageUrl = `${API}${empleado.AVATAR}`;
+
+      return (
+        <img 
+          src={imageUrl} 
+          alt={empleado.nombre}
+          className="avatar-img"
+          // Si la imagen falla al cargar (ej. ruta rota), ocultamos la imagen para ver las iniciales
+          onError={(e) => {
+            e.target.style.display = 'none'; 
+            // Esto es un truco rápido: si falla la img, podrías forzar a mostrar el div de abajo,
+            // pero por ahora solo ocultamos la imagen rota para que no se vea el icono de error.
+          }}
+        />
+      );
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [searchContainerRef]);
 
+    // 3. Fallback: Si AVATAR es null, mostramos las iniciales
+    return (
+      <div 
+        className="avatar-placeholder"
+        style={{ backgroundColor: getAvatarColor(empleado.nombre) }}
+      >
+        {empleado.nombre ? empleado.nombre.charAt(0).toUpperCase() : <User size={16}/>}
+      </div>
+    );
+  };
 
-  // 2. Lógica de Filtrado (Tabla)
-  const filteredEmpleados = empleados.filter((emp) => {
+  const handleAsignarOrden = async (empleado) => {
+    if (!ordenPendiente) return;
+    if (!window.confirm(`¿Asignar la orden "${ordenPendiente.titulo}" a ${empleado.nombre}?`)) return;
+
+    try {
+      await apiFetch(`${API}/api/ordenes/${ordenPendiente.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ id_empleado: empleado.id, accion: "asignar" }),
+      });
+      alert(`Orden asignada correctamente a ${empleado.nombre}`);
+      setOrdenPendiente(null);
+      navigate("/ordenes-trabajo");
+    } catch (error) {
+      alert("Error al asignar la orden: " + error.message);
+    }
+  };
+
+  const cancelarAsignacion = () => {
+    setOrdenPendiente(null);
+    navigate(location.pathname, { replace: true, state: {} });
+  };
+
+const filteredEmpleados = empleados.filter((e) => {
+    // --- 1. FILTRO ROBUSTO PARA OCULTAR AL FANTASMA ---
+    // Convertimos a minúsculas y quitamos espacios para comparar seguro
+    const nombreNorm = (e.nombre || "").toLowerCase().trim();
+    const apellidoNorm = (e.apellido || "").toLowerCase().trim();
+
+    // Si coincide con "sin asignar" o "system unassigned", lo ocultamos
+    if (nombreNorm === "sin" && apellidoNorm === "asignar") return false;
+    if (nombreNorm === "system" && apellidoNorm === "unassigned") return false;
+    // ---------------------------------------------------
+
+    // --- 2. Lógica normal del buscador (SIN CAMBIOS) ---
     if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-
+    const text = searchTerm.toLowerCase();
     switch (searchType) {
-        case "nombre":
-            return `${emp.nombre} ${emp.apellido}`.toLowerCase().includes(term);
-        case "cedula":
-            return emp.NUMERO_DOCUMENTO?.toString().includes(term);
-        case "cargo":
-            return emp.rol?.toLowerCase().includes(term);
-        case "deposito":
-            const depNombre = depositos.find(d => d.ID_DEPOSITO === emp.ID_DEPOSITO)?.NOMBRE || "";
-            return depNombre.toLowerCase().includes(term);
-        case "estado":
-            const estadoTexto = emp.estado ? "activo" : "inactivo";
-            // CAMBIO: Usamos startsWith para que "Inactivo" NO coincida cuando buscas "Activo"
-            return estadoTexto.startsWith(term);
-        default:
-            return true;
+      case "nombre": return e.nombre.toLowerCase().includes(text);
+      case "apellido": return e.apellido.toLowerCase().includes(text);
+      case "rol": return (e.rol || "").toLowerCase().includes(text);
+      case "deposito":
+        const nombreDeposito = depositos.find(d => d.ID_DEPOSITO === e.ID_DEPOSITO)?.NOMBRE || "";
+        return nombreDeposito.toLowerCase().includes(text);
+      default: return true;
     }
   });
 
-
-  // 3. Generar Opciones para el Dropdown (Autocompletado)
-  const getOptions = () => {
-    let options = [];
-    if (searchType === "cargo") {
-        options = roles.map(r => r.nombre);
-    } else if (searchType === "deposito") {
-        options = depositos.map(d => d.NOMBRE);
-    } else if (searchType === "estado") {
-        options = ["Activo", "Inactivo"];
-    } else {
-        return []; // Nombre y Cédula no tienen lista predefinida
-    }
-
-    // Filtrar las opciones según lo que el usuario escribe (Autocompletado)
-    if (searchTerm) {
-        return options.filter(opt => opt.toLowerCase().includes(searchTerm.toLowerCase()));
-    }
-    return options;
-  };
-
-  const filteredOptions = getOptions();
-  const showDropdown = (["cargo", "deposito", "estado"].includes(searchType)) && showOptions;
-
-  // Handlers
-  const handleOptionClick = (value) => {
-    setSearchTerm(value);
-    setShowOptions(false);
-  };
-
-  const handleTypeChange = (e) => {
-    setSearchType(e.target.value);
-    setSearchTerm("");
-    setShowOptions(true); // Abrir lista al cambiar tipo para ver qué hay
-  };
-
-  // ... (Funciones de Guardar/Crear se mantienen igual)
-  const handleSaveEmployee = async (d) => { /* Tu lógica PUT */ try{ await apiFetch(`${API}/api/empleados/${d.id}`, {method:"PUT", body:JSON.stringify(d)}); alert("Guardado"); setSelectedEmployee(null); loadData(); }catch(e){alert(e)} };
-  const handleToggleStatus = async (id) => { if(window.confirm("¿Cambiar estado?")){ try{ await apiFetch(`${API}/api/empleados/${id}/estado`, {method:"PUT"}); setSelectedEmployee(null); loadData(); }catch(e){alert(e)} } };
-  const handleCreateSubmit = async (e) => { e.preventDefault(); try{ const r = await fetch(`${API}/api/registro`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(registro)}); const d = await r.json(); if(d.success){ alert("Creado"); setShowCreateModal(false); loadData(); setRegistro({nombre:"",apellido:"",fecha:"",cedula:"",deposito:"",telefono:"",correo:"",contrasena:"",confirmar:""}); }else{alert(d.message)} }catch(err){alert("Error red")} };
-  const handleRegistroChange = (e) => setRegistro({...registro, [e.target.name]: e.target.value});
-
   return (
     <div className="dashboard-layout">
-       <div className="content-dashboard">
-            
-            <div className="page-header">
-                <div>
-                    <h1>Empleados</h1>
-                    <p className="subtitle">Gestión centralizada de personal.</p>
-                </div>
-                <button className="btn btn-primary btn-new" onClick={() => setShowCreateModal(true)}>
-                    <UserPlus size={18} /> <span>Nuevo Empleado</span>
-                </button>
+      <div className="content-dashboard">
+        
+        {ordenPendiente && (
+          <div className="assignment-banner fade-in-down">
+            <div className="banner-content">
+              <AlertTriangle size={20} className="text-amber-600" />
+              <div>
+                <strong>Modo Asignación:</strong> Selecciona un empleado para <span className="highlight-order">"{ordenPendiente.titulo}"</span>
+              </div>
             </div>
+            <button className="btn-cancel-assign" onClick={cancelarAsignacion}>Cancelar</button>
+          </div>
+        )}
 
-            {/* --- SUPER BUSCADOR CON AUTOCOMPLETADO --- */}
-            <div className="search-section" ref={searchContainerRef}>
-                <div className="modern-search-bar">
-                    <Search className="search-icon-left" size={20} />
+        <div className="page-header">
+          <div>
+            <h1>Empleados</h1>
+            <p className="subtitle">Listado del personal {!isLoading && `(${filteredEmpleados.length})`}</p>
+          </div>
+          {!ordenPendiente && (
+            <button className="btn-new" onClick={() => setShowCreateModal(true)}>
+              <UserPlus size={18} /> Nuevo Empleado
+            </button>
+          )}
+        </div>
+
+        <div className="search-section">
+          <div className="modern-search-bar">
+            <Search className="search-icon-left" size={20} />
+            <input
+              type="text"
+              placeholder={`Buscar por ${searchType}...`}
+              className="search-input-main"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <button className="clear-search-btn" onClick={() => setSearchTerm("")}><X size={16} /></button>
+            )}
+            <div className="search-divider"></div>
+            <div className="search-type-wrapper">
+              <span className="search-label">Filtro:</span>
+              <select className="search-type-select" value={searchType} onChange={(e) => setSearchType(e.target.value)}>
+                <option value="nombre">Nombre</option>
+                <option value="apellido">Apellido</option>
+                <option value="rol">Cargo</option>
+                <option value="deposito">Depósito</option>
+              </select>
+              <ChevronDown size={16} className="select-arrow" />
+            </div>
+          </div>
+        </div>
+
+        <div className="table-container">
+          <table className="styled-table">
+            <thead>
+              <tr>
+                <th>Empleado</th>
+                <th>Apellido</th>
+                <th>Depósito</th>
+                <th>Cargo</th>
+                <th>Estado</th>
+                <th style={{ textAlign: "center" }}>Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr>
+                  <td colSpan="6" style={{ textAlign: "center", padding: "40px", color: "#666" }}>
+                    <Loader2 className="animate-spin" size={24} style={{marginRight: 10}}/> Cargando...
+                  </td>
+                </tr>
+              ) : filteredEmpleados.length > 0 ? (
+                filteredEmpleados.map((e) => (
+                  <tr key={e.id} className={ordenPendiente ? "row-highlight-mode" : ""}>
                     
-                    <input 
-                        type="text" 
-                        className="search-input-main"
-                        placeholder={searchType === "cedula" ? "Escribe cédula..." : `Buscar por ${searchType}...`}
-                        value={searchTerm}
-                        onChange={(e) => {
-                            setSearchTerm(e.target.value);
-                            setShowOptions(true); // Mostrar lista al escribir
-                        }}
-                        onFocus={() => setShowOptions(true)} // Mostrar al hacer click
-                        autoComplete="off"
-                    />
+                    {/* --- AQUÍ ESTÁ EL CAMBIO VISUAL PRINCIPAL --- */}
+                    <td>
+                      <div className="employee-profile-cell">
+                        {/* Renderizamos el Avatar (Foto o Inicial) */}
+                        {renderAvatar(e)}
+                        
+                        {/* Nombre del empleado */}
+                        <span className="employee-name-text">
+                          {formatText(e.nombre)}
+                        </span>
+                      </div>
+                    </td>
+                    {/* --------------------------------------------- */}
 
-                    {searchTerm && (
-                        <button className="clear-search-btn" onClick={() => {setSearchTerm(""); setShowOptions(true);}}>
-                            <X size={16} />
+                    <td>{formatText(e.apellido)}</td>
+                    <td>{depositos.find((d) => d.ID_DEPOSITO === e.ID_DEPOSITO)?.NOMBRE || <span style={{color: '#999'}}>—</span>}</td>
+                    <td><span className="role-badge">{formatText(e.rol)}</span></td>
+                    <td>
+                      <span className={`status-badge ${e.estado ? "active" : "inactive"}`}>
+                        {e.estado ? "Activo" : "Inactivo"}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      {ordenPendiente ? (
+                        <button className="btn-icon" onClick={() => handleAsignarOrden(e)} style={{color: '#d97706', background: '#fffbeb'}}>
+                          <UserPlus size={20} />
                         </button>
-                    )}
+                      ) : (
+                        <button className="btn-icon" onClick={() => setSelectedEmployee(e)}>
+                          <MoreHorizontal size={20} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr><td colSpan="6" className="empty-search-state">No se encontraron resultados.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-                    <div className="search-divider"></div>
-
-                    <div className="search-type-wrapper">
-                        <span className="search-label">Filtrar por:</span>
-                        <select 
-                            className="search-type-select"
-                            value={searchType}
-                            onChange={handleTypeChange}
-                        >
-                            <option value="nombre">Nombre</option>
-                            <option value="cedula">Cédula</option>
-                            <option value="cargo">Cargo</option>
-                            <option value="deposito">Depósito</option>
-                            <option value="estado">Estado</option>
-                        </select>
-                        <ChevronDown size={14} className="select-arrow" />
-                    </div>
-                </div>
-
-                {/* --- LISTA FLOTANTE (DROPDOWN) --- */}
-                {showDropdown && (
-                    <div className="autocomplete-dropdown fade-in-down">
-                        {filteredOptions.length > 0 ? (
-                            <ul className="options-list">
-                                {filteredOptions.map((opt, index) => (
-                                    <li key={index} onClick={() => handleOptionClick(opt)}>
-                                        {/* Resaltar si ya está seleccionado */}
-                                        <span>{opt}</span>
-                                        {searchTerm.toLowerCase() === opt.toLowerCase() && <Check size={16} color="#007bff"/>}
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (
-                            <div className="no-options">No hay resultados para "{searchTerm}"</div>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {/* TABLA */}
-            <div className="table-container">
-                <table className="styled-table">
-                <thead>
-                    <tr>
-                        <th>Nombre</th>
-                        <th>Apellido</th>
-                        <th>Depósito</th>
-                        <th>Cargo</th>
-                        <th>Cédula</th>
-                        <th>Estado</th>
-                        <th style={{textAlign: 'center'}}>Info</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {filteredEmpleados.map((e) => (
-                    <tr key={e.id} style={{opacity: e.estado ? 1 : 0.6}}>
-                        <td style={{fontWeight: '500'}}>{e.nombre}</td>
-                        <td>{e.apellido}</td>
-                        <td>{depositos.find(d => d.ID_DEPOSITO === e.ID_DEPOSITO)?.NOMBRE || "—"}</td>
-                        <td><span className="role-badge">{e.rol}</span></td>
-                        <td>{e.NUMERO_DOCUMENTO}</td>
-                        <td>
-                            <span className={`status-badge ${e.estado ? "active" : "inactive"}`}>
-                                {e.estado ? "Activo" : "Inactivo"}
-                            </span>
-                        </td>
-                        <td style={{textAlign: 'center'}}>
-                            <button className="btn-icon" onClick={() => setSelectedEmployee(e)}>
-                                <MoreHorizontal size={20} />
-                            </button>
-                        </td>
-                    </tr>
-                    ))}
-                    {filteredEmpleados.length === 0 && (
-                        <tr><td colSpan="7" className="empty-search-state">No se encontraron resultados.</td></tr>
-                    )}
-                </tbody>
-                </table>
-            </div>
-       </div>
-
-       {/* Modales */}
-       {selectedEmployee && <EmployeeModal employee={selectedEmployee} depositos={depositos} roles={roles} onClose={() => setSelectedEmployee(null)} onSave={handleSaveEmployee} onToggleStatus={handleToggleStatus} />}
-       {showCreateModal && <RegisterModal registro={registro} handleRegistroChange={handleRegistroChange} handleRegistroSubmit={handleCreateSubmit} onClose={() => setShowCreateModal(false)} />}
+      {selectedEmployee && <EmployeeModal employee={selectedEmployee} depositos={depositos} roles={roles} onClose={() => setSelectedEmployee(null)} />}
+      {showCreateModal && <RegisterModal onClose={() => setShowCreateModal(false)} depositos={depositos} roles={roles} reload={loadData} />}
     </div>
   );
 };

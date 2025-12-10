@@ -1,0 +1,429 @@
+/* src/styles/Ordenes.css */
+
+/* ======================= */
+/*  GRID Y TARJETAS        */
+/* ======================= */
+
+.ordenes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.orden-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.orden-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 25px rgba(15, 23, 42, 0.12);
+    border-color: #cbd5f5;
+}
+
+/* Borde izquierdo según prioridad */
+.orden-card.priority-alta { border-left: 5px solid #dc3545; }
+.orden-card.priority-media { border-left: 5px solid #ffc107; }
+.orden-card.priority-baja { border-left: 5px solid #28a745; }
+
+.orden-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.badge-estado {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.badge-estado.pendiente { background: #e3e5e8; color: #4f5660; }
+.badge-estado.en-progreso { background: #e6f7ff; color: #007bff; }
+.badge-estado.aprobada { background: #e6f4ea; color: #1e7e34; }
+
+.orden-date {
+    font-size: 0.8rem;
+    color: #9ca3af;
+}
+
+.orden-card h3 {
+    margin: 0 0 10px 0;
+    font-size: 1.1rem;
+    color: #111827;
+}
+.orden-desc {
+    color: #4b5563;
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+    flex-grow: 1;
+}
+
+.orden-meta {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    font-size: 0.85rem;
+    color: #555;
+}
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Área de ejecución (datos agregados por empleado) */
+.orden-execution {
+    background: #f9fafb;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    font-size: 0.85rem;
+}
+.exec-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    color: #374151;
+}
+
+/* ACCIONES EN LA TARJETA */
+.orden-actions {
+    border-top: 1px solid #f3f4f6;
+    padding-top: 15px;
+    display: flex;
+    gap: 10px;
+}
+
+.btn-action {
+    flex: 1;
+    padding: 8px 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.btn-action:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
+.btn-action.primary {
+    background: #111827;
+    color: white;
+}
+.btn-action.primary:hover {
+    background: #000;
+}
+
+.btn-action.secondary {
+    background: #f3f4f6;
+    color: #111827;
+}
+.btn-action.secondary:hover {
+    background: #e5e7eb;
+}
+
+.btn-action.danger {
+    background: #ef4444;
+    color: #fff;
+}
+.btn-action.danger:hover {
+    background: #dc2626;
+}
+
+/* ======================= */
+/*  HEADER / BOTÓN NUEVO   */
+/* ======================= */
+
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 25px;
+}
+
+.page-header h1 {
+    margin: 0;
+    font-size: 1.6rem;
+    color: #111827;
+}
+
+.subtitle {
+    margin-top: 4px;
+    font-size: 0.9rem;
+    color: #6b7280;
+}
+
+.btn-new {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #111827;
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+.btn-new:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.03);
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.25);
+}
+
+/* ======================= */
+/*  MODAL BACKDROP         */
+/* ======================= */
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+}
+
+/* ======================= */
+/*  MODAL / WIZARD         */
+/* ======================= */
+
+.discord-card.modal-wizard {
+    background: #ffffff;
+    color: #111827;
+    width: 480px;
+    max-width: 95vw;
+    border-radius: 16px;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.28);
+    padding: 24px 24px 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.discord-card.modal-wizard h2 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: #111827;
+}
+
+.wizard-step-indicator {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.wizard-progress {
+    width: 100%;
+    height: 4px;
+    background: #e5e7eb;
+    border-radius: 999px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+
+.wizard-progress-bar {
+    height: 100%;
+    background: #111827;
+    border-radius: 999px;
+    transition: width 0.25s ease;
+}
+
+.wizard-form {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* ======================= */
+/*  INPUTS / SELECTS       */
+/* ======================= */
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.input-group label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.input-group input,
+.input-group textarea,
+.discord-select,
+.input-field {
+    width: 100%;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #ffffff;
+    color: #111827;
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    outline: none;
+    font-family: inherit;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.input-group input:focus,
+.input-group textarea:focus,
+.discord-select:focus,
+.input-field:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.35);
+    background: #ffffff;
+}
+
+.input-group textarea {
+    resize: none;
+    min-height: 80px;
+}
+
+/* ======================= */
+/*  BOTONES MODAL/WIZARD   */
+/* ======================= */
+
+.wizard-buttons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+    gap: 10px;
+}
+
+.btn-save {
+    background: #111827;
+    color: #ffffff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s ease, transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.btn-save:hover {
+    background: #020617;
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35);
+    transform: translateY(-1px);
+}
+
+.btn-status {
+    border: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: #e5e7eb;
+    color: #111827;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.btn-status:hover {
+    background: #d1d5db;
+}
+
+.btn-status.btn-danger {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+.btn-status.btn-danger:hover {
+    background: #fecaca;
+}
+
+/* ======================= */
+/*  MODAL AVANCE SIMPLE    */
+/* ======================= */
+
+.discord-card {
+    background: #ffffff;
+    color: #111827;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.28);
+}
+
+.discord-card .input-group input {
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    color: #111827;
+}
+
+.discord-card .card-actions {
+    margin-top: 14px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+/* ======================= */
+/*  COMMAND SEARCH STYLE   */
+/* ======================= */
+
+.command-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: #0b1120; /* fondo oscuro estilo launcher */
+    border: 1px solid #6366f1;
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.5);
+    margin-bottom: 6px;
+}
+
+.command-search-icon {
+    color: #e5e7eb;
+    flex-shrink: 0;
+}
+
+.command-search input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #f9fafb;
+    font-size: 0.9rem;
+}
+
+.command-search input::placeholder {
+    color: #9ca3af;
+}

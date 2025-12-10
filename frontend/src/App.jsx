@@ -14,8 +14,8 @@ import ResetPassword from "./pages/ResetPassword";
 import Profile from "./pages/Profile";
 import Roles from "./pages/Roles";
 import Empleados from "./pages/Empleados";
-import Config from "./pages/Config"; // <--- NUEVA PÁGINA
-
+import Config from "./pages/Config"; 
+import OrdenesTrabajo from "./pages/OrdenesTrabajo";
 // --- Componentes ---
 import Layout from "./components/Layout";
 
@@ -156,7 +156,14 @@ function App() {
               </AdminRoute>
             }
           />
-
+          <Route
+            path="/ordenes-trabajo"
+            element={
+              <ProtectedRoute>
+                <OrdenesTrabajo />
+              </ProtectedRoute>
+            }
+          />
           {/* --- FALLBACK (Error 404) --- */}
           <Route path="*" element={<Navigate to="/home" replace />} />
           

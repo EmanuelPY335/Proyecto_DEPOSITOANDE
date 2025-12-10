@@ -155,9 +155,6 @@ const Profile = () => {
                     <input type="text" name="TELEFONO" value={profile.TELEFONO} onChange={handleChange} className="input-field"/>
                   </div>
 
-                  <button className="btn-save-profile" onClick={handleSaveChanges}>
-                    Guardar Cambios
-                  </button>
                 </div>
 
 
@@ -235,7 +232,9 @@ const Profile = () => {
                     </label>
                   </div>
                 </div>
-
+                  <button className="btn-save-profile" onClick={handleSaveChanges}>
+                    Guardar Cambios
+                  </button>
               </div> {/* Fin perfil-edit-column */}
 
 
@@ -266,9 +265,7 @@ const Profile = () => {
 
                     <div className="header-text">
                       <h2>{profile.NOMBRE} {profile.APELLIDO}</h2>
-                      <span className="username-tag">
-                        @{profile.NOMBRE?.toLowerCase()}_{profile.APELLIDO?.toLowerCase()}
-                      </span>
+                   <br />
                     </div>
                   </div>
 
