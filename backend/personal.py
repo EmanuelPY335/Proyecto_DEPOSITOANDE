@@ -64,6 +64,25 @@ def get_empleados():
         return jsonify(
             {"error": "Error interno del servidor", "details": str(e)}
         ), 500
+@personal_bp.route("/empleados/simple", methods=["GET"])
+@jwt_required()
+@role_required("Admin")
+def empleados_simple():
+    try:
+        empleados = Empleado.query.filter_by(ESTADO_ACTIVO=True).all()
+
+        lista = []
+        for e in empleados:
+            lista.append({
+                "ID_EMPLEADO": e.ID_EMPLEADO,
+                "NOMBRE": e.NOMBRE,
+                "APELLIDO": e.APELLIDO,
+                "ID_DEPOSITO": e.ID_DEPOSITO
+            })
+
+        return jsonify(lista), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ---------------------------------------------------------

@@ -137,22 +137,34 @@ class EstadoOrden(db.Model):
     ID_ESTADO_ORDEN = db.Column(db.Integer, primary_key=True)
     ESTADO_ORDEN = db.Column(db.String(40))
 
+# En backend/db.py
+
 class OrdenTrabajo(db.Model):
     __tablename__ = 'orden_trabajo'
     ID_ORDEN = db.Column(db.Integer, primary_key=True)
     
+    # Relaciones
     ID_ESTADO_ORDEN = db.Column(db.Integer, db.ForeignKey('estado_orden.ID_ESTADO_ORDEN'), nullable=False)
     ID_DEPOSITO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
     ID_EMPLEADO = db.Column(db.Integer, db.ForeignKey('empleado.ID_EMPLEADO'), nullable=False)
     
-    TITULO = db.Column(db.String(100), nullable=False, default="Nueva Tarea")
-    DESCRIPCION = db.Column(db.String(100))
-    PRIORIDAD = db.Column(db.String(20), default="Media")
+    # Datos Generales
+    TITULO = db.Column(db.String(100), nullable=False)
+    DESCRIPCION = db.Column(db.Text) # Cambiado a Text para más espacio
+    PRIORIDAD = db.Column(db.String(20), default="Media") # Baja, Media, Alta
     
-    FECHA_INICIO = db.Column(db.Date)
-    FECHA_CIERRE = db.Column(db.Date)
+    # Fechas
+    FECHA_INICIO = db.Column(db.Date) # Fecha asignada para iniciar
+    FECHA_CIERRE = db.Column(db.Date) # Fecha real de cierre
+    
+    # --- NUEVOS CAMPOS SEGÚN REQUERIMIENTO ---
+    HERRAMIENTAS = db.Column(db.Text, nullable=True) # Lista de herramientas usadas
+    TIEMPO_EMPLEADO = db.Column(db.String(50), nullable=True) # Ej: "2 horas", "45 min"
 
-    # Relaciones
+     # --- BORRADO DE COLUMNA ---
+    ELIMINADA = db.Column(db.Boolean, default=False)
+
+    # Relaciones SQL
     estado = db.relationship('EstadoOrden')
     deposito = db.relationship('Deposito')
     empleado = db.relationship('Empleado', backref='ordenes_asignadas')
@@ -163,8 +175,16 @@ class OrdenTrabajo(db.Model):
             "titulo": self.TITULO,
             "descripcion": self.DESCRIPCION,
             "estado": self.estado.ESTADO_ORDEN if self.estado else "Desconocido",
+            "estado_id": self.ID_ESTADO_ORDEN,
             "prioridad": self.PRIORIDAD,
             "fecha_inicio": str(self.FECHA_INICIO) if self.FECHA_INICIO else None,
             "fecha_cierre": str(self.FECHA_CIERRE) if self.FECHA_CIERRE else None,
-            "deposito": self.deposito.NOMBRE if self.deposito else "-"
+            "herramientas": self.HERRAMIENTAS or "",
+            "tiempo_empleado": self.TIEMPO_EMPLEADO or "",
+            
+            # Datos relacionados
+            "deposito": self.deposito.NOMBRE if self.deposito else "-",
+            "deposito_id": self.ID_DEPOSITO,
+            "empleado_nombre": f"{self.empleado.NOMBRE} {self.empleado.APELLIDO}" if self.empleado else "Sin asignar",
+            "empleado_id": self.ID_EMPLEADO
         }

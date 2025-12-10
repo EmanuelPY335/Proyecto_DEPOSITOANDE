@@ -8,7 +8,7 @@ from flask_jwt_extended import (
     create_access_token, jwt_required, JWTManager, get_jwt
 )
 from flask_mail import Mail, Message
-
+from ordenes import ordenes_bp
 # --- IMPORTACIONES INTERNAS ---
 from mapa import mapa_bp, socketio
 from perfil import perfil_bp
@@ -25,7 +25,7 @@ from db import (
 # 🔧 CONFIGURACIÓN PRINCIPAL
 # -----------------------------------------------------------------
 app = Flask(__name__)
-
+app.register_blueprint(ordenes_bp, url_prefix="/api")
 # --- CORS (Con soporte para React y Raspberry Pi) ---
 CORS(
     app,
@@ -60,7 +60,7 @@ app.config.update(
 mail = Mail(app)
 
 # --- SQLALCHEMY ---
-app.config["SQLALCHEMY_DATABASE_URI"] = "mysql+mysqlconnector://root:@127.0.0.1/SISDEPO"
+app.config["SQLALCHEMY_DATABASE_URI"] = "mysql+mysqlconnector://root:pepitos9900.@127.0.0.1:3306/sisdepo"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 

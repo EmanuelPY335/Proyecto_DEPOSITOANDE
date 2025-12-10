@@ -1,4 +1,5 @@
 # emulator_gps.py
+
 import requests
 import time
 import random
@@ -53,3 +54,4 @@ if __name__ == "__main__":
         emulator.run_emulation(interval=30)
     except KeyboardInterrupt:
         print("\n⏹️ Emulador detenido.")
+    
