@@ -1,9 +1,10 @@
+// src/pages/Empleados.jsx
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../utils/api";
 import EmployeeModal from "../components/EmployeeModal";
 import RegisterModal from "../components/RegisterModal";
 import { useLocation, useNavigate } from "react-router-dom";
-import { UserPlus, MoreHorizontal, AlertTriangle, Search, X, ChevronDown, Loader2, User } from "lucide-react"; // Agregué User icon
+import { UserPlus, MoreHorizontal, AlertTriangle, Search, X, ChevronDown, Loader2, User } from "lucide-react"; 
 import "../styles/Empleados.css";
 
 const API = "http://127.0.0.1:5000";
@@ -32,7 +33,6 @@ const Empleados = () => {
     }
   }, [location]);
   
-  
   const loadData = async () => {
     setIsLoading(true);
     try {
@@ -51,56 +51,33 @@ const Empleados = () => {
     }
   };
 
-// Helper para mayúsculas en CADA palabra (Ej: "oscar emanuel" -> "Oscar Emanuel")
   const formatText = (text) => {
     if (!text) return "";
-    
-    return text
-      .toString()
-      .toLowerCase()       // 1. Convertimos todo a minúscula primero
-      .split(" ")          // 2. Separamos el texto por espacios
-      .map((word) =>       // 3. Recorremos cada palabra...
-        word.charAt(0).toUpperCase() + word.slice(1) // ...y ponemos mayúscula solo a la primera letra
-      )
-      .join(" ");          // 4. Unimos todo de nuevo con espacios
+    return text.toString().toLowerCase().split(" ").map((word) => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(" ");
   };
 
-  // --- NUEVO: Lógica para el Avatar ---
   const getAvatarColor = (name) => {
     const colors = ["#ef4444", "#f97316", "#f59e0b", "#10b981", "#3b82f6", "#6366f1", "#8b5cf6", "#ec4899"];
     const charCode = name ? name.charCodeAt(0) : 0;
     return colors[charCode % colors.length];
   };
 
-// --- FUNCIÓN RENDER AVATAR CORREGIDA ---
   const renderAvatar = (empleado) => {
-    // 1. CORRECCIÓN: La propiedad en tu consola es "AVATAR" (mayúsculas)
     if (empleado.AVATAR) {
-      // 2. CORRECCIÓN: Tu BD ya devuelve "/api/uploads/...", así que solo unimos con el host
-      // Resultado: http://127.0.0.1:5000/api/uploads/avatars/avatar_4.jpg
       const imageUrl = `${API}${empleado.AVATAR}`;
-
       return (
         <img 
           src={imageUrl} 
           alt={empleado.nombre}
           className="avatar-img"
-          // Si la imagen falla al cargar (ej. ruta rota), ocultamos la imagen para ver las iniciales
-          onError={(e) => {
-            e.target.style.display = 'none'; 
-            // Esto es un truco rápido: si falla la img, podrías forzar a mostrar el div de abajo,
-            // pero por ahora solo ocultamos la imagen rota para que no se vea el icono de error.
-          }}
+          onError={(e) => { e.target.style.display = 'none'; }}
         />
       );
     }
-
-    // 3. Fallback: Si AVATAR es null, mostramos las iniciales
     return (
-      <div 
-        className="avatar-placeholder"
-        style={{ backgroundColor: getAvatarColor(empleado.nombre) }}
-      >
+      <div className="avatar-placeholder" style={{ backgroundColor: getAvatarColor(empleado.nombre) }}>
         {empleado.nombre ? empleado.nombre.charAt(0).toUpperCase() : <User size={16}/>}
       </div>
     );
@@ -128,18 +105,25 @@ const Empleados = () => {
     navigate(location.pathname, { replace: true, state: {} });
   };
 
-const filteredEmpleados = empleados.filter((e) => {
-    // --- 1. FILTRO ROBUSTO PARA OCULTAR AL FANTASMA ---
-    // Convertimos a minúsculas y quitamos espacios para comparar seguro
+// --- 🔥 FILTRADO CON LÓGICA DE DEPÓSITO 🔥 ---
+  const filteredEmpleados = empleados.filter((e) => {
+    // 1. Ocultar fantasmas/system (Sin cambios)
     const nombreNorm = (e.nombre || "").toLowerCase().trim();
     const apellidoNorm = (e.apellido || "").toLowerCase().trim();
-
-    // Si coincide con "sin asignar" o "system unassigned", lo ocultamos
     if (nombreNorm === "sin" && apellidoNorm === "asignar") return false;
     if (nombreNorm === "system" && apellidoNorm === "unassigned") return false;
-    // ---------------------------------------------------
 
-    // --- 2. Lógica normal del buscador (SIN CAMBIOS) ---
+    // 2. FILTRO POR DEPÓSITO (Si estamos asignando orden)
+    // [CORRECCIÓN]: Usamos Number() para evitar errores de tipo (string vs int)
+    if (ordenPendiente) {
+        if (Number(e.ID_DEPOSITO) !== Number(ordenPendiente.deposito_id)) {
+            return false;
+        }
+    }
+    
+    // ... resto del código (Filtros del buscador) ...
+
+    // 3. Filtros del buscador
     if (!searchTerm) return true;
     const text = searchTerm.toLowerCase();
     switch (searchType) {
@@ -163,6 +147,9 @@ const filteredEmpleados = empleados.filter((e) => {
               <AlertTriangle size={20} className="text-amber-600" />
               <div>
                 <strong>Modo Asignación:</strong> Selecciona un empleado para <span className="highlight-order">"{ordenPendiente.titulo}"</span>
+                <div style={{fontSize: '0.8rem', marginTop: '2px'}}>
+                   (Filtrando empleados del depósito correspondiente)
+                </div>
               </div>
             </div>
             <button className="btn-cancel-assign" onClick={cancelarAsignacion}>Cancelar</button>
@@ -230,21 +217,14 @@ const filteredEmpleados = empleados.filter((e) => {
               ) : filteredEmpleados.length > 0 ? (
                 filteredEmpleados.map((e) => (
                   <tr key={e.id} className={ordenPendiente ? "row-highlight-mode" : ""}>
-                    
-                    {/* --- AQUÍ ESTÁ EL CAMBIO VISUAL PRINCIPAL --- */}
                     <td>
                       <div className="employee-profile-cell">
-                        {/* Renderizamos el Avatar (Foto o Inicial) */}
                         {renderAvatar(e)}
-                        
-                        {/* Nombre del empleado */}
                         <span className="employee-name-text">
                           {formatText(e.nombre)}
                         </span>
                       </div>
                     </td>
-                    {/* --------------------------------------------- */}
-
                     <td>{formatText(e.apellido)}</td>
                     <td>{depositos.find((d) => d.ID_DEPOSITO === e.ID_DEPOSITO)?.NOMBRE || <span style={{color: '#999'}}>—</span>}</td>
                     <td><span className="role-badge">{formatText(e.rol)}</span></td>
@@ -267,7 +247,7 @@ const filteredEmpleados = empleados.filter((e) => {
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan="6" className="empty-search-state">No se encontraron resultados.</td></tr>
+                <tr><td colSpan="6" className="empty-search-state">No se encontraron resultados (revisa si hay empleados en este depósito).</td></tr>
               )}
             </tbody>
           </table>

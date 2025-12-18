@@ -427,3 +427,70 @@
 .command-search input::placeholder {
     color: #9ca3af;
 }
+/* src/styles/Ordenes.css */
+
+/* Contenedor del item de meta datos cuando hay empleado */
+.employee-assigned-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px; /* Espacio entre avatar/icono y nombre */
+}
+
+/* Estilo para la imagen del avatar pequeña */
+.meta-avatar-img {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%; /* Esto lo hace circular */
+    object-fit: cover;  /* Asegura que la imagen no se deforme */
+    border: 1px solid #e5e7eb; /* Borde sutil opcional */
+}
+
+/* Estilo para el nombre para asegurar que se alinee bien */
+.employee-name-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px; /* Limita el ancho si el nombre es muy largo */
+    font-weight: 500;
+}
+
+/* Ajuste para el icono de fallback para que tenga el mismo tamaño visual */
+.meta-fallback-icon {
+    color: #6b7280; /* Un gris estándar */
+}
+.badge-estado.completada,
+.badge-estado.finalizada,
+.badge-estado.aprobada {
+    background-color: #d1fae5; /* Fondo verde muy suave */
+    color: #059669; /* Texto verde intenso */
+    border: 1px solid #a7f3d0; /* Borde sutil para definirlo mejor */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-icon-simple {
+    background: transparent;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+.btn-icon-simple:hover {
+    background-color: #f3f4f6;
+    color: #007bff;
+}
+/* ESTADO: FIN DE TIEMPO LIMITE (VENCIDA) */
+.badge-estado.fin-de-tiempo-limite {
+    background-color: #fee2e2;  /* Fondo rojo muy suave */
+    color: #b91c1c;             /* Texto rojo intenso */
+    border: 1px solid #fca5a5;  /* Borde rojo suave */
+    
+    /* TRUCOS PARA QUE SE VEA BIEN */
+    white-space: nowrap;        /* Obliga a que sea 1 sola línea */
+    font-size: 0.65rem;         /* Letra un poco más pequeña para que quepa */
+    padding: 4px 8px;           /* Ajustar relleno */
+    font-weight: 800;           /* Negrita extra */
+    letter-spacing: 0.5px;      /* Espaciado para legibilidad */
+    display: inline-block;      /* Asegura que respete el padding */
+}

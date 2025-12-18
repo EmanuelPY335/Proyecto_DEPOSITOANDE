@@ -265,7 +265,7 @@ const Profile = () => {
 
                     <div className="header-text">
                       <h2>{profile.NOMBRE} {profile.APELLIDO}</h2>
-                   <br />
+                    <br />
                     </div>
                   </div>
 
