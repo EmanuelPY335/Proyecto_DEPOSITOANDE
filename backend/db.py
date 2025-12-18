@@ -137,7 +137,6 @@ class EstadoOrden(db.Model):
     ID_ESTADO_ORDEN = db.Column(db.Integer, primary_key=True)
     ESTADO_ORDEN = db.Column(db.String(40))
 
-# En backend/db.py
 
 class OrdenTrabajo(db.Model):
     __tablename__ = 'orden_trabajo'
@@ -150,24 +149,25 @@ class OrdenTrabajo(db.Model):
     
     # Datos Generales
     TITULO = db.Column(db.String(100), nullable=False)
-    DESCRIPCION = db.Column(db.Text) # Cambiado a Text para más espacio
-    PRIORIDAD = db.Column(db.String(20), default="Media") # Baja, Media, Alta
+    DESCRIPCION = db.Column(db.Text) 
+    PRIORIDAD = db.Column(db.String(20), default="Media") 
     
-    # Fechas
-    FECHA_INICIO = db.Column(db.Date) # Fecha asignada para iniciar
-    FECHA_CIERRE = db.Column(db.Date) # Fecha real de cierre
+    # Fechas (Importante: DateTime)
+    FECHA_INICIO = db.Column(db.DateTime) 
+    FECHA_CIERRE = db.Column(db.DateTime) 
     
-    # --- NUEVOS CAMPOS SEGÚN REQUERIMIENTO ---
-    HERRAMIENTAS = db.Column(db.Text, nullable=True) # Lista de herramientas usadas
-    TIEMPO_EMPLEADO = db.Column(db.String(50), nullable=True) # Ej: "2 horas", "45 min"
+        # --- NUEVO CAMPO: FECHA LÍMITE (Opcional) ---
+    FECHA_LIMITE = db.Column(db.DateTime, nullable=True) 
 
-     # --- BORRADO DE COLUMNA ---
+    HERRAMIENTAS = db.Column(db.Text, nullable=True)
+    TIEMPO_EMPLEADO = db.Column(db.String(50), nullable=True)
     ELIMINADA = db.Column(db.Boolean, default=False)
 
     # Relaciones SQL
     estado = db.relationship('EstadoOrden')
     deposito = db.relationship('Deposito')
     empleado = db.relationship('Empleado', backref='ordenes_asignadas')
+    avances = db.relationship('AvanceOrden', backref='orden', cascade="all, delete-orphan")
 
     def to_dict(self):
         return {
@@ -177,8 +177,15 @@ class OrdenTrabajo(db.Model):
             "estado": self.estado.ESTADO_ORDEN if self.estado else "Desconocido",
             "estado_id": self.ID_ESTADO_ORDEN,
             "prioridad": self.PRIORIDAD,
-            "fecha_inicio": str(self.FECHA_INICIO) if self.FECHA_INICIO else None,
-            "fecha_cierre": str(self.FECHA_CIERRE) if self.FECHA_CIERRE else None,
+            
+            # Formato corregido y único: DD/MM/YYYY HH:MM
+            "fecha_inicio": self.FECHA_INICIO.strftime("%d/%m/%Y %H:%M") if self.FECHA_INICIO else None,
+            "fecha_cierre": self.FECHA_CIERRE.strftime("%d/%m/%Y %H:%M") if self.FECHA_CIERRE else None,
+            
+            # AGREGAR ESTO AL DICCIONARIO:
+            "fecha_limite": self.FECHA_LIMITE.strftime("%Y-%m-%dT%H:%M") if self.FECHA_LIMITE else "", # Formato ISO para el input datetime-local
+            "fecha_limite_fmt": self.FECHA_LIMITE.strftime("%d/%m/%Y %H:%M") if self.FECHA_LIMITE else None, # Para mostrar bonito
+            
             "herramientas": self.HERRAMIENTAS or "",
             "tiempo_empleado": self.TIEMPO_EMPLEADO or "",
             
@@ -186,5 +193,24 @@ class OrdenTrabajo(db.Model):
             "deposito": self.deposito.NOMBRE if self.deposito else "-",
             "deposito_id": self.ID_DEPOSITO,
             "empleado_nombre": f"{self.empleado.NOMBRE} {self.empleado.APELLIDO}" if self.empleado else "Sin asignar",
-            "empleado_id": self.ID_EMPLEADO
+            "empleado_id": self.ID_EMPLEADO,
+            # Avatar
+            "empleado_avatar": self.empleado.usuario.AVATAR if (self.empleado and self.empleado.usuario) else None
+        }
+
+class AvanceOrden(db.Model):
+    __tablename__ = 'avance_orden'
+    ID_AVANCE = db.Column(db.Integer, primary_key=True)
+    ID_ORDEN = db.Column(db.Integer, db.ForeignKey('orden_trabajo.ID_ORDEN'), nullable=False)
+    AUTOR = db.Column(db.String(100)) 
+    MENSAJE = db.Column(db.Text, nullable=False)
+    FECHA_HORA = db.Column(db.DateTime, default=datetime.datetime.now)
+
+    def to_dict(self):
+        return {
+            "id": self.ID_AVANCE,
+            "autor": self.AUTOR,
+            "mensaje": self.MENSAJE,
+            # Formato con barras
+            "fecha": self.FECHA_HORA.strftime("%d/%m/%Y %H:%M")
         }
