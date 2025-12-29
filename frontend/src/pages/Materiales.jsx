@@ -1,117 +1,397 @@
-// Materiales.jsx
+// src/pages/Materiales.jsx
 import React, { useState, useEffect } from "react";
-import Sidebar from "../components/Sidebar";
-import "../styles/Home.css"; 
+import { apiFetch } from "../utils/api";
+import { 
+  Box, Plus, Search, Filter, AlertTriangle, Package, 
+  Layers, Ruler, Hash, Edit, Trash2, X, Save, ShieldAlert, Truck, Check
+} from "lucide-react";
+import LotesModal from "../components/LotesModal"; 
 import "../styles/Materiales.css";
-import { apiFetch } from "../utils/api"; // <--- CAMBIO: Importar apiFetch
+
+const API_URL = "http://127.0.0.1:5000";
 
 const Materiales = () => {
   const [materiales, setMateriales] = useState([]);
-  const [nombre, setNombre] = useState("");
-  const [codigo, setCodigo] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [depositos, setDepositos] = useState([]); 
+  const [loading, setLoading] = useState(true);
+  
+  // --- ESTADOS PARA FILTROS Y BÚSQUEDA ---
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showFilters, setShowFilters] = useState(false); // Mostrar/Ocultar menú filtros
+  const [filterCategory, setFilterCategory] = useState("Todas");
+  const [filterStock, setFilterStock] = useState("Todos");
 
-  const fetchMateriales = async () => {
-    try {
-      // <--- CAMBIO: Usar apiFetch --->
-      const data = await apiFetch("http://127.0.0.1:5000/api/materiales");
-      setMateriales(data);
-    } catch (err) {
-      setError(err.message || "Error de conexión al servidor");
-    }
-  };
+  // Estados para modales
+  const [showModal, setShowModal] = useState(false);
+  const [selectedMaterialLotes, setSelectedMaterialLotes] = useState(null);
+  
+  // Formulario y Rol
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentId, setCurrentId] = useState(null);
+  const [rolUser, setRolUser] = useState("");
+  const [formData, setFormData] = useState({
+    codigo_unico: "",
+    nombre: "",
+    cantidad: "",
+    unidad_medida: "unid",
+    categoria: "General",
+    stock_minimo: "5"
+  });
 
-  // Cargar materiales al inicio
+  const ALLOWED_ROLES = ["Master_Admin", "Admin", "Personal_Inventario"];
+
   useEffect(() => {
-    fetchMateriales();
+    const rol = sessionStorage.getItem("user_rol");
+    setRolUser(rol);
+    if (ALLOWED_ROLES.includes(rol)) {
+        loadData();
+    } else {
+        setLoading(false); 
+    }
+    // eslint-disable-next-line
   }, []);
 
-  const handleAddMaterial = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
-
+  const loadData = async () => {
+    setLoading(true);
     try {
-      // <--- CAMBIO: Usar apiFetch --->
-      const data = await apiFetch("http://127.0.0.1:5000/api/materiales", {
-        method: "POST",
-        body: JSON.stringify({ nombre: nombre, codigo_unico: codigo }),
-      });
-      
-      if (data.success) {
-        setSuccess(data.message);
-        setNombre(""); 
-        setCodigo("");
-        fetchMateriales(); // Recargar la lista
-      } else {
-        setError(data.message || "Error al guardar el material");
-      }
-    } catch (err) {
-      setError(err.message || "Error de conexión al servidor");
+      const [matData, depData] = await Promise.all([
+        apiFetch(`${API_URL}/api/materiales`),
+        apiFetch(`${API_URL}/api/depositos`) 
+      ]);
+      setMateriales(matData || []);
+      setDepositos(depData || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
   };
+
+  // --- LÓGICA DE FILTRADO AVANZADO ---
+  const filteredMaterials = materiales.filter(m => {
+    // 1. Filtro por Texto (Nombre o Código)
+    const matchesText = m.NOMBRE.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        String(m.CODIGO_UNICO).includes(searchTerm);
+    
+    // 2. Filtro por Categoría
+    const matchesCategory = filterCategory === "Todas" || m.CATEGORIA === filterCategory;
+
+    // 3. Filtro por Estado de Stock
+    let matchesStock = true;
+    const stockMinimo = m.STOCK_MINIMO || 5;
+    if (filterStock === "Bajo") {
+        matchesStock = m.CANTIDAD <= stockMinimo; // En Falta
+    } else if (filterStock === "Normal") {
+        matchesStock = m.CANTIDAD > stockMinimo; // OK
+    }
+
+    return matchesText && matchesCategory && matchesStock;
+  });
+
+  // Control de Acceso
+  if (!ALLOWED_ROLES.includes(rolUser)) {
+      return (
+          <div className="dashboard-layout" style={{display:'flex', justifyContent:'center', alignItems:'center', height:'80vh'}}>
+              <div style={{textAlign:'center', color:'#4b5563'}}>
+                  <ShieldAlert size={64} style={{color:'#ef4444', marginBottom: 20}} />
+                  <h1>Acceso Restringido</h1>
+                  <p>Este módulo es exclusivo para Personal de Inventario y Gerencia.</p>
+              </div>
+          </div>
+      );
+  }
+
+  // Métricas
+  const totalItems = materiales.length;
+  const stockBajo = materiales.filter(m => m.CANTIDAD <= (m.STOCK_MINIMO || 5)).length;
+
+  // Manejadores de Formulario
+  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+  
+  const openNewModal = () => {
+      setFormData({ codigo_unico: "", nombre: "", cantidad: "", unidad_medida: "unid", categoria: "General", stock_minimo: "5" });
+      setIsEditing(false);
+      setShowModal(true);
+  };
+
+  const openEditModal = (material) => {
+      setFormData({
+          codigo_unico: material.CODIGO_UNICO,
+          nombre: material.NOMBRE,
+          cantidad: material.CANTIDAD,
+          unidad_medida: material.UNIDAD || "unid",
+          categoria: material.CATEGORIA || "General",
+          stock_minimo: material.STOCK_MINIMO || 5
+      });
+      setCurrentId(material.ID_MATERIAL);
+      setIsEditing(true);
+      setShowModal(true);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const endpoint = isEditing ? `${API_URL}/api/materiales/${currentId}` : `${API_URL}/api/materiales`;
+    const method = isEditing ? "PUT" : "POST";
+    try {
+      await apiFetch(endpoint, { method: method, body: JSON.stringify(formData) });
+      setShowModal(false);
+      loadData();
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  };
+
+  const handleDelete = async (id) => {
+      if(!window.confirm("¿Seguro que deseas eliminar este material?")) return;
+      try {
+          await apiFetch(`${API_URL}/api/materiales/${id}`, { method: "DELETE" });
+          loadData();
+      } catch (err) {
+          alert(err.message);
+      }
+  };
+
+  const renderCategoryBadge = (cat) => {
+    const styleMap = {
+      'Conductores': 'badge-blue',
+      'Aisladores': 'badge-purple',
+      'Protección': 'badge-orange',
+      'Ferretería': 'badge-gray',
+      'General': 'badge-default'
+    };
+    return <span className={`category-badge ${styleMap[cat] || 'badge-default'}`}>{cat}</span>;
+  };
+
+  // Listas para los dropdowns
+  const categoriasPosibles = ["Todas", "Conductores", "Aisladores", "Protección", "Ferretería", "General"];
+  const estadosPosibles = [
+      { label: "Todos los Estados", value: "Todos" }, 
+      { label: "Stock Normal", value: "Normal" }, 
+      { label: "En Falta / Crítico", value: "Bajo" }
+  ];
 
   return (
     <div className="dashboard-layout">
-      {/* (Asumimos que el Navbar se renderiza aquí o en App.jsx) */}
-      
-      <div className="main-area">
-        <Sidebar /> {/* Sidebar a la izquierda */}
+      <div className="content-dashboard">
         
-        <div className="content-dashboard">
-          <h1>Gestión de Materiales</h1>
-          <p className="subtitle">Añada o vea los materiales del depósito.</p>
-          
-          <div className="materiales-container">
-            {/* Formulario para añadir */}
-            <div className="form-container">
-              <h2>Añadir Nuevo Material</h2>
-              <form onSubmit={handleAddMaterial}>
-                <input
-                  type="text"
-                  placeholder="Código Único (Ej: 12345)"
-                  value={codigo}
-                  onChange={(e) => setCodigo(e.target.value)}
-                  required
-                />
-                <input
-                  type="text"
-                  placeholder="Nombre del Material (Ej: Cable 2mm)"
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  required
-                />
-                <button type="submit" className="btn-guardar">Guardar Material</button>
-              </form>
-              {error && <p className="msg-error">{error}</p>}
-              {success && <p className="msg-success">{success}</p>}
-            </div>
+        <div className="page-header">
+          <div>
+            <h1>Inventario</h1>
+            <p className="subtitle">Gestión de materiales y stock del depósito.</p>
+          </div>
+          <button className="btn-new" onClick={openNewModal}>
+            <Plus size={18} /> Nuevo Material
+          </button>
+        </div>
 
-            {/* Tabla de materiales existentes */}
-            <div className="table-container">
-              <h2>Materiales en Sistema</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Código Único</th>
-                    <th>Nombre</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {materiales.map((material) => (
-                    <tr key={material.ID_MATERIAL}>
-                      <td>{material.ID_MATERIAL}</td>
-                      <td>{material.CODIGO_UNICO}</td>
-                      <td>{material.NOMBRE}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* MÉTRICAS */}
+        <div className="metrics-grid">
+          <div className="metric-card">
+            <div className="metric-icon bg-blue"><Package size={24}/></div>
+            <div className="metric-info">
+              <span className="metric-value">{totalItems}</span>
+              <span className="metric-label">Total Materiales</span>
+            </div>
+          </div>
+          <div className="metric-card">
+            <div className={`metric-icon ${stockBajo > 0 ? 'bg-red' : 'bg-green'}`}>
+              <AlertTriangle size={24}/>
+            </div>
+            <div className="metric-info">
+              <span className="metric-value">{stockBajo}</span>
+              <span className="metric-label">Stock Crítico</span>
             </div>
           </div>
         </div>
+
+        {/* BARRA DE HERRAMIENTAS Y FILTROS */}
+        <div className="toolbar-section" style={{position: 'relative'}}>
+          <div className="search-bar-modern">
+            <Search size={18} className="search-icon"/>
+            <input 
+              type="text" 
+              placeholder="Buscar por nombre o código..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          
+          {/* BOTÓN TOGGLE FILTROS */}
+          <button 
+            className={`btn-filter ${showFilters ? 'active' : ''}`} 
+            onClick={() => setShowFilters(!showFilters)}
+            style={{backgroundColor: showFilters ? '#e0e7ff' : '', color: showFilters ? '#4338ca' : ''}}
+          >
+            <Filter size={18} /> Filtros
+          </button>
+
+          {/* MENÚ FLOTANTE DE FILTROS */}
+          {showFilters && (
+            <div className="filters-dropdown fade-in">
+                <div className="filter-group">
+                    <label>Categoría</label>
+                    <div className="filter-chips">
+                        {categoriasPosibles.map(cat => (
+                            <button 
+                                key={cat} 
+                                className={`chip ${filterCategory === cat ? 'active' : ''}`}
+                                onClick={() => setFilterCategory(cat)}
+                            >
+                                {cat} {filterCategory === cat && <Check size={12}/>}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <div className="filter-group">
+                    <label>Estado de Stock</label>
+                    <select 
+                        className="discord-select" 
+                        value={filterStock} 
+                        onChange={(e) => setFilterStock(e.target.value)}
+                    >
+                        {estadosPosibles.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="filter-footer">
+                    <button className="btn-text-only" onClick={() => {
+                        setFilterCategory("Todas");
+                        setFilterStock("Todos");
+                        setSearchTerm("");
+                    }}>Limpiar Filtros</button>
+                </div>
+            </div>
+          )}
+        </div>
+
+        {/* TABLA DE RESULTADOS */}
+        <div className="table-container fade-in">
+          <table className="styled-table materials-table">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Descripción</th>
+                <th>Categoría</th>
+                <th>Stock Global</th>
+                <th>Unidad</th>
+                <th style={{textAlign: 'right'}}>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan="6" className="text-center p-5">Cargando inventario...</td></tr>
+              ) : filteredMaterials.length === 0 ? (
+                <tr><td colSpan="6" className="empty-state-row">
+                    {materiales.length === 0 ? "No hay materiales registrados." : "No se encontraron coincidencias con los filtros."}
+                </td></tr>
+              ) : (
+                filteredMaterials.map((m) => {
+                  const isLowStock = m.CANTIDAD <= (m.STOCK_MINIMO || 5);
+                  return (
+                    <tr key={m.ID_MATERIAL}>
+                      <td className="font-mono">#{m.CODIGO_UNICO}</td>
+                      <td className="font-bold text-dark">{m.NOMBRE}</td>
+                      <td>{renderCategoryBadge(m.CATEGORIA)}</td>
+                      <td>
+                        <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                            <span className={`stock-indicator ${isLowStock ? 'stock-low' : 'stock-ok'}`}>
+                            {m.CANTIDAD}
+                            </span>
+                            {isLowStock && <span style={{fontSize:'0.7rem', color:'#dc2626', fontWeight:'bold'}}>EN FALTA</span>}
+                        </div>
+                      </td>
+                      <td className="text-muted">{m.UNIDAD || m.UNIDAD_MEDIDA}</td>
+                      <td style={{textAlign: 'right'}}>
+                        <button 
+                            className="btn-icon" 
+                            onClick={() => setSelectedMaterialLotes(m)} 
+                            title="Gestionar Lotes y Transferencias"
+                            style={{color: '#6366f1', backgroundColor: '#eef2ff', marginRight: '5px'}}
+                        >
+                            <Truck size={18}/>
+                        </button>
+                        <button className="btn-icon" onClick={() => openEditModal(m)} title="Editar">
+                            <Edit size={18}/>
+                        </button>
+                        {(rolUser === "Master_Admin" || rolUser === "Admin") && (
+                            <button className="btn-icon danger" onClick={() => handleDelete(m.ID_MATERIAL)} title="Eliminar">
+                                <Trash2 size={18}/>
+                            </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* MODAL LOTES */}
+        {selectedMaterialLotes && (
+            <LotesModal 
+                material={selectedMaterialLotes} 
+                depositos={depositos}
+                onClose={() => {
+                    setSelectedMaterialLotes(null);
+                    loadData(); 
+                }} 
+            />
+        )}
+
+        {/* MODAL CREAR/EDITAR */}
+        {showModal && (
+          <div className="modal-backdrop">
+            <div className="discord-card modal-material">
+              <div className="modal-header-simple">
+                <h2>{isEditing ? "Editar Material" : "Nuevo Material"}</h2>
+                <button className="close-btn-simple" onClick={() => setShowModal(false)}><X size={20}/></button>
+              </div>
+              <form onSubmit={handleSubmit}>
+                <div className="form-grid-2">
+                  <div className="input-group">
+                    <label><Hash size={14}/> Código Único</label>
+                    <input 
+                        type="number" name="codigo_unico" required 
+                        value={formData.codigo_unico} onChange={handleChange} 
+                        placeholder="Ej: 1001" 
+                        disabled={isEditing}
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label><Layers size={14}/> Categoría</label>
+                    <select name="categoria" className="discord-select" value={formData.categoria} onChange={handleChange}>
+                      {categoriasPosibles.filter(c => c !== "Todas").map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="input-group">
+                  <label><Box size={14}/> Nombre / Descripción</label>
+                  <input type="text" name="nombre" required value={formData.nombre} onChange={handleChange} placeholder="Ej: Cable Preensamblado 25mm" />
+                </div>
+                <div className="form-grid-3">
+                  <div className="input-group">
+                    <label>Stock Inicial</label>
+                    <input type="number" name="cantidad" required value={formData.cantidad} onChange={handleChange} placeholder="0" />
+                  </div>
+                  <div className="input-group">
+                    <label><Ruler size={14}/> Unidad</label>
+                    <input type="text" name="unidad_medida" required value={formData.unidad_medida} onChange={handleChange} placeholder="m, unid..." />
+                  </div>
+                  <div className="input-group">
+                    <label><AlertTriangle size={14}/> Mínimo</label>
+                    <input type="number" name="stock_minimo" value={formData.stock_minimo} onChange={handleChange} placeholder="5" />
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn-status" onClick={() => setShowModal(false)}>Cancelar</button>
+                  <button type="submit" className="btn-save"><Save size={16}/> Guardar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

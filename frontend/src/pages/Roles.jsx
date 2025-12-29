@@ -1,255 +1,188 @@
 // src/pages/Roles.jsx
-import React, { useEffect, useState } from "react"; // ✅ Correcto
+import React, { useState, useEffect } from "react";
 import { apiFetch } from "../utils/api";
-import "../styles/Roles.css";
+import { 
+  Shield, Lock, UserCog, Check, Plus, Save, AlertCircle 
+} from "lucide-react";
+import "../styles/Roles.css"; // Crearemos este CSS después
 
-const API = "http://127.0.0.1:5000";
+const API_URL = "http://127.0.0.1:5000";
 
-// --- Componente Modal ---
-// Lo ponemos en el mismo archivo por simplicidad
-const RoleModal = ({ modalState, onClose, onSave, setMsg }) => {
-  const [roleName, setRoleName] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    // Cuando el modal se abre para editar, carga el nombre del rol
-    if (modalState.mode === "edit" && modalState.role) {
-      setRoleName(modalState.role.nombre);
-    } else {
-      setRoleName("");
-    }
-  }, [modalState]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!roleName.trim()) {
-      setMsg("El nombre del rol no puede estar vacío.");
-      return;
-    }
-
-    setIsSaving(true);
-    setMsg("");
-    
-    // Llama a la función onSave que decidirá si crear o actualizar
-    await onSave(roleName, modalState.role ? modalState.role.id : null);
-    
-    setIsSaving(false);
-  };
-
-  if (!modalState.open) return null;
-
-  return (
-    <div className="modal-backdrop">
-      <div className="modal-content">
-        <h2>{modalState.mode === "add" ? "Agregar Nuevo Rol" : "Editar Rol"}</h2>
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="roleName">Nombre del Rol</label>
-            <input
-              type="text"
-              id="roleName"
-              value={roleName}
-              onChange={(e) => setRoleName(e.target.value)}
-              placeholder="Ej: Personal_Inventario"
-              disabled={isSaving}
-            />
-          </div>
-          <div className="modal-actions">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onClose}
-              disabled={isSaving}
-            >
-              Cancelar
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={isSaving}>
-              {isSaving ? "Guardando..." : "Guardar"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-
-// --- Componente Principal de la Página ---
 const Roles = () => {
   const [roles, setRoles] = useState([]);
-  const [empleados, setEmpleados] = useState([]);
-  const [savingUser, setSavingUser] = useState(false); // Para la tabla de usuarios
-  const [msg, setMsg] = useState("");
+  const [permisosDisponibles, setPermisosDisponibles] = useState([]);
+  const [selectedRol, setSelectedRol] = useState(null);
+  const [permisosAsignados, setPermisosAsignados] = useState([]); // IDs
+  const [loading, setLoading] = useState(true);
   
-  // Estado para el modal de roles
-  const [modalState, setModalState] = useState({ 
-    open: false, 
-    mode: 'add', // 'add' o 'edit'
-    role: null  // El rol a editar
-  });
-
-  const loadData = async () => {
-    // No limpiar el mensaje aquí para que se vean los mensajes de éxito/error
-    try {
-      const [r, e] = await Promise.all([
-        apiFetch(`${API}/api/roles`),
-        apiFetch(`${API}/api/empleados`),
-      ]);
-      setRoles(r || []);
-      setEmpleados(e || []);
-    } catch (err) {
-      setMsg(err.message || "Error al cargar datos.");
-    }
-  };
+  // Estado para crear rol
+  const [showNewRol, setShowNewRol] = useState(false);
+  const [newRolName, setNewRolName] = useState("");
 
   useEffect(() => {
-    loadData();
+    loadInitialData();
   }, []);
 
-  // -- Lógica de Asignación de Roles a Usuarios --
-  const handleChangeRol = async (idUsuario, nuevoRol) => {
-    setSavingUser(true);
-    setMsg("");
+  const loadInitialData = async () => {
     try {
-      const resp = await apiFetch(`${API}/api/asignar-rol`, {
-        method: "PUT",
-        body: JSON.stringify({ usuario_id: idUsuario, rol: nuevoRol }),
-      });
-      setMsg(resp.msg || "Rol de usuario actualizado.");
-      // Recargar solo los empleados, los roles no cambiaron
-      const e = await apiFetch(`${API}/api/empleados`);
-      setEmpleados(e || []);
-    } catch (err) {
-      setMsg(err.message || "Error al asignar rol de usuario.");
-    } finally {
-      setSavingUser(false);
-    }
-  };
-
-  // -- Lógica de Gestión de Roles (CRUD) --
-
-  const handleOpenModal = (mode, role = null) => {
-    setMsg("");
-    setModalState({ open: true, mode, role });
-  };
-
-  const handleCloseModal = () => {
-    setModalState({ open: false, mode: 'add', role: null });
-  };
-
-  const handleSaveRole = async (roleName, roleId) => {
-    const isEditing = modalState.mode === 'edit';
-    const url = isEditing ? `${API}/api/roles/${roleId}` : `${API}/api/roles`;
-    const method = isEditing ? "PUT" : "POST";
-
-    try {
-      const resp = await apiFetch(url, {
-        method: method,
-        body: JSON.stringify({ nombre_rol: roleName }),
-      });
+      const [rolesData, permisosData] = await Promise.all([
+        apiFetch(`${API_URL}/api/roles`),
+        apiFetch(`${API_URL}/api/permisos`)
+      ]);
+      setRoles(rolesData || []);
+      setPermisosDisponibles(permisosData || []);
       
-      setMsg(resp.msg || "Rol guardado.");
-      handleCloseModal();
-      await loadData(); // Recargar todo (roles y empleados)
-    } catch (err) {
-      setMsg(err.message || "Error al guardar el rol.");
-    }
-  };
-
-  const handleDeleteRole = async (roleId, roleName) => {
-    if (window.confirm(`¿Está seguro que desea eliminar el rol "${roleName}"?`)) {
-      setMsg("");
-      try {
-        const resp = await apiFetch(`${API}/api/roles/${roleId}`, {
-          method: "DELETE",
-        });
-        setMsg(resp.msg || "Rol eliminado.");
-        await loadData(); // Recargar
-      } catch (err) {
-        setMsg(err.message || "Error al eliminar el rol.");
+      // Seleccionar el primero por defecto si existe
+      if (rolesData && rolesData.length > 0) {
+        handleSelectRol(rolesData[0]);
       }
+    } catch (error) {
+      console.error("Error cargando roles:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handleSelectRol = async (rol) => {
+    setSelectedRol(rol);
+    // Cargar permisos de este rol
+    try {
+      const assignedIds = await apiFetch(`${API_URL}/api/roles/${rol.id}/permisos`);
+      setPermisosAsignados(assignedIds || []);
+    } catch (error) {
+      console.error(error);
+      setPermisosAsignados([]);
+    }
+  };
+
+  const togglePermiso = (idPermiso) => {
+    if (permisosAsignados.includes(idPermiso)) {
+      setPermisosAsignados(permisosAsignados.filter(id => id !== idPermiso));
+    } else {
+      setPermisosAsignados([...permisosAsignados, idPermiso]);
+    }
+  };
+
+  const saveConfiguration = async () => {
+    if (!selectedRol) return;
+    try {
+      await apiFetch(`${API_URL}/api/roles/${selectedRol.id}/permisos`, {
+        method: "PUT",
+        body: JSON.stringify({ permisos: permisosAsignados })
+      });
+      alert(`Permisos actualizados para ${selectedRol.nombre}`);
+    } catch (error) {
+      alert("Error al guardar: " + error.message);
+    }
+  };
+
+  const handleCreateRol = async (e) => {
+    e.preventDefault();
+    if (!newRolName.trim()) return;
+    try {
+      await apiFetch(`${API_URL}/api/roles`, {
+        method: "POST",
+        body: JSON.stringify({ nombre: newRolName, descripcion: "Rol personalizado" })
+      });
+      setShowNewRol(false);
+      setNewRolName("");
+      loadInitialData(); // Recargar lista
+    } catch (error) {
+      alert(error.message);
+    }
+  };
 
   return (
     <div className="dashboard-layout">
-      <div className="main-area">
+      <div className="content-dashboard">
         
-        <div className="content-dashboard">
-          <h1>Roles y Permisos</h1>
-          <br />
+        <div className="roles-container">
+            {/* --- PANEL IZQUIERDO: LISTA DE ROLES --- */}
+            <div className="roles-sidebar">
+                <div className="sidebar-header">
+                    <h2><Shield size={22}/> Roles</h2>
+                    <button className="btn-add-mini" onClick={() => setShowNewRol(true)} title="Crear Rol">
+                        <Plus size={18}/>
+                    </button>
+                </div>
 
-          {msg && (
-            <p
-              className={
-                msg.toLowerCase().includes("error") ? "msg-error" : "msg-success"
-              }
-            >
-              {msg}
-            </p>
-          )}
+                {showNewRol && (
+                    <form onSubmit={handleCreateRol} className="new-rol-form fade-in">
+                        <input 
+                            autoFocus
+                            type="text" 
+                            placeholder="Nombre del Rol..." 
+                            value={newRolName}
+                            onChange={(e) => setNewRolName(e.target.value)}
+                        />
+                        <div className="form-mini-actions">
+                            <button type="button" onClick={() => setShowNewRol(false)} className="btn-cancel">✕</button>
+                            <button type="submit" className="btn-confirm">✓</button>
+                        </div>
+                    </form>
+                )}
 
-          {/* --- 1. Sección de Gestión de Roles --- */}
-          <div className="form-container">
-            <div className="roles-header">
-              <h2>Gestión de Roles</h2>
-              <button 
-                className="btn btn-primary"
-                onClick={() => handleOpenModal('add')}
-              >
-                Agregar Rol
-              </button>
-            </div>
-            <div className="table-wrapper">
-              <table className="roles-table">
-                <thead>
-                  <tr>
-                    <th>Nombre del Rol</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {roles.map((r) => (
-                    <tr key={r.id}>
-                      <td>{r.nombre}</td>
-                      <td className="roles-actions">
-                        <button 
-                          className="btn btn-secondary"
-                          onClick={() => handleOpenModal('edit', r)}
+                <div className="roles-list">
+                    {loading ? <p className="loading-text">Cargando...</p> : 
+                     roles.map(rol => (
+                        <div 
+                            key={rol.id} 
+                            className={`rol-item ${selectedRol?.id === rol.id ? 'active' : ''}`}
+                            onClick={() => handleSelectRol(rol)}
                         >
-                          Editar
-                        </button>
-                        <button 
-                          className="btn btn-danger"
-                          onClick={() => handleDeleteRole(r.id, r.nombre)}
-                        >
-                          Eliminar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {roles.length === 0 && (
-                    <tr>
-                      <td colSpan={2} className="empty-table-row">
-                        No hay roles definidos.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                            <UserCog size={18}/>
+                            <span>{rol.nombre}</span>
+                            {rol.nombre === "Master_Admin" && <Lock size={14} className="lock-icon"/>}
+                        </div>
+                    ))}
+                </div>
             </div>
-          </div>
+
+            {/* --- PANEL DERECHO: MATRIZ DE PERMISOS --- */}
+            <div className="roles-main">
+                {selectedRol ? (
+                    <>
+                        <div className="config-header">
+                            <div>
+                                <h1>Configurando: <span className="highlight-rol">{selectedRol.nombre}</span></h1>
+                                <p>Define qué puede hacer este usuario en el sistema.</p>
+                            </div>
+                            <button className="btn-save-config" onClick={saveConfiguration}>
+                                <Save size={18}/> Guardar Cambios
+                            </button>
+                        </div>
+
+                        <div className="permissions-grid">
+                            {permisosDisponibles.map(permiso => {
+                                const isActive = permisosAsignados.includes(permiso.id);
+                                return (
+                                    <div 
+                                        key={permiso.id} 
+                                        className={`permiso-card ${isActive ? 'active' : ''}`}
+                                        onClick={() => togglePermiso(permiso.id)}
+                                    >
+                                        <div className="permiso-info">
+                                            <h4>{permiso.nombre.replace(/_/g, " ")}</h4>
+                                            <p>{permiso.descripcion}</p>
+                                        </div>
+                                        <div className={`toggle-switch ${isActive ? 'on' : 'off'}`}>
+                                            <div className="toggle-knob"></div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </>
+                ) : (
+                    <div className="empty-selection">
+                        <UserCog size={64} style={{opacity: 0.2}}/>
+                        <p>Selecciona un rol de la izquierda para editar sus permisos.</p>
+                    </div>
+                )}
+            </div>
         </div>
+
       </div>
-      
-      {/* --- Modal para Crear/Editar Roles --- */}
-      <RoleModal 
-        modalState={modalState}
-        onClose={handleCloseModal}
-        onSave={handleSaveRole}
-        setMsg={setMsg}
-      />
     </div>
   );
 };

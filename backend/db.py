@@ -7,6 +7,22 @@ from werkzeug.security import generate_password_hash, check_password_hash
 db = SQLAlchemy()
 
 # ---------------------------------------------------------
+# TABLAS INTERMEDIAS Y PERMISOS
+# ---------------------------------------------------------
+
+# Tabla de asociación (Muchos a Muchos) para Roles y Permisos
+permiso_x_rol = db.Table('permiso_x_rol',
+    db.Column('ID_ROL', db.Integer, db.ForeignKey('rol.ID_ROL'), primary_key=True),
+    db.Column('ID_PERMISO', db.Integer, db.ForeignKey('permiso.ID_PERMISO'), primary_key=True)
+)
+
+class Permiso(db.Model):
+    __tablename__ = 'permiso'
+    ID_PERMISO = db.Column(db.Integer, primary_key=True)
+    NOMBRE_PERMISO = db.Column(db.String(60), unique=True, nullable=False)
+    DESCRIPCION = db.Column(db.String(255))
+
+# ---------------------------------------------------------
 # MODELOS DE USUARIO Y PERSONAL
 # ---------------------------------------------------------
 
@@ -14,12 +30,24 @@ class Rol(db.Model):
     __tablename__ = 'rol'
     ID_ROL = db.Column(db.Integer, primary_key=True)
     NOMBRE_ROL = db.Column(db.String(60))
+    DESCRIPCION_ROL = db.Column(db.String(255))
+
+    # RELACIONES
+    # 1. Permisos (Muchos a Muchos)
+    permisos = db.relationship('Permiso', secondary=permiso_x_rol, backref=db.backref('roles', lazy='dynamic'))
+    
+    # 2. Usuarios (Uno a Muchos) - CORREGIDO: Usamos back_populates para evitar conflicto
+    usuarios = db.relationship('Usuario', back_populates='rol', lazy=True)
 
 class Deposito(db.Model):
     __tablename__ = 'deposito'
     ID_DEPOSITO = db.Column(db.Integer, primary_key=True)
     NOMBRE = db.Column(db.String(60))
     DIRECCION = db.Column(db.String(60))
+
+    # Relaciones
+    # (Agregamos backref si es necesario en el futuro)
+    inventario_items = db.relationship('Inventario', backref='deposito', lazy=True)
 
     def to_dict(self):
         return {"ID_DEPOSITO": self.ID_DEPOSITO, "NOMBRE": self.NOMBRE}
@@ -37,11 +65,10 @@ class Empleado(db.Model):
 
     # Relaciones
     usuario = db.relationship('Usuario', back_populates='empleado', uselist=False)
-    deposito = db.relationship('Deposito')
+    # Nota: Deposito no tiene back_populates explicito aquí, pero está bien.
 
 class Usuario(db.Model):
     __tablename__ = 'usuario'
-    # --- ESTOS SON LOS CAMPOS QUE FALTABAN ---
     ID_USUARIO = db.Column(db.Integer, primary_key=True)
     ID_ROL = db.Column(db.Integer, db.ForeignKey('rol.ID_ROL'))
     ID_EMPLEADO = db.Column(db.Integer, db.ForeignKey('empleado.ID_EMPLEADO'), unique=True)
@@ -49,13 +76,15 @@ class Usuario(db.Model):
     CORREO = db.Column(db.String(80), unique=True, nullable=False)
     CONTRASENA = db.Column(db.String(255), nullable=False)
     
-    # Campos nuevos de perfil
+    # Campos de perfil
     AVATAR = db.Column(db.String(255)) 
     BANNER_COLOR = db.Column(db.String(20), default='#5865F2')
 
     # Relaciones
     empleado = db.relationship('Empleado', back_populates='usuario')
-    rol = db.relationship('Rol')
+    
+    # CORREGIDO: Usamos back_populates para conectar con Rol.usuarios
+    rol = db.relationship('Rol', back_populates='usuarios')
 
     def set_password(self, password):
         self.CONTRASENA = generate_password_hash(password)
@@ -83,17 +112,98 @@ class PasswordResetToken(db.Model):
     EXPIRES_AT = db.Column(db.DateTime, nullable=False)
 
 # ---------------------------------------------------------
-# MODELOS DE INVENTARIO
+# MODELOS DE INVENTARIO Y LOTES
 # ---------------------------------------------------------
 
 class Material(db.Model):
     __tablename__ = 'material'
     ID_MATERIAL = db.Column(db.Integer, primary_key=True)
     CODIGO_UNICO = db.Column(db.Integer, unique=True) 
-    NOMBRE = db.Column(db.String(60))
-    
+    NOMBRE = db.Column(db.String(100))
+    CANTIDAD = db.Column(db.Float, default=0.0)
+    UNIDAD_MEDIDA = db.Column(db.String(20)) 
+    CATEGORIA = db.Column(db.String(50)) 
+    STOCK_MINIMO = db.Column(db.Float, default=5.0)
+
+    # Relación con Lotes
+    lotes = db.relationship('Lote', backref='material', lazy=True)
+
     def to_dict(self):
-        return {"ID_MATERIAL": self.ID_MATERIAL, "CODIGO_UNICO": self.CODIGO_UNICO, "NOMBRE": self.NOMBRE}
+        return {
+            "ID_MATERIAL": self.ID_MATERIAL, 
+            "CODIGO_UNICO": self.CODIGO_UNICO, 
+            "NOMBRE": self.NOMBRE,
+            "CANTIDAD": self.CANTIDAD,
+            "UNIDAD": self.UNIDAD_MEDIDA,
+            "CATEGORIA": self.CATEGORIA,
+            "STOCK_MINIMO": self.STOCK_MINIMO
+        }
+
+class Lote(db.Model):
+    __tablename__ = 'lote'
+    ID_LOTE = db.Column(db.Integer, primary_key=True)
+    ID_MATERIAL = db.Column(db.Integer, db.ForeignKey('material.ID_MATERIAL'), nullable=False)
+    FECHA_INGRESO = db.Column(db.Date, default=datetime.date.today)
+    OBSERVACIONES = db.Column(db.String(254))
+
+    # La relación 'material' se crea con el backref en Material
+
+class EstadoInventario(db.Model):
+    __tablename__ = 'estado_inventario'
+    ID_ESTADO_INVENTARIO = db.Column(db.Integer, primary_key=True)
+    ESTADO_INVENTARIO = db.Column(db.String(60))
+
+class Inventario(db.Model):
+    __tablename__ = 'inventario'
+    ID_INVENTARIO = db.Column(db.Integer, primary_key=True)
+    ID_DEPOSITO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
+    ID_LOTE = db.Column(db.Integer, db.ForeignKey('lote.ID_LOTE'), nullable=False)
+    ID_ESTADO_INVENTARIO = db.Column(db.Integer, db.ForeignKey('estado_inventario.ID_ESTADO_INVENTARIO'), nullable=False)
+    CANTIDAD_ACTUAL = db.Column(db.Float, default=0)
+
+    # Relaciones
+    # Deposito backref definido arriba
+    lote = db.relationship('Lote', backref='inventarios')
+    estado = db.relationship('EstadoInventario')
+
+    def to_dict(self):
+        return {
+            "id_inventario": self.ID_INVENTARIO,
+            "material": self.lote.material.NOMBRE,
+            "codigo": self.lote.material.CODIGO_UNICO,
+            "lote_id": self.ID_LOTE,
+            "fecha_ingreso": self.lote.FECHA_INGRESO.strftime('%Y-%m-%d') if self.lote.FECHA_INGRESO else None,
+            "deposito": self.deposito.NOMBRE,
+            "cantidad": self.CANTIDAD_ACTUAL,
+            "estado": self.estado.ESTADO_INVENTARIO if self.estado else "Desconocido"
+        }
+
+# ---------------------------------------------------------
+# MODELOS DE MOVIMIENTOS
+# ---------------------------------------------------------
+
+class TipoMovimiento(db.Model):
+    __tablename__ = 'tipo_movimiento'
+    ID_TIPO_MOVIMIENTO = db.Column(db.Integer, primary_key=True)
+    TIPO_MOVIMIENTO = db.Column(db.String(40))
+
+class MovimientoMaterial(db.Model):
+    __tablename__ = 'movimiento_material'
+    ID_MOVIMIENTO = db.Column(db.Integer, primary_key=True)
+    ID_TIPO_MOVIMIENTO = db.Column(db.Integer, db.ForeignKey('tipo_movimiento.ID_TIPO_MOVIMIENTO'), nullable=False)
+    ID_EMPLEADO = db.Column(db.Integer, db.ForeignKey('empleado.ID_EMPLEADO'), nullable=False)
+    ID_DEPOSITO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
+    ID_LOTE = db.Column(db.Integer, db.ForeignKey('lote.ID_LOTE'), nullable=False)
+    
+    FECHA_MOVIMIENTO = db.Column(db.Date, default=datetime.date.today)
+    CANTIDAD = db.Column(db.Float)
+    OBSERVACIONES = db.Column(db.String(254))
+
+    # Relaciones
+    tipo = db.relationship('TipoMovimiento')
+    empleado = db.relationship('Empleado')
+    deposito = db.relationship('Deposito')
+    lote = db.relationship('Lote')
 
 # ---------------------------------------------------------
 # MODELOS DE VEHÍCULOS Y GPS
@@ -137,7 +247,6 @@ class EstadoOrden(db.Model):
     ID_ESTADO_ORDEN = db.Column(db.Integer, primary_key=True)
     ESTADO_ORDEN = db.Column(db.String(40))
 
-
 class OrdenTrabajo(db.Model):
     __tablename__ = 'orden_trabajo'
     ID_ORDEN = db.Column(db.Integer, primary_key=True)
@@ -152,11 +261,8 @@ class OrdenTrabajo(db.Model):
     DESCRIPCION = db.Column(db.Text) 
     PRIORIDAD = db.Column(db.String(20), default="Media") 
     
-    # Fechas (Importante: DateTime)
     FECHA_INICIO = db.Column(db.DateTime) 
     FECHA_CIERRE = db.Column(db.DateTime) 
-    
-        # --- NUEVO CAMPO: FECHA LÍMITE (Opcional) ---
     FECHA_LIMITE = db.Column(db.DateTime, nullable=True) 
 
     HERRAMIENTAS = db.Column(db.Text, nullable=True)
@@ -177,24 +283,16 @@ class OrdenTrabajo(db.Model):
             "estado": self.estado.ESTADO_ORDEN if self.estado else "Desconocido",
             "estado_id": self.ID_ESTADO_ORDEN,
             "prioridad": self.PRIORIDAD,
-            
-            # Formato corregido y único: DD/MM/YYYY HH:MM
             "fecha_inicio": self.FECHA_INICIO.strftime("%d/%m/%Y %H:%M") if self.FECHA_INICIO else None,
             "fecha_cierre": self.FECHA_CIERRE.strftime("%d/%m/%Y %H:%M") if self.FECHA_CIERRE else None,
-            
-            # AGREGAR ESTO AL DICCIONARIO:
-            "fecha_limite": self.FECHA_LIMITE.strftime("%Y-%m-%dT%H:%M") if self.FECHA_LIMITE else "", # Formato ISO para el input datetime-local
-            "fecha_limite_fmt": self.FECHA_LIMITE.strftime("%d/%m/%Y %H:%M") if self.FECHA_LIMITE else None, # Para mostrar bonito
-            
+            "fecha_limite": self.FECHA_LIMITE.strftime("%Y-%m-%dT%H:%M") if self.FECHA_LIMITE else "",
+            "fecha_limite_fmt": self.FECHA_LIMITE.strftime("%d/%m/%Y %H:%M") if self.FECHA_LIMITE else None,
             "herramientas": self.HERRAMIENTAS or "",
             "tiempo_empleado": self.TIEMPO_EMPLEADO or "",
-            
-            # Datos relacionados
             "deposito": self.deposito.NOMBRE if self.deposito else "-",
             "deposito_id": self.ID_DEPOSITO,
             "empleado_nombre": f"{self.empleado.NOMBRE} {self.empleado.APELLIDO}" if self.empleado else "Sin asignar",
             "empleado_id": self.ID_EMPLEADO,
-            # Avatar
             "empleado_avatar": self.empleado.usuario.AVATAR if (self.empleado and self.empleado.usuario) else None
         }
 
@@ -211,6 +309,5 @@ class AvanceOrden(db.Model):
             "id": self.ID_AVANCE,
             "autor": self.AUTOR,
             "mensaje": self.MENSAJE,
-            # Formato con barras
             "fecha": self.FECHA_HORA.strftime("%d/%m/%Y %H:%M")
         }

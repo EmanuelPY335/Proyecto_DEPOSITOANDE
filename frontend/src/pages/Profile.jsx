@@ -1,23 +1,17 @@
+// src/pages/Profile.jsx
 import React, { useState, useEffect } from "react";
 import { apiFetch } from "../utils/api";
-import { Camera, Save, Lock, User, Palette, Mail, Phone } from "lucide-react";
+import { Camera, User, Palette, Mail, Phone, CheckCircle, AlertTriangle, X } from "lucide-react";
 import "../styles/Profile.css";
 import "../styles/EmployeeModal.css"; 
 
 const API_URL = "http://127.0.0.1:5000";
 
 const Profile = () => {
-  // Estado del Perfil (Datos + Apariencia)
+  // Estado del Perfil (Solo datos visuales)
   const [profile, setProfile] = useState({
     NOMBRE: "", APELLIDO: "", TELEFONO: "", CORREO: "",
     BANNER_COLOR: "#5865F2", AVATAR: null
-  });
-  
-  // Estado de Contraseñas
-  const [passwords, setPasswords] = useState({ 
-    current_password: "", 
-    new_password: "", 
-    confirm_password: "" 
   });
 
   const [avatarFile, setAvatarFile] = useState(null);
@@ -28,6 +22,14 @@ const Profile = () => {
     loadProfile();
   }, []);
 
+  // Auto-cierre de alertas
+  useEffect(() => {
+    if (msg.text) {
+      const timer = setTimeout(() => setMsg({ type: "", text: "" }), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [msg]);
+
   const loadProfile = async () => {
     try {
       const data = await apiFetch(`${API_URL}/api/profile`);
@@ -36,10 +38,7 @@ const Profile = () => {
     } catch (err) { console.error(err); }
   };
 
-  // --- MANEJADORES ---
   const handleChange = (e) => setProfile({...profile, [e.target.name]: e.target.value});
-  
-  const handlePassChange = (e) => setPasswords({...passwords, [e.target.name]: e.target.value});
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
@@ -49,7 +48,6 @@ const Profile = () => {
     }
   };
 
-  // 1. Guardar Perfil (Info + Avatar)
   const handleSaveChanges = async (e) => {
     e.preventDefault();
     setMsg({ type: "", text: "" });
@@ -77,60 +75,42 @@ const Profile = () => {
         window.dispatchEvent(new Event("storage"));
         loadProfile(); 
         setAvatarFile(null);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     } catch (err) {
       setMsg({ type: "error", text: "Error al actualizar perfil." });
     }
   };
 
-  // 2. Guardar Contraseña (Separado por seguridad)
-  const handlePasswordSubmit = async (e) => {
-    e.preventDefault();
-    setMsg({ type: "", text: "" });
-
-    if (passwords.new_password !== passwords.confirm_password) {
-      setMsg({ type: "error", text: "Las nuevas contraseñas no coinciden." });
-      return;
-    }
-
-    try {
-      const data = await apiFetch(`${API_URL}/api/profile/change-password`, {
-        method: "POST",
-        body: JSON.stringify({
-          current_password: passwords.current_password,
-          new_password: passwords.new_password,
-        }),
-      });
-
-      if (data.success) {
-        setMsg({ type: "success", text: "Contraseña actualizada correctamente." });
-        setPasswords({ current_password: "", new_password: "", confirm_password: "" });
-      } else {
-        setMsg({ type: "error", text: data.message || "Error al cambiar contraseña." });
-      }
-    } catch (err) {
-      setMsg({ type: "error", text: err.message || "Error de conexión." });
-    }
-  };
-
   return (
       <div className="dashboard-layout">
-              <div className="content-dashboard">
+          <div className="content-dashboard">
 
-              <div className="profile-header-section">
-                  <h1>Mi Perfil</h1>
-                  <p className="subtitle">Personaliza tu identidad dentro de SISDEPO.</p>
-                  <br />
-        </div>
+            <div className="profile-header-section">
+                <h1>Mi Perfil</h1>
+                <p className="subtitle">Personaliza tu identidad dentro de SISDEPO.</p>
+                <br />
+            </div>
 
             <div className="profile-grid">
               
-              {/* ------------------------------------------------------ */}
-              {/* 🟦 COLUMNA IZQUIERDA — 3 TARJETAS UNA DEBAJO DE OTRA   */}
-              {/* ------------------------------------------------------ */}
+              {/* 🟦 COLUMNA IZQUIERDA: FORMULARIOS */}
               <div className="profile-edit-column">
 
-                {/* --- 1. DATOS PERSONALES --- */}
+                {/* ALERTA VISUAL */}
+                {msg.text && (
+                  <div className={`alert-box ${msg.type}`}>
+                    <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                      {msg.type === "success" ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
+                      <span>{msg.text}</span>
+                    </div>
+                    <button className="alert-close-btn" onClick={() => setMsg({ type: "", text: "" })}>
+                      <X size={18} />
+                    </button>
+                  </div>
+                )}
+
+                {/* 1. DATOS PERSONALES */}
                 <div className="settings-card">
                   <h3><User size={18}/> Datos Personales</h3>
 
@@ -154,59 +134,9 @@ const Profile = () => {
                     <label>Teléfono</label>
                     <input type="text" name="TELEFONO" value={profile.TELEFONO} onChange={handleChange} className="input-field"/>
                   </div>
-
                 </div>
 
-
-                {/* --- 2. SEGURIDAD --- */}
-                <div className="settings-card security-card">
-                  <h3><Lock size={18}/> Seguridad</h3>
-
-                  <div className="form-group">
-                    <label>Contraseña Actual</label>
-                    <input 
-                      type="password" 
-                      name="current_password" 
-                      value={passwords.current_password} 
-                      onChange={handlePassChange} 
-                      className="input-field"
-                      placeholder="••••••••"
-                    />
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Nueva Contraseña</label>
-                      <input 
-                        type="password" 
-                        name="new_password" 
-                        value={passwords.new_password} 
-                        onChange={handlePassChange} 
-                        className="input-field"
-                        placeholder="Nueva clave"
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>Confirmar</label>
-                      <input 
-                        type="password" 
-                        name="confirm_password" 
-                        value={passwords.confirm_password} 
-                        onChange={handlePassChange} 
-                        className="input-field"
-                        placeholder="Repetir clave"
-                      />
-                    </div>
-                  </div>
-
-                  <button className="btn-save-password" onClick={handlePasswordSubmit}>
-                    Actualizar Contraseña
-                  </button>
-                </div>
-
-
-                {/* --- 3. APARIENCIA --- */}
+                {/* 2. APARIENCIA */}
                 <div className="settings-card">
                   <h3><Palette size={18}/> Apariencia</h3>
 
@@ -232,27 +162,20 @@ const Profile = () => {
                     </label>
                   </div>
                 </div>
-                  <button className="btn-save-profile" onClick={handleSaveChanges}>
-                    Guardar Cambios
-                  </button>
-              </div> {/* Fin perfil-edit-column */}
+                  
+                <button className="btn-save-profile" onClick={handleSaveChanges}>
+                  Guardar Cambios
+                </button>
+              </div> 
 
-
-
-              {/* ------------------------------------------------------ */}
-              {/* 🟩 COLUMNA DERECHA — VISTA PREVIA                      */}
-              {/* ------------------------------------------------------ */}
+              {/* 🟩 COLUMNA DERECHA: VISTA PREVIA */}
               <div className="profile-preview-column">
-
                 <h3 className="preview-title">Vista Previa</h3>
                 <p className="preview-subtitle">Así te verán los administradores.</p>
                 
                 <div className="discord-card preview-card">
-                  
-                  {/* Banner */}
                   <div className="card-banner" style={{background: profile.BANNER_COLOR}}></div>
 
-                  {/* Avatar */}
                   <div className="card-header-content">
                     {previewAvatar ? (
                       <img src={previewAvatar} alt="Avatar" className="avatar-circle img-avatar" />
@@ -265,37 +188,30 @@ const Profile = () => {
 
                     <div className="header-text">
                       <h2>{profile.NOMBRE} {profile.APELLIDO}</h2>
-                    <br />
+                      <br />
                     </div>
                   </div>
 
-
                   <div className="card-body" style={{overflow: "hidden"}}>
                     <div className="section-title">CONTACTO</div>
-
                     <div className="preview-info-row">
                       <Mail size={14} style={{marginRight: 8}}/> {profile.CORREO}
                     </div>
-
                     <div className="preview-info-row">
                       <Phone size={14} style={{marginRight: 8}}/> {profile.TELEFONO || "Sin teléfono"}
                     </div>
-
                     <div className="card-actions">
                       <button className="btn-save" disabled style={{opacity: 0.7, cursor: 'default'}}>
                         Ejemplo
                       </button>
                     </div>
                   </div>
-
                 </div>
               </div>
 
             </div>
-
           </div>
-        </div>
-
+      </div>
   );
 };
 

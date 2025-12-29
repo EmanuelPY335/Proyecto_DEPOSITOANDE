@@ -16,7 +16,7 @@
 .discord-card {
     background-color: #fff;
     width: 100%;
-    max-width: 450px; /* Un poco más ancha para respirar */
+    max-width: 450px; /* Por defecto para empleados. En Lotes se anula con style inline */
     max-height: 90vh; /* CRUCIAL: Nunca será más alta que el 90% de la pantalla */
     border-radius: 16px;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
@@ -33,11 +33,10 @@
 }
 
 /* --- HEADER (Parte Fija) --- */
-/* Banner un poco más compacto para ganar espacio */
 .card-banner {
     height: 80px; 
     width: 100%;
-    flex-shrink: 0; /* Evita que se aplaste */
+    flex-shrink: 0;
 }
 .banner-active { background: linear-gradient(120deg, #5865F2, #99AAFF); }
 .banner-inactive { background: linear-gradient(120deg, #ED4245, #FF9AA2); }
@@ -51,7 +50,14 @@
 }
 .close-btn:hover { background: rgba(0,0,0,0.5); transform: rotate(90deg); }
 
-/* Info Usuario (Avatar y Nombre) */
+.modal-header {
+    padding: 15px 24px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex; justify-content: space-between; align-items: center;
+    background: #fff; flex-shrink: 0;
+}
+
+/* Info Usuario (Avatar y Nombre) - Estilo antiguo */
 .card-header-content {
     padding: 0 24px;
     margin-top: -45px;
@@ -82,131 +88,195 @@
 .status-dot.online { background-color: #23a559; }
 .status-dot.offline { background-color: #747f8d; }
 
-.header-text {
-    margin-left: 15px; padding-bottom: 5px;
-}
+.header-text { margin-left: 15px; padding-bottom: 5px; }
 .header-text h2 { margin: 0; font-size: 1.3rem; color: #111; font-weight: 800; }
+.header-info h2 { margin: 0; font-size: 1.4rem; color: #1e293b; font-weight: 800; }
 .username-tag { font-size: 0.85rem; color: #5865F2; font-weight: 600; }
 
-/* --- TABS (Fijas arriba del scroll) --- */
+/* --- TABS --- */
 .tabs-container {
-    display: flex;
-    padding: 0 24px;
-    border-bottom: 1px solid #e0e0e0;
-    gap: 25px;
-    background: #fff;
-    flex-shrink: 0; /* No se encoge */
+    display: flex; padding: 0 24px; border-bottom: 1px solid #e0e0e0;
+    gap: 25px; background: #fff; flex-shrink: 0;
 }
-
 .tab-btn {
-    background: none; border: none;
-    padding: 12px 0;
+    background: none; border: none; padding: 12px 0;
     font-size: 0.9rem; font-weight: 600; color: #72767d;
-    cursor: pointer; position: relative;
-    display: flex; align-items: center; gap: 6px;
+    cursor: pointer; position: relative; display: flex; align-items: center; gap: 6px;
     transition: color 0.2s;
 }
-
 .tab-btn:hover { color: #2c2f33; }
 .tab-btn.active { color: #5865F2; }
 .tab-btn.active::after {
     content: ''; position: absolute; bottom: -1px; left: 0;
-    width: 100%; height: 3px; background-color: #5865F2;
-    border-radius: 3px 3px 0 0;
+    width: 100%; height: 3px; background-color: #5865F2; border-radius: 3px 3px 0 0;
 }
 
-/* --- CUERPO SCROLLEABLE (Lo más importante) --- */
-.card-body {
+/* --- CUERPO GENERAL (Modal Body) --- */
+.card-body, .modal-body {
     padding: 24px;
-    overflow-y: auto; /* Activa el scroll vertical */
-    flex-grow: 1; /* Ocupa el espacio restante */
-    /* Scrollbar personalizado elegante */
-    scrollbar-width: thin;
-    scrollbar-color: #ccc transparent;
+    overflow-y: auto; 
+    flex-grow: 1; 
+    scrollbar-width: thin; scrollbar-color: #ccc transparent;
 }
+.card-body::-webkit-scrollbar, .modal-body::-webkit-scrollbar { width: 6px; }
+.card-body::-webkit-scrollbar-track, .modal-body::-webkit-scrollbar-track { background: transparent; }
+.card-body::-webkit-scrollbar-thumb, .modal-body::-webkit-scrollbar-thumb { background-color: #dcdcdc; border-radius: 20px; }
+.card-body::-webkit-scrollbar-thumb:hover, .modal-body::-webkit-scrollbar-thumb:hover { background-color: #b3b3b3; }
 
-/* Scrollbar Webkit (Chrome, Edge, Safari) */
-.card-body::-webkit-scrollbar { width: 6px; }
-.card-body::-webkit-scrollbar-track { background: transparent; }
-.card-body::-webkit-scrollbar-thumb { background-color: #dcdcdc; border-radius: 20px; }
-.card-body::-webkit-scrollbar-thumb:hover { background-color: #b3b3b3; }
-
-
-/* --- FORMULARIOS Y INPUTS --- */
-.section-title {
-    font-size: 0.7rem; font-weight: 800; color: #949BA4;
-    margin-bottom: 10px; letter-spacing: 0.5px; text-transform: uppercase;
-}
-
+/* --- FORMULARIOS --- */
 .input-group { margin-bottom: 16px; }
 .input-group label {
     display: flex; align-items: center; gap: 6px;
     font-size: 0.75rem; font-weight: 700; color: #4F5660; margin-bottom: 6px;
+    text-transform: uppercase;
 }
 
-.input-group input, .discord-select {
-    width: 100%; 
-    padding: 10px 12px;
-    background-color: #F2F3F5; /* Gris más claro */
-    border: 1px solid transparent; 
-    border-radius: 8px; /* Más redondeado */
+.input-group input, .discord-select, .discord-input {
+    width: 100%; padding: 10px 12px;
+    background-color: #F2F3F5;
+    border: 1px solid transparent; border-radius: 8px;
     font-size: 0.95rem; color: #2E3338;
-    box-sizing: border-box;
-    transition: all 0.2s ease;
+    box-sizing: border-box; transition: all 0.2s ease;
 }
 
-.input-group input:focus, .discord-select:focus {
+.input-group input:focus, .discord-select:focus, .discord-input:focus {
     outline: none; background-color: #fff; 
-    box-shadow: 0 0 0 2px #5865F2; /* Anillo azul de enfoque */
+    box-shadow: 0 0 0 2px #5865F2;
 }
 
-.row-2 { display: flex; gap: 15px; }
-.row-2 .input-group { flex: 1; }
-
-
-/* --- BOTONES DE ACCIÓN --- */
+/* --- BOTONES --- */
 .card-actions {
-    margin-top: 20px; 
-    padding-top: 20px;
-    border-top: 1px solid #e0e0e0;
+    margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0;
     display: flex; justify-content: flex-end; gap: 10px;
 }
-
 .btn-save, .btn-status {
-    padding: 10px 18px; 
-    border: none; border-radius: 6px;
+    padding: 10px 18px; border: none; border-radius: 6px;
     font-weight: 600; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
     font-size: 0.85rem; transition: transform 0.1s, filter 0.2s;
 }
-
 .btn-save:hover, .btn-status:hover { filter: brightness(0.95); transform: translateY(-1px); }
 .btn-save:active, .btn-status:active { transform: translateY(0); }
 
 .btn-save { background-color: #5865F2; color: white; flex-grow: 1; }
-.btn-status.btn-danger { background-color: transparent; border: 1px solid #ED4245; color: #ED4245; }
-.btn-status.btn-danger:hover { background-color: #ED4245; color: white; }
-.btn-status.btn-success { background-color: transparent; border: 1px solid #23a559; color: #23a559; }
-.btn-status.btn-success:hover { background-color: #23a559; color: white; }
+.btn-status { background-color: #f1f5f9; color: #475569; }
 
-/* --- ESTADÍSTICAS (Tab Asistencia) --- */
-.attendance-stats { display: flex; gap: 12px; margin-bottom: 20px; }
-.stat-box {
-    flex: 1; background: #F8F9FA;
-    padding: 15px; border-radius: 12px; text-align: center;
-    border: 1px solid #EBEBEB;
-    transition: transform 0.2s;
+.btn-icon {
+    border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    transition: opacity 0.2s; border-radius: 4px;
 }
-.stat-box:hover { transform: translateY(-2px); border-color: #5865F2; }
-.stat-label { display: block; font-size: 0.7rem; color: #777; text-transform: uppercase; font-weight: 700; }
-.stat-value { font-size: 1.4rem; font-weight: 800; color: #2c2f33; margin-top: 4px; }
+.btn-icon:hover { opacity: 0.8; }
 
-/* Estados Vacíos */
-.empty-state {
-    text-align: center; padding: 30px 0; color: #999;
-    display: flex; flex-direction: column; align-items: center; gap: 10px;
+/* ========================================= */
+/* NUEVOS ESTILOS PARA LOTES / STOCK    */
+/* ========================================= */
+
+/* 1. BARRA DE HERRAMIENTAS MODERNA */
+.toolbar-container {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+    background-color: #f8fafc; /* Fondo suave */
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
 }
 
-/* Animación simple */
-.fade-in { animation: fadeIn 0.3s ease-out; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+/* Buscador Compacto */
+.search-wrapper-pro {
+    position: relative;
+    width: 240px; /* Ancho fijo para que no sea muy largo */
+    flex-shrink: 0;
+}
+
+.search-icon-pro {
+    position: absolute; left: 12px; top: 50%;
+    transform: translateY(-50%); color: #94a3b8; pointer-events: none;
+}
+
+.input-pro {
+    width: 100%;
+    padding: 9px 12px 9px 38px; /* Espacio para icono a la izq */
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.9rem; color: #334155;
+    background-color: white; transition: all 0.2s ease;
+}
+
+.select-pro {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.9rem; color: #334155;
+    background-color: white; cursor: pointer;
+}
+
+.input-pro:focus, .select-pro:focus {
+    outline: none; border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* 2. BOTÓN TRANSFERIR "PREMIUM" */
+.btn-transfer-pro {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white; border: none;
+    padding: 6px 12px; border-radius: 6px;
+    font-size: 0.8rem; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-transfer-pro:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
+    filter: brightness(1.1);
+}
+.btn-transfer-pro:active { transform: translateY(0); }
+.btn-transfer-pro:disabled {
+    background: #e2e8f0; color: #94a3b8;
+    cursor: not-allowed; box-shadow: none; transform: none;
+}
+
+/* 3. TABLA CON SCROLL INDEPENDIENTE */
+.table-scroll-container {
+    max-height: 350px; /* Altura máxima fija */
+    overflow-y: auto;  /* Scroll interno */
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: white;
+    
+    /* Scrollbar fino */
+    scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent;
+}
+
+.table-scroll-container::-webkit-scrollbar { width: 8px; }
+.table-scroll-container::-webkit-scrollbar-track { background: transparent; }
+.table-scroll-container::-webkit-scrollbar-thumb { 
+    background-color: #cbd5e1; border-radius: 4px; border: 2px solid transparent; background-clip: content-box; 
+}
+.table-scroll-container::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+
+/* Estilos básicos de tabla */
+.styled-table { width: 100%; border-collapse: collapse; }
+.styled-table th { 
+    text-align: left; padding: 12px 15px; 
+    background-color: #f8fafc; color: #64748b; 
+    font-size: 0.75rem; text-transform: uppercase; font-weight: 700;
+    border-bottom: 1px solid #e2e8f0;
+}
+.styled-table td { 
+    padding: 12px 15px; font-size: 0.9rem; color: #334155; 
+    border-bottom: 1px solid #f1f5f9; 
+}
+
+/* 4. BADGES DE CATEGORÍA */
+.category-badge { border-radius: 4px; font-weight: 600; letter-spacing: 0.3px; }
+.badge-blue { background-color: #eff6ff; color: #3b82f6; border: 1px solid #dbeafe; }
+.badge-purple { background-color: #f5f3ff; color: #8b5cf6; border: 1px solid #ede9fe; }
+.badge-orange { background-color: #fff7ed; color: #f97316; border: 1px solid #ffedd5; }
+.badge-gray { background-color: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
+.badge-default { background-color: #f3f4f6; color: #4b5563; }

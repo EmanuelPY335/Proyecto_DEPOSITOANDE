@@ -3,7 +3,7 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 // --- Contextos ---
-import { ThemeProvider } from "./context/ThemeContext"; // <--- IMPORTANTE PARA MODO OSCURO
+import { ThemeProvider } from "./context/ThemeContext";
 
 // --- Páginas ---
 import Login from "./pages/Login";
@@ -16,6 +16,8 @@ import Roles from "./pages/Roles";
 import Empleados from "./pages/Empleados";
 import Config from "./pages/Config"; 
 import OrdenesTrabajo from "./pages/OrdenesTrabajo";
+import Materiales from "./pages/Materiales"; // <--- 1. IMPORTAR MATERIALES
+
 // --- Componentes ---
 import Layout from "./components/Layout";
 
@@ -81,11 +83,10 @@ const AdminRoute = ({ children }) => {
 // --- APP PRINCIPAL ---
 function App() {
   return (
-    // Envolvemos toda la app en el ThemeProvider para que los colores funcionen
     <ThemeProvider>
       <Router>
         <Routes>
-          
+           
           {/* --- RUTAS PÚBLICAS --- */}
           <Route path="/" element={<Login />} />
           <Route path="/reset-password/:token" element={<ResetPassword />} />
@@ -99,7 +100,17 @@ function App() {
               </ProtectedRoute>
             }
           />
-          
+           
+          {/* 2. AGREGAR LA RUTA DE MATERIALES AQUÍ */}
+          <Route
+            path="/materiales"
+            element={
+              <ProtectedRoute>
+                <Materiales />
+              </ProtectedRoute>
+            }
+          />
+
           <Route
             path="/pag2"
             element={
@@ -118,12 +129,20 @@ function App() {
             }
           />
 
-          {/* Nueva Ruta de Configuración */}
           <Route
             path="/config"
             element={
               <ProtectedRoute>
                 <Config /> 
+              </ProtectedRoute>
+            }
+          />
+          
+          <Route
+            path="/ordenes-trabajo"
+            element={
+              <ProtectedRoute>
+                <OrdenesTrabajo />
               </ProtectedRoute>
             }
           />
@@ -147,7 +166,7 @@ function App() {
               </AdminRoute>
             }
           />
-          
+           
           <Route
             path="/empleados"
             element={
@@ -156,17 +175,10 @@ function App() {
               </AdminRoute>
             }
           />
-          <Route
-            path="/ordenes-trabajo"
-            element={
-              <ProtectedRoute>
-                <OrdenesTrabajo />
-              </ProtectedRoute>
-            }
-          />
+
           {/* --- FALLBACK (Error 404) --- */}
           <Route path="*" element={<Navigate to="/home" replace />} />
-          
+           
         </Routes>
       </Router>
     </ThemeProvider>

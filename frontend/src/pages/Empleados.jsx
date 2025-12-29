@@ -51,6 +51,7 @@ const Empleados = () => {
     }
   };
 
+  // ... (funciones auxiliares formatText, getAvatarColor, renderAvatar siguen igual) ...
   const formatText = (text) => {
     if (!text) return "";
     return text.toString().toLowerCase().split(" ").map((word) => 
@@ -105,25 +106,51 @@ const Empleados = () => {
     navigate(location.pathname, { replace: true, state: {} });
   };
 
-// --- 🔥 FILTRADO CON LÓGICA DE DEPÓSITO 🔥 ---
+  // ✅ AGREGAR ESTA FUNCIÓN: Guardar cambios de edición
+  const handleSaveEmployee = async (formData) => {
+    try {
+        await apiFetch(`${API}/api/empleados/${formData.id}`, {
+            method: "PUT",
+            body: JSON.stringify(formData)
+        });
+        alert("Empleado actualizado correctamente.");
+        loadData(); // Recargar lista
+        setSelectedEmployee(null); // Cerrar modal
+    } catch (error) {
+        alert("Error al actualizar: " + error.message);
+    }
+  };
+
+  // ✅ AGREGAR ESTA FUNCIÓN: Activar/Desactivar cuenta
+  const handleToggleStatus = async (idEmpleado) => {
+    // Confirmación opcional
+    if(!window.confirm("¿Seguro que deseas cambiar el estado de este empleado?")) return;
+
+    try {
+        await apiFetch(`${API}/api/empleados/${idEmpleado}/estado`, {
+            method: "PUT"
+        });
+        // alert("Estado actualizado."); // Opcional
+        loadData(); // Recargar la tabla para ver el cambio de color
+        setSelectedEmployee(null); // Cerrar modal
+    } catch (error) {
+        alert("Error al cambiar estado: " + error.message);
+    }
+  };
+
+  // --- Filtros ---
   const filteredEmpleados = empleados.filter((e) => {
-    // 1. Ocultar fantasmas/system (Sin cambios)
     const nombreNorm = (e.nombre || "").toLowerCase().trim();
     const apellidoNorm = (e.apellido || "").toLowerCase().trim();
     if (nombreNorm === "sin" && apellidoNorm === "asignar") return false;
     if (nombreNorm === "system" && apellidoNorm === "unassigned") return false;
 
-    // 2. FILTRO POR DEPÓSITO (Si estamos asignando orden)
-    // [CORRECCIÓN]: Usamos Number() para evitar errores de tipo (string vs int)
     if (ordenPendiente) {
         if (Number(e.ID_DEPOSITO) !== Number(ordenPendiente.deposito_id)) {
             return false;
         }
     }
-    
-    // ... resto del código (Filtros del buscador) ...
 
-    // 3. Filtros del buscador
     if (!searchTerm) return true;
     const text = searchTerm.toLowerCase();
     switch (searchType) {
@@ -168,6 +195,7 @@ const Empleados = () => {
           )}
         </div>
 
+        {/* ... (SECCIÓN DEL BUSCADOR SE MANTIENE IGUAL) ... */}
         <div className="search-section">
           <div className="modern-search-bar">
             <Search className="search-icon-left" size={20} />
@@ -195,6 +223,7 @@ const Empleados = () => {
           </div>
         </div>
 
+        {/* ... (TABLA SE MANTIENE IGUAL) ... */}
         <div className="table-container">
           <table className="styled-table">
             <thead>
@@ -247,14 +276,25 @@ const Empleados = () => {
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan="6" className="empty-search-state">No se encontraron resultados (revisa si hay empleados en este depósito).</td></tr>
+                <tr><td colSpan="6" className="empty-search-state">No se encontraron resultados.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {selectedEmployee && <EmployeeModal employee={selectedEmployee} depositos={depositos} roles={roles} onClose={() => setSelectedEmployee(null)} />}
+      {/* ✅ AQUÍ ESTABA EL ERROR: AGREGAMOS onSave Y onToggleStatus */}
+      {selectedEmployee && (
+        <EmployeeModal 
+            employee={selectedEmployee} 
+            depositos={depositos} 
+            roles={roles} 
+            onClose={() => setSelectedEmployee(null)} 
+            onSave={handleSaveEmployee}          // <--- FALTABA ESTO
+            onToggleStatus={handleToggleStatus}  // <--- FALTABA ESTO (Error actual)
+        />
+      )}
+      
       {showCreateModal && <RegisterModal onClose={() => setShowCreateModal(false)} depositos={depositos} roles={roles} reload={loadData} />}
     </div>
   );
