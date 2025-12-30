@@ -1,8 +1,8 @@
 # backend/roles_permisos.py
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt, verify_jwt_in_request
+from flask_jwt_extended import jwt_required, get_jwt, verify_jwt_in_request, get_jwt_identity
 from functools import wraps
-from db import db, Rol, Permiso
+from db import db, Rol, Permiso, Usuario  # <--- AGREGAMOS Usuario AQUÍ
 from sqlalchemy import text
 
 roles_bp = Blueprint("roles_permisos", __name__)
@@ -35,31 +35,72 @@ def role_required(*roles_permitidos):
 # ==============================================================================
 
 def check_admin_access():
+    """
+    Verificación estricta para MODIFICACIONES (PUT/POST).
+    Solo Admins y Master_Admin.
+    """
     claims = get_jwt()
     rol_actual = claims.get("rol_nombre")
     if rol_actual not in ["Master_Admin", "Admin"]:
         return False, rol_actual
     return True, rol_actual
 
-# 1. LISTAR ROLES
+# ---------------------------------------------------------
+# 1. LISTAR ROLES (GET) - ¡MODIFICADO!
+# ---------------------------------------------------------
 @roles_bp.route("/roles", methods=["GET"])
 @jwt_required()
 def get_roles():
-    permitido, rol_usuario = check_admin_access()
-    if not permitido: return jsonify({"error": "Acceso denegado"}), 403
+    try:
+        current_user_id = get_jwt_identity()
+        usuario = Usuario.query.get(current_user_id)
+        
+        if not usuario or not usuario.rol:
+            return jsonify({"error": "Usuario sin rol válido"}), 403
 
-    roles = Rol.query.all()
-    resultado = []
-    for r in roles:
-        # Admin no ve a Master_Admin
-        if rol_usuario == "Admin" and r.NOMBRE_ROL == "Master_Admin":
-            continue
-        resultado.append({
-            "id": r.ID_ROL, 
-            "nombre": r.NOMBRE_ROL, 
-            "descripcion": r.DESCRIPCION_ROL or ""
-        })
-    return jsonify(resultado), 200
+        rol_nombre_usuario = usuario.rol.NOMBRE_ROL
+        tiene_acceso = False
+
+        # A) Acceso directo para Admins
+        if rol_nombre_usuario in ["Master_Admin", "Admin"]:
+            tiene_acceso = True
+        else:
+            # B) Acceso por Permisos (Para Gerentes, RRHH, etc.)
+            # Si tienen permiso de gestionar empleados o roles, necesitan ver la lista.
+            sql = text("""
+                SELECT 1 
+                FROM permiso_x_rol pxr
+                JOIN permiso p ON pxr.ID_PERMISO = p.ID_PERMISO
+                WHERE pxr.ID_ROL = :id_rol 
+                AND p.NOMBRE_PERMISO IN ('gestion_roles', 'gestion_empleados')
+            """)
+            resultado = db.session.execute(sql, {'id_rol': usuario.ID_ROL}).fetchone()
+            if resultado:
+                tiene_acceso = True
+
+        if not tiene_acceso:
+            return jsonify({"error": "Acceso denegado"}), 403
+
+        # C) Obtener la lista
+        roles = Rol.query.all()
+        resultado = []
+        for r in roles:
+            # Nadie excepto Master_Admin debería poder asignar el rol Master_Admin
+            # Ocultamos 'Master_Admin' si el usuario actual NO es Master_Admin
+            if rol_nombre_usuario != "Master_Admin" and r.NOMBRE_ROL == "Master_Admin":
+                continue
+                
+            resultado.append({
+                "id": r.ID_ROL, 
+                "nombre": r.NOMBRE_ROL, 
+                "descripcion": r.DESCRIPCION_ROL or ""
+            })
+            
+        return jsonify(resultado), 200
+
+    except Exception as e:
+        print(f"Error en get_roles: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # 2. LISTAR PERMISOS
 @roles_bp.route("/permisos", methods=["GET"])
@@ -88,6 +129,7 @@ def get_rol_permisos(id_rol):
     if rol_usuario == "Admin" and rol_target.NOMBRE_ROL == "Master_Admin":
         return jsonify({"error": "Prohibido ver permisos del Master."}), 403
 
+    # Ajustado a tus tablas: permiso_x_rol
     query = text("SELECT ID_PERMISO FROM permiso_x_rol WHERE ID_ROL = :rid")
     result = db.session.execute(query, {"rid": id_rol}).fetchall()
     ids = [row[0] for row in result]
@@ -110,6 +152,7 @@ def update_rol_permisos(id_rol):
     nuevos_ids = data.get("permisos", [])
 
     try:
+        # Ajustado a tus tablas: permiso_x_rol
         db.session.execute(text("DELETE FROM permiso_x_rol WHERE ID_ROL = :rid"), {"rid": id_rol})
         if nuevos_ids:
             for pid in nuevos_ids:

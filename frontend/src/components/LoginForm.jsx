@@ -1,4 +1,3 @@
-// LoginForm.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import RegisterModal from "./RegisterModal"; 
@@ -32,26 +31,65 @@ const LoginForm = () => {
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setMessage(""); // Limpiar mensaje en un nuevo intento
+    
     try {
-      const response = await fetch("http://127.0.0.1:5000/api/login", {
+      // 1. PETICIÓN DE LOGIN (Obtener Token)
+      // CORRECCIÓN 1: La URL correcta es /api/login (según tu main.py)
+      const response = await fetch("http://127.0.0.1:5000/api/login", { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        // CORRECCIÓN 2: Tu backend espera "contrasena", no "password"
+        body: JSON.stringify({ correo: email, contrasena: password }), 
       });
       
       const data = await response.json();
       
       if (data.access_token) {
-            // --- CAMBIO: Usamos sessionStorage ---
-            sessionStorage.setItem("access_token", data.access_token);
-            sessionStorage.setItem("user_nombre", data.user_nombre);
-            sessionStorage.setItem("user_rol", data.rol);
-            
-            navigate("/home");
+        // --- LÓGICA DE PERMISOS INTEGRADA ---
+        
+        // A. Guardamos el token y datos básicos
+        sessionStorage.setItem("access_token", data.access_token);
+
+        // B. Inmediatamente pedimos el PERFIL para obtener los permisos reales
+        try {
+            const perfilResponse = await fetch("http://127.0.0.1:5000/api/profile", {
+                method: "GET",
+                headers: {
+                    "Authorization": `Bearer ${data.access_token}`,
+                    "Content-Type": "application/json"
+                }
+            });
+
+            if (perfilResponse.ok) {
+                const perfilData = await perfilResponse.json();
+                
+                // Guardamos datos actualizados del perfil
+                const nombreCompleto = `${perfilData.NOMBRE} ${perfilData.APELLIDO}`;
+                sessionStorage.setItem("user_nombre", nombreCompleto);
+                sessionStorage.setItem("user_rol", perfilData.rol);
+                
+                // 🔥 GUARDAMOS LOS PERMISOS (Esto es lo que necesita el Home)
+                const permisos = perfilData.permisos || [];
+                sessionStorage.setItem("user_permissions", JSON.stringify(permisos));
+
+            } else {
+                console.warn("No se pudo cargar el perfil completo, usando datos básicos.");
+                // Fallback si falla el perfil
+                sessionStorage.setItem("user_permissions", "[]");
+            }
+        } catch (err) {
+            console.error("Error fetching profile:", err);
+            sessionStorage.setItem("user_permissions", "[]");
+        }
+
+        // C. Redirigir al Home
+        navigate("/home");
+
       } else {
         setMessage(data.message || "Correo o contraseña incorrectos");
       }
     } catch (error) {
+      console.error(error);
       setMessage("Ocurrió un error en el servidor");
     }
   };
@@ -62,7 +100,11 @@ const LoginForm = () => {
 
   const handleRegistroSubmit = async (e) => {
     e.preventDefault();
-    // (Lógica de registro sin cambios)
+    if (registro.contrasena !== registro.confirmar) {
+        alert("Las contraseñas no coinciden");
+        return;
+    }
+    // Lógica de registro
     try {
       const response = await fetch("http://127.0.0.1:5000/api/registro", {
         method: "POST",
@@ -73,14 +115,17 @@ const LoginForm = () => {
       if (data.success) {
         console.log("✅ Registro exitoso");
         setShowModal(false);
+        setMessage("Registro exitoso. Por favor inicia sesión.");
       } else {
         console.error("❌ Error en registro:", data.message);
+        alert(data.message);
       }
     } catch (error) {
       console.error("❌ Error al conectar con el servidor:", error);
     }
   };
 
+  // --- TU RENDERIZADO ORIGINAL (Mantiene el diseño centrado) ---
   return (
     <div className={styles.loginWrapper}>
       <div className={styles.loginContainer}>
@@ -124,7 +169,6 @@ const LoginForm = () => {
           </button>
         </div>
 
-        {/* Esta línea ya existía y mostrará el mensaje */}
         {message && <p className={styles.loginMessage}>{message}</p>}
 
         {showModal && (

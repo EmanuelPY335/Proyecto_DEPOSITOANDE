@@ -1,0 +1,342 @@
+/* Contenedor relativo para posicionar el dropdown */
+.notification-container {
+    position: relative;
+    display: inline-block;
+}
+
+/* Botón de Campana */
+.bell-btn {
+    background: transparent;
+    border: none;
+    color: #6b7280; /* Gris medio */
+    padding: 8px;
+    border-radius: 50%;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bell-btn:hover, .bell-btn:focus {
+    background-color: #f3f4f6;
+    color: #111827; /* Gris oscuro */
+    outline: none;
+}
+
+/* Badge Rojo (Contador) */
+.notification-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: #ef4444; /* Rojo vibrante */
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #ffffff; /* Borde blanco para separar del icono */
+}
+
+/* Menú Desplegable (Dropdown) */
+.notification-dropdown {
+    position: absolute;
+    top: 115%; /* Justo debajo del botón */
+    right: -10px; /* Alineado a la derecha, con un pequeño offset */
+    width: 320px;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 
+        0 10px 25px -5px rgba(0, 0, 0, 0.1), 
+        0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e5e7eb;
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.dropdown-header {
+    padding: 16px 20px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.dropdown-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #111827;
+}
+
+.dropdown-content {
+    padding: 8px 0;
+}
+
+/* Secciones del menú */
+.menu-section {
+    padding: 8px 0;
+}
+
+.menu-section.border-top {
+    border-top: 1px solid #e5e7eb;
+}
+
+.section-title {
+    display: block;
+    padding: 8px 20px 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #9ca3af;
+    letter-spacing: 0.05em;
+}
+
+/* Elementos del menú (Links) */
+.menu-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    text-decoration: none;
+    color: #374151;
+    transition: background 0.2s;
+    gap: 15px;
+}
+
+.menu-item:hover {
+    background-color: #f3f4f6;
+}
+
+/* Si es un ítem destacado (ej: pedidos pendientes con notificaciones) */
+.menu-item.highlight {
+    background-color: #eff6ff; /* Azul muy claro */
+}
+.menu-item.highlight:hover {
+    background-color: #dbeafe;
+}
+
+/* Iconos dentro del menú */
+.menu-item-icon {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.menu-item-icon.blue { background: #dbeafe; color: #2563eb; }
+.menu-item-icon.green { background: #dcfce7; color: #16a34a; }
+.menu-item-icon.gray { background: #f3f4f6; color: #6b7280; }
+
+/* Texto del menú */
+.menu-item-text {
+    flex-grow: 1;
+    display: flex; flex-direction: column;
+}
+.menu-item-text span { font-weight: 600; font-size: 0.95rem; }
+.menu-item-text small { color: #6b7280; font-size: 0.8rem; }
+
+/* Badges internos y flechas */
+.counter-badge.red {
+    background: #ef4444; color: white;
+    padding: 2px 8px; border-radius: 10px;
+    font-size: 0.75rem; font-weight: 700;
+}
+
+.chevron { color: #d1d5db; }
+
+/* Animación rápida para el dropdown */
+.fade-in-quick { animation: fadeInQuick 0.2s ease-out; }
+@keyframes fadeInQuick {
+    from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* src/styles/NotificationMenu.css - AGREGADOS */
+
+/* Estado APAGADO (Read / Empty) */
+.mailbox-read {
+    opacity: 0.6; /* Un poco transparente */
+    filter: grayscale(100%); /* Blanco y negro */
+    transition: all 0.3s;
+}
+
+.mailbox-read:hover {
+    opacity: 1; /* Al pasar el mouse se prende un poco */
+    filter: grayscale(0%);
+    background-color: #f9fafb;
+}
+
+.gray-dim {
+    background: #e5e7eb;
+    color: #9ca3af;
+}
+
+/* Estado PRENDIDO (Unread / Active) */
+.mailbox-unread {
+    background-color: #eff6ff; /* Fondo azul muy muy suave */
+    border-left: 3px solid #2563eb; /* Borde indicador a la izquierda */
+}
+
+.mailbox-unread span {
+    color: #1e3a8a; /* Texto más oscuro y fuerte */
+    font-weight: 700;
+}
+
+/* Icono vibrante con pulso */
+.blue-pulse {
+    background: #dbeafe;
+    color: #2563eb;
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7);
+    animation: pulse-blue 2s infinite;
+}
+
+@keyframes pulse-blue {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+
+/* Animación de entrada del Badge */
+.bounce-in {
+    animation: bounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes bounceIn {
+    0% { transform: scale(0); }
+    80% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+/* Texto de "Todo al día" */
+.status-text {
+    font-size: 0.75rem;
+    color: #10b981;
+    float: right;
+    margin-top: 3px;
+    font-weight: 500;
+}
+/* src/styles/NotificationMenu.css */
+
+/* --- ESTILOS DE ESTADO (BUZÓN) --- */
+
+/* 1. ESTADO "LEÍDO" (APAGADO) 
+   Se ve tenue, grisáceo, indica que no requiere atención inmediata.
+*/
+.mailbox-read {
+    background-color: transparent;
+    opacity: 0.7; /* Un poco transparente */
+    transition: all 0.2s;
+}
+
+.mailbox-read:hover {
+    opacity: 1;
+    background-color: #f9fafb; /* Gris muy suave al pasar mouse */
+}
+
+.mailbox-read .menu-item-text span {
+    font-weight: 500; /* Peso normal */
+    color: #4b5563;   /* Gris oscuro */
+}
+
+/* Iconos apagados */
+.gray-dim { background: #f3f4f6; color: #9ca3af; }
+.green-dim { background: #f0fdf4; color: #86efac; }
+
+
+/* 2. ESTADO "NO LEÍDO" (PRENDIDO/BRUTAL)
+   Resalta visualmente, fondo azul suave, borde indicador, texto negrita.
+*/
+.mailbox-unread {
+    background-color: #eff6ff; /* Fondo azul muy claro */
+    border-left: 3px solid #2563eb; /* Borde azul a la izquierda */
+}
+
+.mailbox-unread:hover {
+    background-color: #dbeafe; /* Azul un poco más fuerte al hover */
+}
+
+.mailbox-unread .menu-item-text span {
+    font-weight: 700; /* NEGRITA */
+    color: #1e3a8a;   /* Azul oscuro profundo */
+}
+
+.mailbox-unread .menu-item-text small {
+    color: #3b82f6; /* Subtítulo azulado */
+    font-weight: 500;
+}
+
+/* ICONO VIBRANTE CON PULSO */
+.blue-pulse {
+    background: #dbeafe;
+    color: #2563eb;
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7);
+    animation: pulse-blue 2s infinite;
+}
+
+@keyframes pulse-blue {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+
+/* --- ANIMACIONES GENERALES --- */
+.bell-ringing {
+    animation: ring 4s .7s ease-in-out infinite;
+    transform-origin: 50% 4px;
+    color: #2563eb; /* La campana se pone azul si hay notificaciones */
+}
+
+@keyframes ring {
+    0% { transform: rotate(0); }
+    1% { transform: rotate(30deg); }
+    3% { transform: rotate(-28deg); }
+    5% { transform: rotate(34deg); }
+    7% { transform: rotate(-32deg); }
+    9% { transform: rotate(30deg); }
+    11% { transform: rotate(-28deg); }
+    13% { transform: rotate(26deg); }
+    15% { transform: rotate(-24deg); }
+    17% { transform: rotate(22deg); }
+    19% { transform: rotate(-20deg); }
+    21% { transform: rotate(18deg); }
+    23% { transform: rotate(-16deg); }
+    25% { transform: rotate(14deg); }
+    27% { transform: rotate(-12deg); }
+    29% { transform: rotate(10deg); }
+    31% { transform: rotate(-8deg); }
+    33% { transform: rotate(6deg); }
+    35% { transform: rotate(-4deg); }
+    37% { transform: rotate(2deg); }
+    39% { transform: rotate(-1deg); }
+    41% { transform: rotate(1deg); }
+    43% { transform: rotate(0); }
+    100% { transform: rotate(0); }
+}
+
+/* Badge de contador */
+.counter-badge.red {
+    background: #ef4444; 
+    color: white;
+    min-width: 20px;
+    height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 10px;
+    font-size: 0.75rem; 
+    font-weight: 700;
+}
+
+/* Header del dropdown */
+.dropdown-header {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.status-text {
+    font-size: 0.75rem;
+    color: #10b981; /* Verde éxito */
+    font-weight: 600;
+}

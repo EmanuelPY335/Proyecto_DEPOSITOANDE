@@ -3,9 +3,10 @@ import React, { useState, useEffect } from "react";
 import { apiFetch } from "../utils/api";
 import { 
   Box, Plus, Search, Filter, AlertTriangle, Package, 
-  Layers, Ruler, Hash, Edit, Trash2, X, Save, ShieldAlert, Truck, Check
+  Layers, Ruler, Hash, Edit, Trash2, X, Save, ShieldAlert, Truck, Check, Send
 } from "lucide-react";
 import LotesModal from "../components/LotesModal"; 
+import SolicitudModal from "../components/SolicitudModal"; 
 import "../styles/Materiales.css";
 
 const API_URL = "http://127.0.0.1:5000";
@@ -17,33 +18,45 @@ const Materiales = () => {
   
   // --- ESTADOS PARA FILTROS Y BÚSQUEDA ---
   const [searchTerm, setSearchTerm] = useState("");
-  const [showFilters, setShowFilters] = useState(false); // Mostrar/Ocultar menú filtros
+  const [showFilters, setShowFilters] = useState(false);
   const [filterCategory, setFilterCategory] = useState("Todas");
   const [filterStock, setFilterStock] = useState("Todos");
 
   // Estados para modales
   const [showModal, setShowModal] = useState(false);
   const [selectedMaterialLotes, setSelectedMaterialLotes] = useState(null);
+  const [solicitudMat, setSolicitudMat] = useState(null); 
   
-  // Formulario y Rol
+  // Formulario y Permisos
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState(null);
   const [rolUser, setRolUser] = useState("");
+  const [hasAccess, setHasAccess] = useState(false); // ✅ NUEVO ESTADO DE ACCESO
+
   const [formData, setFormData] = useState({
-    codigo_unico: "",
-    nombre: "",
-    cantidad: "",
-    unidad_medida: "unid",
-    categoria: "General",
-    stock_minimo: "5"
+    codigo_unico: "", nombre: "", cantidad: "", unidad_medida: "unid", categoria: "General", stock_minimo: "5"
   });
 
-  const ALLOWED_ROLES = ["Master_Admin", "Admin", "Personal_Inventario"];
-
   useEffect(() => {
+    // 1. OBTENER ROL Y PERMISOS DE SESSION STORAGE
     const rol = sessionStorage.getItem("user_rol");
+    const permisosStr = sessionStorage.getItem("user_permissions");
+    const permisos = permisosStr ? JSON.parse(permisosStr) : [];
+
     setRolUser(rol);
-    if (ALLOWED_ROLES.includes(rol)) {
+
+    // 2. VERIFICAR SI TIENE PERMISO (Dinámico)
+    // Pasa si es Master/Admin, si es Personal_Inventario (legacy) o si tiene el permiso explícito
+    const canAccess = 
+        rol === "Master_Admin" || 
+        rol === "Admin" || 
+        rol === "Personal_Inventario" || 
+        permisos.includes("gestion_materiales");
+
+    setHasAccess(canAccess);
+
+    // 3. CARGAR DATOS SI TIENE PERMISO
+    if (canAccess) {
         loadData();
     } else {
         setLoading(false); 
@@ -62,6 +75,8 @@ const Materiales = () => {
       setDepositos(depData || []);
     } catch (e) {
       console.error(e);
+      // Si el backend devuelve 403, aquí podríamos manejarlo, 
+      // pero el chequeo inicial previene la llamada usualmente.
     } finally {
       setLoading(false);
     }
@@ -69,34 +84,28 @@ const Materiales = () => {
 
   // --- LÓGICA DE FILTRADO AVANZADO ---
   const filteredMaterials = materiales.filter(m => {
-    // 1. Filtro por Texto (Nombre o Código)
     const matchesText = m.NOMBRE.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         String(m.CODIGO_UNICO).includes(searchTerm);
-    
-    // 2. Filtro por Categoría
     const matchesCategory = filterCategory === "Todas" || m.CATEGORIA === filterCategory;
-
-    // 3. Filtro por Estado de Stock
+    
     let matchesStock = true;
     const stockMinimo = m.STOCK_MINIMO || 5;
     if (filterStock === "Bajo") {
-        matchesStock = m.CANTIDAD <= stockMinimo; // En Falta
+        matchesStock = m.CANTIDAD <= stockMinimo;
     } else if (filterStock === "Normal") {
-        matchesStock = m.CANTIDAD > stockMinimo; // OK
+        matchesStock = m.CANTIDAD > stockMinimo;
     }
 
     return matchesText && matchesCategory && matchesStock;
   });
 
-  // Control de Acceso
-  if (!ALLOWED_ROLES.includes(rolUser)) {
+  // ✅ BLOQUEO DE RENDERIZADO: Usamos la variable hasAccess calculada dinámicamente
+  if (!loading && !hasAccess) {
       return (
-          <div className="dashboard-layout" style={{display:'flex', justifyContent:'center', alignItems:'center', height:'80vh'}}>
-              <div style={{textAlign:'center', color:'#4b5563'}}>
-                  <ShieldAlert size={64} style={{color:'#ef4444', marginBottom: 20}} />
-                  <h1>Acceso Restringido</h1>
-                  <p>Este módulo es exclusivo para Personal de Inventario y Gerencia.</p>
-              </div>
+          <div className="fade-in" style={{display:'flex', flexDirection: 'column', justifyContent:'center', alignItems:'center', height:'60vh', color:'#4b5563'}}>
+              <ShieldAlert size={64} style={{color:'#ef4444', marginBottom: 20}} />
+              <h1>Acceso Restringido</h1>
+              <p>No tienes los permisos necesarios para ver el inventario.</p>
           </div>
       );
   }
@@ -105,7 +114,6 @@ const Materiales = () => {
   const totalItems = materiales.length;
   const stockBajo = materiales.filter(m => m.CANTIDAD <= (m.STOCK_MINIMO || 5)).length;
 
-  // Manejadores de Formulario
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
   
   const openNewModal = () => {
@@ -116,12 +124,8 @@ const Materiales = () => {
 
   const openEditModal = (material) => {
       setFormData({
-          codigo_unico: material.CODIGO_UNICO,
-          nombre: material.NOMBRE,
-          cantidad: material.CANTIDAD,
-          unidad_medida: material.UNIDAD || "unid",
-          categoria: material.CATEGORIA || "General",
-          stock_minimo: material.STOCK_MINIMO || 5
+          codigo_unico: material.CODIGO_UNICO, nombre: material.NOMBRE, cantidad: material.CANTIDAD,
+          unidad_medida: material.UNIDAD || "unid", categoria: material.CATEGORIA || "General", stock_minimo: material.STOCK_MINIMO || 5
       });
       setCurrentId(material.ID_MATERIAL);
       setIsEditing(true);
@@ -152,33 +156,22 @@ const Materiales = () => {
   };
 
   const renderCategoryBadge = (cat) => {
-    const styleMap = {
-      'Conductores': 'badge-blue',
-      'Aisladores': 'badge-purple',
-      'Protección': 'badge-orange',
-      'Ferretería': 'badge-gray',
-      'General': 'badge-default'
-    };
+    const styleMap = { 'Conductores': 'badge-blue', 'Aisladores': 'badge-purple', 'Protección': 'badge-orange', 'Ferretería': 'badge-gray', 'General': 'badge-default' };
     return <span className={`category-badge ${styleMap[cat] || 'badge-default'}`}>{cat}</span>;
   };
 
-  // Listas para los dropdowns
   const categoriasPosibles = ["Todas", "Conductores", "Aisladores", "Protección", "Ferretería", "General"];
-  const estadosPosibles = [
-      { label: "Todos los Estados", value: "Todos" }, 
-      { label: "Stock Normal", value: "Normal" }, 
-      { label: "En Falta / Crítico", value: "Bajo" }
-  ];
+  const estadosPosibles = [{ label: "Todos los Estados", value: "Todos" }, { label: "Stock Normal", value: "Normal" }, { label: "En Falta / Crítico", value: "Bajo" }];
 
   return (
-    <div className="dashboard-layout">
-      <div className="content-dashboard">
+    <div className="fade-in" style={{ width: "100%" }}>
         
         <div className="page-header">
           <div>
             <h1>Inventario</h1>
             <p className="subtitle">Gestión de materiales y stock del depósito.</p>
           </div>
+          {/* ✅ BOTÓN NUEVO: Solo visible si tiene acceso (ya validado arriba) */}
           <button className="btn-new" onClick={openNewModal}>
             <Plus size={18} /> Nuevo Material
           </button>
@@ -204,19 +197,16 @@ const Materiales = () => {
           </div>
         </div>
 
-        {/* BARRA DE HERRAMIENTAS Y FILTROS */}
+        {/* TOOLBAR Y FILTROS */}
         <div className="toolbar-section" style={{position: 'relative'}}>
           <div className="search-bar-modern">
             <Search size={18} className="search-icon"/>
             <input 
-              type="text" 
-              placeholder="Buscar por nombre o código..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              type="text" placeholder="Buscar por nombre o código..." 
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           
-          {/* BOTÓN TOGGLE FILTROS */}
           <button 
             className={`btn-filter ${showFilters ? 'active' : ''}`} 
             onClick={() => setShowFilters(!showFilters)}
@@ -225,18 +215,13 @@ const Materiales = () => {
             <Filter size={18} /> Filtros
           </button>
 
-          {/* MENÚ FLOTANTE DE FILTROS */}
           {showFilters && (
             <div className="filters-dropdown fade-in">
                 <div className="filter-group">
                     <label>Categoría</label>
                     <div className="filter-chips">
                         {categoriasPosibles.map(cat => (
-                            <button 
-                                key={cat} 
-                                className={`chip ${filterCategory === cat ? 'active' : ''}`}
-                                onClick={() => setFilterCategory(cat)}
-                            >
+                            <button key={cat} className={`chip ${filterCategory === cat ? 'active' : ''}`} onClick={() => setFilterCategory(cat)}>
                                 {cat} {filterCategory === cat && <Check size={12}/>}
                             </button>
                         ))}
@@ -244,38 +229,25 @@ const Materiales = () => {
                 </div>
                 <div className="filter-group">
                     <label>Estado de Stock</label>
-                    <select 
-                        className="discord-select" 
-                        value={filterStock} 
-                        onChange={(e) => setFilterStock(e.target.value)}
-                    >
-                        {estadosPosibles.map(opt => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
+                    <select className="discord-select" value={filterStock} onChange={(e) => setFilterStock(e.target.value)}>
+                        {estadosPosibles.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
                     </select>
                 </div>
                 <div className="filter-footer">
                     <button className="btn-text-only" onClick={() => {
-                        setFilterCategory("Todas");
-                        setFilterStock("Todos");
-                        setSearchTerm("");
+                        setFilterCategory("Todas"); setFilterStock("Todos"); setSearchTerm("");
                     }}>Limpiar Filtros</button>
                 </div>
             </div>
           )}
         </div>
 
-        {/* TABLA DE RESULTADOS */}
+        {/* TABLA */}
         <div className="table-container fade-in">
           <table className="styled-table materials-table">
             <thead>
               <tr>
-                <th>Código</th>
-                <th>Descripción</th>
-                <th>Categoría</th>
-                <th>Stock Global</th>
-                <th>Unidad</th>
-                <th style={{textAlign: 'right'}}>Acciones</th>
+                <th>Código</th><th>Descripción</th><th>Categoría</th><th>Stock Global</th><th>Unidad</th><th style={{textAlign: 'right'}}>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -283,7 +255,7 @@ const Materiales = () => {
                 <tr><td colSpan="6" className="text-center p-5">Cargando inventario...</td></tr>
               ) : filteredMaterials.length === 0 ? (
                 <tr><td colSpan="6" className="empty-state-row">
-                    {materiales.length === 0 ? "No hay materiales registrados." : "No se encontraron coincidencias con los filtros."}
+                    {materiales.length === 0 ? "No hay materiales registrados." : "No se encontraron coincidencias."}
                 </td></tr>
               ) : (
                 filteredMaterials.map((m) => {
@@ -295,29 +267,27 @@ const Materiales = () => {
                       <td>{renderCategoryBadge(m.CATEGORIA)}</td>
                       <td>
                         <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
-                            <span className={`stock-indicator ${isLowStock ? 'stock-low' : 'stock-ok'}`}>
-                            {m.CANTIDAD}
-                            </span>
+                            <span className={`stock-indicator ${isLowStock ? 'stock-low' : 'stock-ok'}`}>{m.CANTIDAD}</span>
                             {isLowStock && <span style={{fontSize:'0.7rem', color:'#dc2626', fontWeight:'bold'}}>EN FALTA</span>}
                         </div>
                       </td>
                       <td className="text-muted">{m.UNIDAD || m.UNIDAD_MEDIDA}</td>
                       <td style={{textAlign: 'right'}}>
-                        <button 
-                            className="btn-icon" 
-                            onClick={() => setSelectedMaterialLotes(m)} 
-                            title="Gestionar Lotes y Transferencias"
-                            style={{color: '#6366f1', backgroundColor: '#eef2ff', marginRight: '5px'}}
-                        >
+                        
+                        {/* BOTÓN SOLICITUD: Visible para todos los que entraron aquí */}
+                        <button className="btn-icon" onClick={() => setSolicitudMat(m)} title="Solicitar a otro depósito" style={{color: '#d97706', backgroundColor: '#fffbeb', marginRight: '5px'}}>
+                            <Send size={18} style={{ transform: 'rotate(-45deg)', marginLeft: -2 }}/>
+                        </button>
+
+                        <button className="btn-icon" onClick={() => setSelectedMaterialLotes(m)} title="Gestionar Lotes y Transferencias" style={{color: '#6366f1', backgroundColor: '#eef2ff', marginRight: '5px'}}>
                             <Truck size={18}/>
                         </button>
-                        <button className="btn-icon" onClick={() => openEditModal(m)} title="Editar">
-                            <Edit size={18}/>
-                        </button>
-                        {(rolUser === "Master_Admin" || rolUser === "Admin") && (
-                            <button className="btn-icon danger" onClick={() => handleDelete(m.ID_MATERIAL)} title="Eliminar">
-                                <Trash2 size={18}/>
-                            </button>
+
+                        <button className="btn-icon" onClick={() => openEditModal(m)} title="Editar"><Edit size={18}/></button>
+                        
+                        {/* ✅ BOTÓN ELIMINAR: Ahora visible si tienes permiso de gestión o eres admin */}
+                        {hasAccess && (
+                            <button className="btn-icon danger" onClick={() => handleDelete(m.ID_MATERIAL)} title="Eliminar"><Trash2 size={18}/></button>
                         )}
                       </td>
                     </tr>
@@ -328,19 +298,10 @@ const Materiales = () => {
           </table>
         </div>
 
-        {/* MODAL LOTES */}
-        {selectedMaterialLotes && (
-            <LotesModal 
-                material={selectedMaterialLotes} 
-                depositos={depositos}
-                onClose={() => {
-                    setSelectedMaterialLotes(null);
-                    loadData(); 
-                }} 
-            />
-        )}
+        {selectedMaterialLotes && <LotesModal material={selectedMaterialLotes} depositos={depositos} onClose={() => { setSelectedMaterialLotes(null); loadData(); }} />}
 
-        {/* MODAL CREAR/EDITAR */}
+        {solicitudMat && <SolicitudModal material={solicitudMat} depositos={depositos} onClose={() => setSolicitudMat(null)} />}
+
         {showModal && (
           <div className="modal-backdrop">
             <div className="discord-card modal-material">
@@ -350,39 +311,14 @@ const Materiales = () => {
               </div>
               <form onSubmit={handleSubmit}>
                 <div className="form-grid-2">
-                  <div className="input-group">
-                    <label><Hash size={14}/> Código Único</label>
-                    <input 
-                        type="number" name="codigo_unico" required 
-                        value={formData.codigo_unico} onChange={handleChange} 
-                        placeholder="Ej: 1001" 
-                        disabled={isEditing}
-                    />
-                  </div>
-                  <div className="input-group">
-                    <label><Layers size={14}/> Categoría</label>
-                    <select name="categoria" className="discord-select" value={formData.categoria} onChange={handleChange}>
-                      {categoriasPosibles.filter(c => c !== "Todas").map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
+                  <div className="input-group"><label><Hash size={14}/> Código Único</label><input type="number" name="codigo_unico" required value={formData.codigo_unico} onChange={handleChange} placeholder="Ej: 1001" disabled={isEditing}/></div>
+                  <div className="input-group"><label><Layers size={14}/> Categoría</label><select name="categoria" className="discord-select" value={formData.categoria} onChange={handleChange}>{categoriasPosibles.filter(c => c !== "Todas").map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                 </div>
-                <div className="input-group">
-                  <label><Box size={14}/> Nombre / Descripción</label>
-                  <input type="text" name="nombre" required value={formData.nombre} onChange={handleChange} placeholder="Ej: Cable Preensamblado 25mm" />
-                </div>
+                <div className="input-group"><label><Box size={14}/> Nombre / Descripción</label><input type="text" name="nombre" required value={formData.nombre} onChange={handleChange} placeholder="Ej: Cable Preensamblado 25mm" /></div>
                 <div className="form-grid-3">
-                  <div className="input-group">
-                    <label>Stock Inicial</label>
-                    <input type="number" name="cantidad" required value={formData.cantidad} onChange={handleChange} placeholder="0" />
-                  </div>
-                  <div className="input-group">
-                    <label><Ruler size={14}/> Unidad</label>
-                    <input type="text" name="unidad_medida" required value={formData.unidad_medida} onChange={handleChange} placeholder="m, unid..." />
-                  </div>
-                  <div className="input-group">
-                    <label><AlertTriangle size={14}/> Mínimo</label>
-                    <input type="number" name="stock_minimo" value={formData.stock_minimo} onChange={handleChange} placeholder="5" />
-                  </div>
+                  <div className="input-group"><label>Stock Inicial</label><input type="number" name="cantidad" required value={formData.cantidad} onChange={handleChange} placeholder="0" /></div>
+                  <div className="input-group"><label><Ruler size={14}/> Unidad</label><input type="text" name="unidad_medida" required value={formData.unidad_medida} onChange={handleChange} placeholder="m, unid..." /></div>
+                  <div className="input-group"><label><AlertTriangle size={14}/> Mínimo</label><input type="number" name="stock_minimo" value={formData.stock_minimo} onChange={handleChange} placeholder="5" /></div>
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn-status" onClick={() => setShowModal(false)}>Cancelar</button>
@@ -392,7 +328,6 @@ const Materiales = () => {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 };

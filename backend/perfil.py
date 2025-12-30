@@ -14,12 +14,11 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- RUTA PARA SERVIR IMÁGENES ---
 @perfil_bp.route('/uploads/avatars/<filename>')
 def uploaded_file(filename):
     return send_from_directory(os.path.join(current_app.root_path, UPLOAD_FOLDER), filename)
 
-# --- 1. OBTENER PERFIL (GET) - ¡ESTA FALTABA! ---
+# --- 1. OBTENER PERFIL (GET) CON PERMISOS ---
 @perfil_bp.route("/profile", methods=["GET"])
 @jwt_required()
 def get_profile():
@@ -29,8 +28,20 @@ def get_profile():
     if not usuario:
         return jsonify({"success": False, "message": "Usuario no encontrado."}), 404
         
-    # Devuelve los datos usando el método que actualizamos en db.py
-    return jsonify(usuario.to_dict_profile()), 200
+    # Obtener el diccionario base del perfil
+    data = usuario.to_dict_profile()
+    
+    # AGREGADO: Obtener la lista de permisos del rol
+    lista_permisos = []
+    if usuario.rol and usuario.rol.permisos:
+        # Usamos NOMBRE_PERMISO según tu db.py
+        lista_permisos = [p.NOMBRE_PERMISO for p in usuario.rol.permisos]
+    
+    # Inyectamos el rol y los permisos en la respuesta
+    data['rol'] = usuario.rol.NOMBRE_ROL if usuario.rol else "Sin Rol"
+    data['permisos'] = lista_permisos
+    
+    return jsonify(data), 200
 
 # --- 2. ACTUALIZAR PERFIL (PUT) ---
 @perfil_bp.route("/profile", methods=["PUT"])
@@ -41,13 +52,11 @@ def update_profile():
         usuario = Usuario.query.get(id_usuario)
         data = request.json
         
-        # Actualizar datos de Empleado
         if usuario.empleado:
             usuario.empleado.NOMBRE = data.get("NOMBRE", usuario.empleado.NOMBRE)
             usuario.empleado.APELLIDO = data.get("APELLIDO", usuario.empleado.APELLIDO)
             usuario.empleado.TELEFONO = data.get("TELEFONO", usuario.empleado.TELEFONO)
         
-        # Actualizar datos de Usuario
         usuario.CORREO = data.get("CORREO", usuario.CORREO)
         usuario.BANNER_COLOR = data.get("BANNER_COLOR", usuario.BANNER_COLOR) 
 
@@ -73,17 +82,14 @@ def upload_avatar():
         id_usuario = get_jwt_identity()
         usuario = Usuario.query.get(id_usuario)
         
-        # Crear carpeta si no existe
         full_path = os.path.join(current_app.root_path, UPLOAD_FOLDER)
         os.makedirs(full_path, exist_ok=True)
         
-        # Nombre seguro
         ext = file.filename.rsplit('.', 1)[1].lower()
         filename = secure_filename(f"avatar_{id_usuario}.{ext}")
         
         file.save(os.path.join(full_path, filename))
         
-        # Guardar ruta en BD
         usuario.AVATAR = f"/api/uploads/avatars/{filename}"
         db.session.commit()
         

@@ -311,3 +311,46 @@ class AvanceOrden(db.Model):
             "mensaje": self.MENSAJE,
             "fecha": self.FECHA_HORA.strftime("%d/%m/%Y %H:%M")
         }
+# ------------PEDIDOS------------
+# Agregar en backend/db.py
+
+# [backend/db.py] - Agregar al final
+
+class EstadoSolicitud(db.Model):
+    __tablename__ = 'estado_solicitud'
+    ID_ESTADO = db.Column(db.Integer, primary_key=True)
+    NOMBRE = db.Column(db.String(50)) # 1: Pendiente, 2: En Preparación, 3: En Tránsito, 4: Recibido, 5: Rechazado
+
+class SolicitudMaterial(db.Model):
+    __tablename__ = 'solicitud_material'
+    ID_SOLICITUD = db.Column(db.Integer, primary_key=True)
+    
+    # ¿Quién pide? (El que necesita el material)
+    ID_DEPOSITO_SOLICITANTE = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
+    ID_USUARIO_SOLICITANTE = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=False)
+    
+    # ¿A quién le pide? (El que tiene el stock)
+    ID_DEPOSITO_PROVEEDOR = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
+    
+    # ¿Qué pide? (Material genérico, no lote específico aún)
+    ID_MATERIAL = db.Column(db.Integer, db.ForeignKey('material.ID_MATERIAL'), nullable=False)
+    CANTIDAD = db.Column(db.Float, nullable=False)
+    
+    # Control de flujo
+    ID_ESTADO = db.Column(db.Integer, db.ForeignKey('estado_solicitud.ID_ESTADO'), default=1)
+    FECHA_SOLICITUD = db.Column(db.DateTime, default=datetime.datetime.now)
+    FECHA_CIERRE = db.Column(db.DateTime, nullable=True)
+    OBSERVACION = db.Column(db.String(255))
+
+    # --- CAMPOS PARA EL FUTURO (Multi-encargo y Camiones) ---
+    # Cuando se apruebe y se asigne a un camión, llenaremos esto:
+    ID_VEHICULO_ASIGNADO = db.Column(db.Integer, db.ForeignKey('vehiculo.ID_VEHICULO'), nullable=True)
+    # Cuando salga físicamente del depósito proveedor:
+    ID_MOVIMIENTO_SALIDA = db.Column(db.Integer, db.ForeignKey('movimiento_material.ID_MOVIMIENTO'), nullable=True)
+
+    # Relaciones
+    material = db.relationship('Material')
+    estado = db.relationship('EstadoSolicitud')
+    dep_solicitante = db.relationship('Deposito', foreign_keys=[ID_DEPOSITO_SOLICITANTE])
+    dep_proveedor = db.relationship('Deposito', foreign_keys=[ID_DEPOSITO_PROVEEDOR])
+    usuario = db.relationship('Usuario')

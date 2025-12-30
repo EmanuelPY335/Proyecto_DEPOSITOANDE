@@ -16,13 +16,13 @@ from mapa import mapa_bp, socketio
 from perfil import perfil_bp
 from personal import personal_bp
 from roles_permisos import role_required, crear_rol, roles_bp
+
+from solicitudes import solicitudes_bp # <--- Tu nuevo archivo
 # ✅ NUEVO IMPORT: Traemos el blueprint correcto
 from materiales import materiales_bp
 
 from db import (
-    db, Usuario, Empleado, Deposito,
-    Material, PasswordResetToken, Rol,
-    Vehiculo, PosicionGps
+    db, Usuario, Empleado, Deposito, PasswordResetToken, Rol, Permiso, permiso_x_rol
 )
 
 # -----------------------------------------------------------------
@@ -40,7 +40,7 @@ app.register_blueprint(roles_bp, url_prefix="/api")
 app.register_blueprint(materiales_bp, url_prefix="/api")
 # Donde registras los blueprints (aprox línea 80):
 app.register_blueprint(movimientos_bp, url_prefix="/api")
-
+app.register_blueprint(solicitudes_bp)
 # --- CORS (Con soporte para React y Raspberry Pi) ---
 CORS(
     app,
@@ -97,29 +97,44 @@ socketio.init_app(
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.json
-    email = data.get("email")
-    contrasena = data.get("password")
-    try:
-        user = Usuario.query.filter_by(CORREO=email).first()
-        if user and user.check_password(contrasena):
-            expires = timedelta(minutes=30)
-            access_token = create_access_token(
-                identity=str(user.ID_USUARIO),
-                expires_delta=expires,
-                additional_claims={
-                    "rol_id": user.ID_ROL,
-                    "rol_nombre": user.rol.NOMBRE_ROL
-                }
-            )
-            return jsonify({
-                "access_token": access_token,
-                "user_nombre": user.empleado.NOMBRE if user.empleado else "Usuario",
-                "rol": user.rol.NOMBRE_ROL
-            }), 200
-        return jsonify({"message": "Correo o contraseña incorrectos"}), 401
-    except Exception as e:
-        print(f"Error en login: {e}")
-        return jsonify({"message": "Error interno del servidor"}), 500
+    correo = data.get("correo")
+    contrasena = data.get("contrasena")
+
+    user = Usuario.query.filter_by(CORREO=correo).first()
+
+    if user and user.check_password(contrasena):
+        # 1. Obtener el nombre del Rol
+        rol_nombre = user.rol.NOMBRE_ROL if user.rol else "Sin Rol"
+        
+        # 2. OBTENER LISTA DE PERMISOS (NUEVO)
+        # Hacemos una consulta uniendo tablas para sacar los nombres de permisos de este rol
+        permisos_query = db.session.query(Permiso.NOMBRE_PERMISO)\
+            .join(permiso_x_rol)\
+            .join(Rol)\
+            .filter(Rol.ID_ROL == user.ID_ROL).all()
+        
+        # Convertimos la respuesta de la base de datos en una lista simple de strings
+        # Ej: ['gestion_materiales', 'ver_mapa']
+        lista_permisos = [p[0] for p in permisos_query]
+
+        # 3. Crear el Token
+        access_token = create_access_token(
+            identity=str(user.ID_USUARIO),
+            additional_claims={
+                "rol_nombre": rol_nombre,
+                "id_empleado": user.ID_EMPLEADO
+            }
+        )
+
+        return jsonify({
+            "message": "Login exitoso",
+            "access_token": access_token,
+            "user": user.to_dict_profile(),
+            "rol": rol_nombre,
+            "permisos": lista_permisos # <--- ENVIAMOS LOS PERMISOS AL FRONTEND
+        }), 200
+
+    return jsonify({"error": "Credenciales inválidas"}), 401
 
 
 @app.route("/api/registro", methods=["POST"])

@@ -1,8 +1,6 @@
 // src/App.jsx
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-
-// --- Contextos ---
 import { ThemeProvider } from "./context/ThemeContext";
 
 // --- Páginas ---
@@ -16,64 +14,65 @@ import Roles from "./pages/Roles";
 import Empleados from "./pages/Empleados";
 import Config from "./pages/Config"; 
 import OrdenesTrabajo from "./pages/OrdenesTrabajo";
-import Materiales from "./pages/Materiales"; // <--- 1. IMPORTAR MATERIALES
-
-// --- Componentes ---
+import Materiales from "./pages/Materiales"; 
+import PedidosEntrantes from "./pages/PedidosEntrantes";
 import Layout from "./components/Layout";
 
-// --- Guards (Lógica de Protección) ---
+// --- Lógica de Permisos ---
 const isLoggedIn = () => !!sessionStorage.getItem("access_token");
 
-const isAdmin = () => {
+// ✅ NUEVA FUNCIÓN: Verifica si tiene el permiso específico
+const hasPermission = (requiredPermission) => {
   const userRole = sessionStorage.getItem("user_rol");
-  return userRole === "Admin" || userRole === "Master_Admin";
+  
+  // Master_Admin siempre tiene acceso a todo
+  if (userRole === "Master_Admin") return true; 
+
+  // Recuperar permisos guardados
+  const storedPermisos = sessionStorage.getItem("user_permissions");
+  const permisos = storedPermisos ? JSON.parse(storedPermisos) : [];
+  
+  return permisos.includes(requiredPermission);
 };
 
-// 1. Ruta Protegida (Cualquier usuario logueado + Layout)
+// 1. Ruta Protegida Básica
 const ProtectedRoute = ({ children }) => {
   if (!isLoggedIn()) {
-    return (
-      <Navigate
-        to="/"
-        replace
-        state={{ message: "Error: Ingrese con un correo y contraseña válida." }}
-      />
-    );
+    return <Navigate to="/" replace state={{ message: "Error: Ingrese con un correo válido." }} />;
   }
   return <Layout>{children}</Layout>;
 };
 
-// 2. Ruta Autenticada (Solo login, SIN Layout - Ej: Mapa pantalla completa)
+// 2. Ruta Autenticada (Sin Layout)
 const AuthenticatedRoute = ({ children }) => {
   if (!isLoggedIn()) {
-    return (
-      <Navigate
-        to="/"
-        replace
-        state={{ message: "Error: Ingrese con un correo y contraseña válida." }}
-      />
-    );
+    return <Navigate to="/" replace state={{ message: "Error: Ingrese con un correo válido." }} />;
   }
   return children;
 };
 
-// 3. Ruta Admin (Solo Gerentes + Layout)
+// 3. Ruta Admin (Solo para gestión de roles, estricta para Admins)
 const AdminRoute = ({ children }) => {
-  if (!isLoggedIn()) {
-    return (
-      <Navigate
-        to="/"
-        replace
-        state={{ message: "Error: Ingrese con un correo y contraseña válida." }}
-      />
-    );
+  const userRole = sessionStorage.getItem("user_rol");
+  if (!isLoggedIn()) return <Navigate to="/" replace />;
+  
+  // Solo Admin y Master_Admin pueden entrar aquí (ej: para crear Roles)
+  if (userRole !== "Admin" && userRole !== "Master_Admin") {
+    return <Navigate to="/home" replace state={{ message: "Acceso restringido a Administradores." }} />;
   }
-  if (!isAdmin()) {
+  return <Layout>{children}</Layout>;
+};
+
+// ✅ 4. NUEVA RUTA: PROTECCIÓN POR PERMISO (La que necesitas)
+const PermissionRoute = ({ children, requiredPermission }) => {
+  if (!isLoggedIn()) return <Navigate to="/" replace />;
+  
+  if (!hasPermission(requiredPermission)) {
     return (
-      <Navigate
-        to="/home"
-        replace
-        state={{ message: "No tienes permisos para acceder a esa dirección." }}
+      <Navigate 
+        to="/home" 
+        replace 
+        state={{ message: `No tienes permisos para acceder a: ${requiredPermission}` }} 
       />
     );
   }
@@ -81,104 +80,82 @@ const AdminRoute = ({ children }) => {
 };
 
 // --- APP PRINCIPAL ---
+
 function App() {
   return (
     <ThemeProvider>
       <Router>
         <Routes>
-           
+            
           {/* --- RUTAS PÚBLICAS --- */}
           <Route path="/" element={<Login />} />
           <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-          {/* --- RUTAS GENERALES (Cualquier empleado) --- */}
-          <Route
-            path="/home"
+          {/* --- RUTAS GENERALES --- */}
+          <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/config" element={<ProtectedRoute><Config /></ProtectedRoute>} />
+            
+          {/* --- RUTAS CON PERMISOS ESPECÍFICOS --- */}
+          
+          {/* Antes usabas AdminRoute, ahora usa PermissionRoute con el permiso 'gestion_empleados' */}
+          <Route 
+            path="/empleados" 
             element={
-              <ProtectedRoute>
-                <Home />
-              </ProtectedRoute>
-            }
+              <PermissionRoute requiredPermission="gestion_empleados">
+                <Empleados />
+              </PermissionRoute>
+            } 
           />
-           
-          {/* 2. AGREGAR LA RUTA DE MATERIALES AQUÍ */}
-          <Route
-            path="/materiales"
+
+          <Route 
+            path="/materiales" 
             element={
-              <ProtectedRoute>
+              <PermissionRoute requiredPermission="gestion_materiales">
                 <Materiales />
-              </ProtectedRoute>
-            }
+              </PermissionRoute>
+            } 
           />
 
-          <Route
-            path="/pag2"
+          <Route 
+            path="/ordenes-trabajo" 
             element={
-              <ProtectedRoute>
-                <Pag2 />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/config"
-            element={
-              <ProtectedRoute>
-                <Config /> 
-              </ProtectedRoute>
-            }
+              <PermissionRoute requiredPermission="gestion_ordenes">
+                <OrdenesTrabajo />
+              </PermissionRoute>
+            } 
           />
           
-          <Route
-            path="/ordenes-trabajo"
+          <Route 
+             path="/pag2" 
+             element={
+               <PermissionRoute requiredPermission="gestion_movimientos">
+                 <Pag2 />
+               </PermissionRoute>
+             } 
+          />
+
+          {/* --- RUTAS ESPECIALES --- */}
+          <Route path="/mapa" element={<AuthenticatedRoute><Mapa /></AuthenticatedRoute>} />
+
+          {/* --- RUTAS SOLO ADMIN --- */}
+          {/* Roles sigue siendo solo para admins, así que AdminRoute está bien aquí */}
+          <Route path="/roles" element={<AdminRoute><Roles /></AdminRoute>} />
+            
+          <Route 
+            path="/pedidos-entrantes" 
             element={
               <ProtectedRoute>
-                <OrdenesTrabajo />
+                  <Layout fullWidth={true}>
+                      <PedidosEntrantes />
+                  </Layout>
               </ProtectedRoute>
-            }
+            } 
           />
 
-          {/* --- RUTAS ESPECIALES (Sin Layout) --- */}
-          <Route
-            path="/mapa"
-            element={
-              <AuthenticatedRoute>
-                <Mapa />
-              </AuthenticatedRoute>
-            }
-          />
-
-          {/* --- RUTAS DE ADMINISTRADOR --- */}
-          <Route
-            path="/roles"
-            element={
-              <AdminRoute>
-                <Roles />
-              </AdminRoute>
-            }
-          />
-           
-          <Route
-            path="/empleados"
-            element={
-              <AdminRoute>
-                <Empleados />
-              </AdminRoute>
-            }
-          />
-
-          {/* --- FALLBACK (Error 404) --- */}
+          {/* --- FALLBACK --- */}
           <Route path="*" element={<Navigate to="/home" replace />} />
-           
+            
         </Routes>
       </Router>
     </ThemeProvider>
