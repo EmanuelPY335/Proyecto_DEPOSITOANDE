@@ -115,16 +115,16 @@ const Home = () => {
             </div>
           )}
 
-          {can("gestion_ordenes") && (
-            <div className="card card-ordenes">
-              <div className="card-header">
-                <Clipboard size={30} className="card-main-icon" />
-                <h3>Órdenes de Trabajo</h3>
-              </div>
-              <p>Asignar y monitorear tareas del personal.</p>
-              <Link to="/ordenes-trabajo" className="card-button senary">Ver Órdenes</Link>
+          {/* ELIMINAMOS EL {can(...)} QUE ENVOLVÍA ESTO */}
+          <div className="card card-ordenes">
+            <div className="card-header">
+              <Clipboard size={30} className="card-main-icon" />
+              <h3>Órdenes de Trabajo</h3>
             </div>
-          )}
+            <p>Ver mis tareas asignadas y reportar avances.</p>
+            <Link to="/ordenes-trabajo" className="card-button senary">Ver Órdenes</Link>
+          </div>
+         
 
           {/* Gestión de Roles: Solo Master Admin o quien tenga el permiso explícito */}
           {can("gestion_roles") && (

@@ -354,3 +354,29 @@ class SolicitudMaterial(db.Model):
     dep_solicitante = db.relationship('Deposito', foreign_keys=[ID_DEPOSITO_SOLICITANTE])
     dep_proveedor = db.relationship('Deposito', foreign_keys=[ID_DEPOSITO_PROVEEDOR])
     usuario = db.relationship('Usuario')
+
+
+class Notificacion(db.Model):
+    __tablename__ = 'notificaciones'
+    ID_NOTIFICACION = db.Column(db.Integer, primary_key=True)
+    
+    # CORRECCIÓN 1: Cambiamos 'usuarios' por 'usuario' (singular)
+    ID_USUARIO = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=False)
+    
+    MENSAJE = db.Column(db.String(255), nullable=False)
+    LEIDA = db.Column(db.Boolean, default=False)
+    
+    # CORRECCIÓN 2: Ya funcionará porque arreglamos el import arriba
+    FECHA_CREACION = db.Column(db.DateTime, default=datetime.datetime.now)
+    
+    # CORRECCIÓN 3: Aseguramos que busque la tabla 'orden_trabajo' (singular/snake_case)
+    ID_ORDEN = db.Column(db.Integer, db.ForeignKey('orden_trabajo.ID_ORDEN'), nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.ID_NOTIFICACION,
+            "mensaje": self.MENSAJE,
+            "leida": self.LEIDA,
+            "fecha": self.FECHA_CREACION.strftime('%Y-%m-%d %H:%M'),
+            "id_orden": self.ID_ORDEN
+        }

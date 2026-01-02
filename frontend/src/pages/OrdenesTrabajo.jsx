@@ -1,3 +1,4 @@
+// src/pages/OrdenesTrabajo.jsx
 import React, { useEffect, useState } from "react";
 import { apiFetch } from "../utils/api";
 import { useNavigate } from "react-router-dom";
@@ -14,6 +15,10 @@ const OrdenesTrabajo = () => {
   const [ordenes, setOrdenes] = useState([]);
   const [depositos, setDepositos] = useState([]);
   const [rolUser, setRolUser] = useState("");
+  
+  // ✅ NUEVO ESTADO: Controla si el usuario tiene poder de gestión (Admin, Master o Permiso)
+  const [canManage, setCanManage] = useState(false);
+  
   const navigate = useNavigate();
 
   const [showModalNew, setShowModalNew] = useState(false);
@@ -43,7 +48,18 @@ const OrdenesTrabajo = () => {
   });
 
   useEffect(() => {
-    setRolUser(sessionStorage.getItem("user_rol") || "");
+    // 1. Obtener Rol y Permisos
+    const rol = sessionStorage.getItem("user_rol") || "";
+    const permisosStr = sessionStorage.getItem("user_permissions");
+    const permisos = permisosStr ? JSON.parse(permisosStr) : [];
+    
+    setRolUser(rol);
+
+    // 2. Definir quién puede gestionar (Crear, Editar, Borrar, Asignar)
+    // Pasa si es Master, Admin O si tiene el permiso 'gestion_ordenes'
+    const hasPower = rol === "Master_Admin" || rol === "Admin" || permisos.includes("gestion_ordenes");
+    setCanManage(hasPower);
+
     loadOrdenes();
     loadRecursos();
   }, []);
@@ -62,26 +78,24 @@ const OrdenesTrabajo = () => {
     } catch (e) { console.error(e); }
   };
 
-  // --- CREAR ORDEN (LÓGICA BLINDADA) ---
+  // --- CREAR ORDEN ---
   const handleCreateSubmit = async (e) => {
     e.preventDefault(); 
 
-    // === ZONA DE CONTROL DE PASOS ===
-    // Si estamos en el paso 1, validamos y pasamos al 2.
-    // AQUÍ ESTABA EL PROBLEMA: Ahora forzamos el return para que NO siga bajando.
     if (step === 1) {
         if (newOrden.titulo && newOrden.titulo.trim() !== "") {
             setStep(2); 
         } else {
             alert("El título es obligatorio para continuar.");
         }
-        return; // <--- ESTO ES VITAL: Detiene la función aquí. No envía nada al backend.
+        return;
     }
 
-    // SI LLEGAMOS AQUÍ, ES PORQUE step === 2.
     try {
       const payload = { ...newOrden };
 
+      // Si NO es Master Admin, borramos el depósito seleccionado 
+      // (El backend usará el depósito del usuario logueado automáticamente)
       if (rolUser !== "Master_Admin") {
           delete payload.id_deposito;
       }
@@ -93,7 +107,6 @@ const OrdenesTrabajo = () => {
         body: JSON.stringify(payload),
       });
 
-      // Resetear todo tras éxito
       setShowModalNew(false);
       setStep(1);
       setNewOrden({ titulo: "", descripcion: "", prioridad: "Media", id_deposito: "", id_empleado: null, fecha_limite: "" });
@@ -196,7 +209,8 @@ const OrdenesTrabajo = () => {
             <h1>Órdenes de Trabajo</h1>
             <p className="subtitle">Gestión y monitoreo de tareas.</p>
           </div>
-          {(rolUser === "Admin" || rolUser === "Master_Admin") && (
+          {/* ✅ CORREGIDO: Ahora usa canManage en lugar de rol fijo */}
+          {canManage && (
             <button className="btn-new" onClick={() => setShowModalNew(true)}>
               <Plus size={18} /> Crear Orden
             </button>
@@ -227,7 +241,8 @@ const OrdenesTrabajo = () => {
 
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
                     <h3>{orden.titulo}</h3>
-                    {(rolUser === "Admin" || rolUser === "Master_Admin") && (
+                    {/* ✅ CORREGIDO: Botón editar info */}
+                    {canManage && (
                         <button className="btn-icon-simple" onClick={() => openEditModal(orden)} title="Editar información">
                             <Edit size={16} />
                         </button>
@@ -274,8 +289,9 @@ const OrdenesTrabajo = () => {
                 </div>
 
                 <div className="orden-actions">
+                  {/* ✅ CORREGIDO: Botón Asignar */}
                   {(!orden.empleado_nombre || orden.empleado_nombre.toLowerCase().includes("sin asignar")) &&
-                    (rolUser === "Admin" || rolUser === "Master_Admin") && (
+                    canManage && (
                       <button className="btn-action primary" onClick={() => handleGoToAssign(orden)}>
                         Asignar <ArrowRight size={14} />
                       </button>
@@ -283,18 +299,21 @@ const OrdenesTrabajo = () => {
 
                   {orden.empleado_nombre && !orden.empleado_nombre.toLowerCase().includes("sin asignar") && (
                       <button className="btn-action secondary" onClick={() => openUpdateModal(orden)}>
-                        {(rolUser === "Admin" || rolUser === "Master_Admin") 
+                        {/* Si es Manager, ve Bitácora. Si es empleado, ve Avance */}
+                        {canManage 
                             ? "Ver Bitácora" 
                             : (isCompleted || isExpired ? "Ver Bitácora" : "Avance")
                         }
                       </button>
                   )}
 
-                  {(rolUser === "Admin" || rolUser === "Master_Admin") && (
+                  {/* ✅ CORREGIDO: Botón Papelera */}
+                  {canManage && (
                     <button className="btn-action danger" onClick={() => deleteSoft(orden.id)} style={{marginLeft: 'auto', flex: '0 0 auto', width:'40px'}}>
                       <Trash2 size={16} />
                     </button>
                   )}
+                  {/* Master Admin sigue siendo el único que puede eliminar permanentemente */}
                   {rolUser === "Master_Admin" && (
                     <button className="btn-action danger" onClick={() => permaDelete(orden.id)} style={{backgroundColor: '#7f1d1d', flex: '0 0 auto', width:'40px'}}>
                       <ShieldAlert size={16} />
@@ -313,7 +332,6 @@ const OrdenesTrabajo = () => {
               <div className="roles-header"><h2>Nueva Orden</h2><span className="wizard-step-indicator">Paso {step} de 2</span></div>
               <div className="wizard-progress"><div className="wizard-progress-bar" style={{ width: step === 1 ? "50%" : "100%" }}></div></div>
 
-              {/* LÓGICA DE ENVÍO CENTRALIZADA AQUÍ */}
               <form onSubmit={handleCreateSubmit} className="wizard-form">
                 {step === 1 && (
                   <div className="fade-in">
@@ -343,6 +361,10 @@ const OrdenesTrabajo = () => {
                         <input type="datetime-local" className="discord-select" value={newOrden.fecha_limite} onChange={(e) => setNewOrden({ ...newOrden, fecha_limite: e.target.value })} />
                     </div>
                     
+                    {/* Lógica de Depósito:
+                       Solo Master_Admin ve el selector. 
+                       Admin y Gerentes verán el aviso de "Asignación automática".
+                    */}
                     {rolUser === "Master_Admin" ? (
                       <div className="input-group" style={{ marginTop: '15px' }}>
                         <label>Depósito</label>
@@ -364,37 +386,15 @@ const OrdenesTrabajo = () => {
 
                 <div className="wizard-buttons" style={{ marginTop: '20px' }}>
                   {step === 1 ? (
-                    <button 
-                        type="button" 
-                        className="btn-status btn-danger" 
-                        onClick={() => setShowModalNew(false)}
-                    >
-                        Cancelar
-                    </button>
+                    <button type="button" className="btn-status btn-danger" onClick={() => setShowModalNew(false)}>Cancelar</button>
                   ) : (
-                    <button 
-                        type="button" 
-                        className="btn-status" 
-                        onClick={() => setStep(1)}
-                    >
-                        <ArrowLeft size={16} /> Atrás
-                    </button>
+                    <button type="button" className="btn-status" onClick={() => setStep(1)}><ArrowLeft size={16} /> Atrás</button>
                   )}
                   
                   {step === 1 ? (
-                    // CAMBIO IMPORTANTE: type="submit" y sin onClick.
-                    // Esto fuerza a que se ejecute handleCreateSubmit, donde controlamos el step.
-                    <button 
-                        type="submit" 
-                        className="btn-save"
-                    >
-                        Siguiente <ArrowRight size={16} />
-                    </button>
+                    <button type="submit" className="btn-save">Siguiente <ArrowRight size={16} /></button>
                   ) : (
-                    // El botón Finalizar también es submit, pero como step es 2, el handler enviará la orden.
-                    <button type="submit" className="btn-save">
-                        Finalizar y Crear
-                    </button>
+                    <button type="submit" className="btn-save">Finalizar y Crear</button>
                   )}
                 </div>
               </form>
@@ -402,7 +402,7 @@ const OrdenesTrabajo = () => {
           </div>
         )}
 
-        {/* ... Resto de modales (Edit, Update) SIN CAMBIOS ... */}
+        {/* --- Modal EDIT --- */}
         {showModalEdit && (
             <div className="modal-backdrop">
                 <div className="discord-card" style={{width: '450px', maxHeight: '90vh', overflowY: 'auto'}}>
@@ -423,6 +423,7 @@ const OrdenesTrabajo = () => {
             </div>
         )}
 
+        {/* --- Modal BITÁCORA / AVANCES --- */}
         {showModalUpdate && selectedOrden && (
             <div className="modal-backdrop" onClick={() => setShowModalUpdate(false)}>
                 <div className="discord-card" style={{ width: '500px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
@@ -444,7 +445,9 @@ const OrdenesTrabajo = () => {
                         )}
                     </div>
 
-                    {selectedOrden.estado !== "Aprobada" && selectedOrden.estado !== "Completada" && selectedOrden.estado !== "Finalizada" && selectedOrden.estado !== "Fin de tiempo limite" && rolUser !== "Admin" && rolUser !== "Master_Admin" && (
+                    {/* ✅ CORREGIDO: Los Gestores (Admin/Gerente) NO pueden escribir avances, solo leer. */}
+                    {selectedOrden.estado !== "Aprobada" && selectedOrden.estado !== "Completada" && selectedOrden.estado !== "Finalizada" && selectedOrden.estado !== "Fin de tiempo limite" && 
+                     !canManage && ( // <--- Si NO es manager, puede escribir
                         <div style={{display: 'flex', gap: '8px', marginBottom: '15px'}}>
                             <input type="text" className="input-field" placeholder="Escribe tu avance..." value={nuevoMensaje} onChange={(e) => setNuevoMensaje(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handlePostAvance()} autoFocus />
                             <button className="btn-save" onClick={handlePostAvance} title="Enviar"><Send size={16}/></button>
@@ -454,7 +457,9 @@ const OrdenesTrabajo = () => {
                     <div style={{display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #eee', paddingTop: '15px'}}>
                         <button className="btn-status btn-danger" onClick={() => setShowModalUpdate(false)}>Cerrar</button>
                         
-                        {selectedOrden.estado !== "Aprobada" && selectedOrden.estado !== "Completada" && selectedOrden.estado !== "Finalizada" && selectedOrden.estado !== "Fin de tiempo limite" && rolUser !== "Admin" && rolUser !== "Master_Admin" && (
+                        {/* Botón Finalizar Tarea: Solo para el empleado que la hace (No managers) */}
+                        {selectedOrden.estado !== "Aprobada" && selectedOrden.estado !== "Completada" && selectedOrden.estado !== "Finalizada" && selectedOrden.estado !== "Fin de tiempo limite" && 
+                         !canManage && (
                             <button className="btn-save" style={{background: '#23a559'}} onClick={handleFinalizarTarea}>
                                 <CheckCircle size={16} style={{marginRight:5}}/> Finalizar Tarea
                             </button>

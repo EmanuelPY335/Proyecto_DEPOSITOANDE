@@ -1,11 +1,53 @@
 # backend/ordenes.py
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from datetime import datetime
-from db import db, OrdenTrabajo, EstadoOrden, Empleado, Usuario, AvanceOrden
-from roles_permisos import role_required
+from sqlalchemy import text
+# 1. IMPORTAMOS Notificacion
+from db import db, OrdenTrabajo, EstadoOrden, Empleado, Usuario, AvanceOrden, Notificacion
 
 ordenes_bp = Blueprint("ordenes", __name__)
+
+# ---------------------------------------------------------
+# 🛡️ HELPER: VERIFICACIÓN DE PERMISOS (Dinámico)
+# ---------------------------------------------------------
+def tiene_permiso_ordenes():
+    """
+    Verifica si el usuario tiene permiso de 'gestion_ordenes'.
+    Master_Admin y Admin siempre pasan.
+    Otros roles se verifican contra la BD.
+    """
+    try:
+        current_user_id = get_jwt_identity()
+        usuario = Usuario.query.get(current_user_id)
+
+        if not usuario or not usuario.rol:
+            return False
+
+        nombre_rol = usuario.rol.NOMBRE_ROL
+
+        # 1. Acceso Directo para Superusuarios
+        if nombre_rol in ["Master_Admin", "Admin"]:
+            return True
+
+        # 2. Verificación Dinámica en BD
+        sql = text("""
+            SELECT 1 
+            FROM permiso_x_rol pxr
+            JOIN permiso p ON pxr.ID_PERMISO = p.ID_PERMISO
+            WHERE pxr.ID_ROL = :id_rol AND p.NOMBRE_PERMISO = 'gestion_ordenes'
+        """)
+        
+        resultado = db.session.execute(sql, {'id_rol': usuario.ID_ROL}).fetchone()
+        
+        if resultado:
+            return True
+            
+        return False
+
+    except Exception as e:
+        print(f"Error verificando permisos ordenes: {e}")
+        return False
 
 # --- FUNCIÓN AUXILIAR PARA FORMATEAR NOMBRES ---
 def format_nombre(text):
@@ -17,11 +59,14 @@ def format_nombre(text):
 @jwt_required()
 def get_ordenes():
     claims = get_jwt()
-    rol = claims.get("rol_nombre")
+    # Obtenemos identidad para saber si es el empleado asignado
     user_id = int(claims.get("sub"))
     
     usuario_actual = Usuario.query.get(user_id)
     empleado_id_actual = usuario_actual.empleado.ID_EMPLEADO if usuario_actual.empleado else None
+    
+    # Verificamos si tiene "Poder de Gestión" (Admin/Gerente)
+    es_gestor = tiene_permiso_ordenes()
 
     try:
         # === LAZY CHECK: Verificar vencimientos al listar ===
@@ -55,10 +100,14 @@ def get_ordenes():
             .outerjoin(Usuario, Empleado.ID_EMPLEADO == Usuario.ID_EMPLEADO)\
             .filter(OrdenTrabajo.ELIMINADA == False)
 
-        if rol not in ["Admin", "Master_Admin"]:
+        # LÓGICA DE FILTRADO:
+        # Si NO es gestor (Admin/Gerente), solo ve sus propias tareas.
+        if not es_gestor:
             if not empleado_id_actual:
-                return jsonify([]), 200
+                return jsonify([]), 200 # Si no es empleado y no es gestor, no ve nada
             query = query.filter(OrdenTrabajo.ID_EMPLEADO == empleado_id_actual)
+        
+        # Si ES gestor, ve todo (la query no se filtra por empleado)
         
         results = query.order_by(OrdenTrabajo.ID_ESTADO_ORDEN.asc(), OrdenTrabajo.FECHA_INICIO.desc()).all()
         
@@ -84,8 +133,11 @@ def get_ordenes():
 # --- 2. CREAR ORDEN ---
 @ordenes_bp.route("/ordenes", methods=["POST"])
 @jwt_required()
-@role_required("Admin")
 def create_orden():
+    # 1. Verificación de permisos (Reemplaza al @role_required)
+    if not tiene_permiso_ordenes():
+        return jsonify({"error": "No tienes permisos para crear órdenes."}), 403
+
     data = request.json
     claims = get_jwt()
     rol = claims.get("rol_nombre")
@@ -96,6 +148,10 @@ def create_orden():
         if not estado_pendiente: return jsonify({"error": "Estado 'Pendiente' no configurado."}), 500
 
         id_deposito = None
+        
+        # Lógica de Depósito:
+        # Master_Admin puede elegir depósito.
+        # Admin / Gerente usa SU PROPIO depósito.
         if rol == "Master_Admin":
             id_deposito = data.get("id_deposito")
             if not id_deposito: return jsonify({"error": "Falta depósito"}), 400
@@ -129,7 +185,22 @@ def create_orden():
             FECHA_LIMITE=fecha_limite
         )
 
+
         db.session.add(nueva_orden)
+        db.session.flush()  # Obtener ID antes de commit
+
+        # 2. LOGICA DE NOTIFICACION AL CREAR
+        if nueva_orden.ID_EMPLEADO:
+            # Buscamos el usuario asociado al empleado para notificarle
+            usuario_dest = Usuario.query.filter_by(ID_EMPLEADO=nueva_orden.ID_EMPLEADO).first()
+            if usuario_dest:
+                noti = Notificacion(
+                    ID_USUARIO=usuario_dest.ID_USUARIO,
+                    ID_ORDEN=nueva_orden.ID_ORDEN,
+                    MENSAJE=f"Nueva orden asignada: {nueva_orden.TITULO}"
+                )
+                db.session.add(noti)
+                        
         db.session.commit()
         return jsonify({"success": True, "message": "Orden creada correctamente."}), 201
 
@@ -143,8 +214,8 @@ def create_orden():
 @jwt_required()
 def update_orden(id_orden):
     data = request.json
-    claims = get_jwt()
-    rol = claims.get("rol_nombre")
+    # Verificamos si es gestor (Admin/Gerente)
+    es_gestor = tiene_permiso_ordenes()
     
     try:
         orden = OrdenTrabajo.query.get(id_orden)
@@ -154,8 +225,9 @@ def update_orden(id_orden):
         # MODO EDICIÓN (Editar Info y Recalcular Estado por Fecha)
         # ---------------------------------------------------------------------
         if data.get("accion") == "editar_info":
-            if rol not in ["Admin", "Master_Admin"]:
-                return jsonify({"error": "No autorizado."}), 403
+            # Reemplazamos el chequeo de rol fijo por el permiso
+            if not es_gestor:
+                return jsonify({"error": "No autorizado para editar información."}), 403
             
             # Actualizar datos básicos
             if "titulo" in data: orden.TITULO = data.get("titulo")
@@ -175,29 +247,24 @@ def update_orden(id_orden):
                     orden.FECHA_LIMITE = None # Borrar límite
             
             # --- LÓGICA AUTOMÁTICA AL EDITAR FECHA ---
-            # Si se tocó la fecha, verificamos si venció o si vuelve a estar activa
             if fecha_cambiada:
                 estado_pendiente = EstadoOrden.query.filter(EstadoOrden.ESTADO_ORDEN.ilike("Pendiente")).first()
                 estado_vencido = EstadoOrden.query.filter(EstadoOrden.ESTADO_ORDEN.ilike("Fin de tiempo limite")).first()
                 
                 if estado_pendiente and estado_vencido:
                     if orden.FECHA_LIMITE:
-                        # Si tiene fecha límite...
                         if orden.FECHA_LIMITE < datetime.now():
-                            # ... y ya pasó -> ESTADO: FIN DE TIEMPO LIMITE
                             orden.ID_ESTADO_ORDEN = estado_vencido.ID_ESTADO_ORDEN
                         else:
-                            # ... y es futuro -> ESTADO: PENDIENTE (Reactiva la orden)
                             orden.ID_ESTADO_ORDEN = estado_pendiente.ID_ESTADO_ORDEN
                     else:
-                        # Si se quitó la fecha límite -> ESTADO: PENDIENTE
                         orden.ID_ESTADO_ORDEN = estado_pendiente.ID_ESTADO_ORDEN
             
             db.session.commit()
             return jsonify({"success": True, "message": "Información y estado actualizados."}), 200
 
         # ---------------------------------------------------------------------
-        # ACTUALIZACIÓN NORMAL (Cambio de estado por usuario, Herramientas, etc.)
+        # ACTUALIZACIÓN NORMAL (Cambio de estado, asignación rápida, herramientas)
         # ---------------------------------------------------------------------
         if "herramientas" in data: 
             orden.HERRAMIENTAS = data.get("herramientas")
@@ -225,8 +292,23 @@ def update_orden(id_orden):
             else:
                  return jsonify({"error": f"Estado '{nuevo_estado_str}' no existe."}), 400
 
-        if rol in ["Admin", "Master_Admin"]:
-            if "id_empleado" in data: orden.ID_EMPLEADO = data.get("id_empleado")
+        # 3. LOGICA DE NOTIFICACION AL REASIGNAR
+        # Permitir reasignar empleado/prioridad si tiene permiso
+        if es_gestor:
+            if "id_empleado" in data: 
+                nuevo_id = data.get("id_empleado")
+                # Si el ID ha cambiado, notificamos al nuevo
+                if nuevo_id != orden.ID_EMPLEADO:
+                    orden.ID_EMPLEADO = nuevo_id
+                    usuario_dest = Usuario.query.filter_by(ID_EMPLEADO=nuevo_id).first()
+                    if usuario_dest:
+                         noti = Notificacion(
+                            ID_USUARIO=usuario_dest.ID_USUARIO,
+                            ID_ORDEN=orden.ID_ORDEN,
+                            MENSAJE=f"Te han asignado una orden: {orden.TITULO}"
+                        )
+                         db.session.add(noti)
+
             if "prioridad" in data: orden.PRIORIDAD = data.get("prioridad")
 
         db.session.commit()
@@ -242,9 +324,11 @@ def update_orden(id_orden):
 @jwt_required()
 def add_avance(id_orden):
     claims = get_jwt()
-    rol = claims.get("rol_nombre")
-    if rol in ["Admin", "Master_Admin"]:
-        return jsonify({"error": "Solo lectura para admins."}), 403
+    
+    # IMPORTANTE: Mantenemos la lógica de que los Administradores (y ahora Gerentes)
+    # NO realizan avances, ellos gestionan. Los avances son para el personal técnico.
+    if tiene_permiso_ordenes():
+        return jsonify({"error": "Modo Administrador: Solo lectura en avances. Asigna tareas, no las ejecutes."}), 403
 
     data = request.json
     nombre_usuario = claims.get("user_nombre", "Empleado") 
@@ -271,26 +355,48 @@ def get_avances(id_orden):
 @ordenes_bp.route("/ordenes/<int:id_orden>", methods=["DELETE"])
 @jwt_required()
 def soft_delete_orden(id_orden):
-    claims = get_jwt()
-    if claims.get("rol_nombre") in ["Admin", "Master_Admin"]:
+    # Ahora quien tenga permiso de gestion puede eliminar (papelera)
+    if tiene_permiso_ordenes():
         orden = OrdenTrabajo.query.get(id_orden)
         if orden:
             orden.ELIMINADA = True
             db.session.commit()
             return jsonify({"message": "Enviada a papelera."}), 200
-    return jsonify({"error": "No autorizado"}), 403
+        return jsonify({"error": "No encontrada"}), 404
+        
+    return jsonify({"error": "No autorizado para eliminar."}), 403
+
+# backend/ordenes.py
 
 @ordenes_bp.route("/ordenes/<int:id_orden>/perma", methods=["DELETE"])
 @jwt_required()
 def perma_delete_orden(id_orden):
+    # La eliminación permanente se mantiene EXCLUSIVA para Master_Admin
     if get_jwt().get("rol_nombre") != "Master_Admin":
-        return jsonify({"error": "Solo Master Admin"}), 403
-    orden = OrdenTrabajo.query.get(id_orden)
-    if orden:
+        return jsonify({"error": "Solo Master Admin puede borrar permanentemente."}), 403
+    
+    try:
+        orden = OrdenTrabajo.query.get(id_orden)
+        if not orden:
+            return jsonify({"error": "No encontrada"}), 404
+
+        # 1. Eliminar Notificaciones asociadas a esta orden
+        # (Si no haces esto, la BD bloquea el borrado por seguridad)
+        Notificacion.query.filter_by(ID_ORDEN=id_orden).delete()
+
+        # 2. Eliminar Avances asociados a esta orden
+        AvanceOrden.query.filter_by(ID_ORDEN=id_orden).delete()
+
+        # 3. Ahora sí, eliminar la Orden
         db.session.delete(orden)
         db.session.commit()
-        return jsonify({"message": "Eliminada permanentemente."}), 200
-    return jsonify({"error": "No encontrada"}), 404
+        
+        return jsonify({"message": "Eliminada permanentemente (y sus datos asociados)."}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error borrando orden: {e}") # Esto te mostrará el error real en la terminal
+        return jsonify({"error": str(e)}), 500
 
 @ordenes_bp.route("/ordenes/empleado/<int:id_empleado>", methods=["GET"])
 @jwt_required()

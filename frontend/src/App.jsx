@@ -120,9 +120,9 @@ function App() {
           <Route 
             path="/ordenes-trabajo" 
             element={
-              <PermissionRoute requiredPermission="gestion_ordenes">
+              <ProtectedRoute>
                 <OrdenesTrabajo />
-              </PermissionRoute>
+              </ProtectedRoute>
             } 
           />
           

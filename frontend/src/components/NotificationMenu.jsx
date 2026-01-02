@@ -1,123 +1,138 @@
-// src/components/NotificationMenu.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { Bell, Inbox, ClipboardList, ChevronRight } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Bell, Check, Clock, Trash2 } from "lucide-react"; // Iconos necesarios
 import { apiFetch } from "../utils/api";
-import "../styles/NotificationMenu.css";
+import { useNavigate } from "react-router-dom";
+import "../styles/NotificationMenu.css"; // Asegúrate de crear este CSS (abajo te lo dejo)
 
 const NotificationMenu = () => {
+  const [notificaciones, setNotificaciones] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [counts, setCounts] = useState({ pedidos_pendientes: 0 });
   const menuRef = useRef(null);
-  
-  const userRole = sessionStorage.getItem("user_rol");
-  const token = sessionStorage.getItem("token");
-  const isAdminRole = ["Master_Admin", "Admin"].includes(userRole);
+  const navigate = useNavigate();
 
-  // Carga de notificaciones
-  useEffect(() => {
-    if (!token || !isAdminRole) return;
-
-    const fetchCounts = async () => {
-      try {
-        const data = await apiFetch("http://127.0.0.1:5000/notificaciones/conteo");
-        setCounts(data);
-      } catch (error) {
-        console.error("Error notificaciones:", error);
+  // 1. Cargar notificaciones del backend
+  const fetchNotificaciones = async () => {
+    try {
+      const data = await apiFetch("http://127.0.0.1:5000/api/notificaciones");
+      if (Array.isArray(data)) {
+        setNotificaciones(data);
       }
-    };
+    } catch (error) {
+      console.error("Error cargando notificaciones:", error);
+    }
+  };
 
-    fetchCounts();
-    // Podrías poner un setInterval aquí si quieres polling
-  }, [token, isAdminRole]);
-
-  // Cerrar al hacer clic fuera
+  // 2. Polling: Actualizar cada 15 segundos
   useEffect(() => {
+    fetchNotificaciones();
+    const interval = setInterval(fetchNotificaciones, 15000);
+
+    // Cerrar al hacer clic fuera
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
-  // Determinar si hay algo pendiente (Estado "No Leído")
-  const hasPending = counts.pedidos_pendientes > 0;
+  // 3. Calcular no leídas
+  const unreadCount = notificaciones.filter(n => !n.leida).length;
+
+  // 4. Manejar clic en una notificación
+  const handleNotificationClick = async (noti) => {
+    try {
+      // Marcar como leída si no lo está
+      if (!noti.leida) {
+        await apiFetch(`http://127.0.0.1:5000/api/notificaciones/leer/${noti.id}`, { method: "PUT" });
+        // Actualizar estado local rápido
+        setNotificaciones(prev => 
+          prev.map(n => n.id === noti.id ? { ...n, leida: true } : n)
+        );
+      }
+
+      setIsOpen(false);
+
+      // Redirigir a Órdenes si corresponde
+      if (noti.id_orden) {
+        navigate("/ordenes-trabajo");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // 5. Marcar todo como leído
+  const markAllRead = async () => {
+    try {
+        await apiFetch(`http://127.0.0.1:5000/api/notificaciones/leer-todas`, { method: "PUT" });
+        setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })));
+    } catch (e) { console.error(e); }
+  };
 
   return (
     <div className="notification-container" ref={menuRef}>
-      {/* CAMPANA: Si no hay nada (hasPending es false), se ve normal sin punto rojo */}
+      
+      {/* --- BOTÓN CAMPANA --- */}
       <button 
         className={`bell-btn ${isOpen ? 'active' : ''}`} 
         onClick={() => setIsOpen(!isOpen)}
       >
-        <Bell size={22} className={hasPending ? "bell-ringing" : ""} />
+        <Bell size={22} className={unreadCount > 0 ? "bell-ringing" : ""} />
         
-        {/* Solo mostramos el badge rojo si realmente hay algo */}
-        {hasPending && isAdminRole && (
-          <span className="notification-badge bounce-in">{counts.pedidos_pendientes}</span>
+        {/* Badge Rojo */}
+        {unreadCount > 0 && (
+          <span className="notification-badge bounce-in">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
         )}
       </button>
 
+      {/* --- MENÚ DROPDOWN --- */}
       {isOpen && (
         <div className="notification-dropdown fade-in-quick">
           <div className="dropdown-header">
-            <h3>Centro de Notificaciones</h3>
-            {/* Mensaje de estado estilo bandeja de entrada */}
-            <span className="status-text">
-                {hasPending ? "Tienes tareas pendientes" : "Estás al día ✅"}
-            </span>
-          </div>
-          
-          <div className="dropdown-content">
-            {isAdminRole && (
-              <div className="menu-section">
-                <span className="section-title">Gestión de Depósito</span>
-                
-                {/* ÍTEM ESTILO BUZÓN: Cambia según si hay pendientes o no */}
-                <Link 
-                    to="/pedidos-entrantes" 
-                    className={`menu-item ${hasPending ? 'mailbox-unread' : 'mailbox-read'}`}
-                    onClick={() => setIsOpen(false)}
-                >
-                  {/* Icono: Azul vibrante si hay pendientes, Gris si no */}
-                  <div className={`menu-item-icon ${hasPending ? 'blue-pulse' : 'gray-dim'}`}>
-                    <Inbox size={18} />
-                  </div>
-                  
-                  <div className="menu-item-text">
-                    <span>Pedidos de Material</span>
-                    <small>
-                        {hasPending 
-                            ? "Solicitudes entrantes esperando aprobación" 
-                            : "No hay solicitudes nuevas"
-                        }
-                    </small>
-                  </div>
-                  
-                  {/* Contador: Solo sale si hay número mayor a 0 */}
-                  {hasPending && (
-                    <span className="counter-badge red">{counts.pedidos_pendientes}</span>
-                  )}
-                </Link>
-
-              </div>
+            <h3>Notificaciones</h3>
+            {unreadCount > 0 ? (
+                <button className="mark-read-text" onClick={markAllRead}>
+                    Marcar todo leido
+                </button>
+            ) : (
+                <span className="status-text">Estás al día ✅</span>
             )}
+          </div>
 
-            <div className="menu-section border-top">
-              <span className="section-title">Mis Tareas</span>
-              <Link to="/mis-ordenes" className="menu-item mailbox-read" onClick={() => setIsOpen(false)}>
-                <div className="menu-item-icon green-dim">
-                  <ClipboardList size={18} />
+          <div className="dropdown-content-list">
+            {notificaciones.length === 0 ? (
+              <div className="empty-state">
+                <Bell size={32} style={{opacity: 0.2, marginBottom: 10}} />
+                <p>No tienes notificaciones nuevas</p>
+              </div>
+            ) : (
+              notificaciones.map((n) => (
+                <div 
+                  key={n.id} 
+                  className={`noti-item ${!n.leida ? "unread" : "read"}`}
+                  onClick={() => handleNotificationClick(n)}
+                >
+                  <div className="noti-indicator">
+                    {!n.leida && <div className="blue-dot" />}
+                  </div>
+                  <div className="noti-body">
+                    <p className="noti-msg">{n.mensaje}</p>
+                    <span className="noti-date">
+                        <Clock size={10} style={{marginRight: 4}}/>
+                        {n.fecha}
+                    </span>
+                  </div>
                 </div>
-                <div className="menu-item-text">
-                  <span>Órdenes de Trabajo</span>
-                  <small>Ver mis asignaciones</small>
-                </div>
-                <ChevronRight size={16} className="chevron" />
-              </Link>
-            </div>
+              ))
+            )}
           </div>
         </div>
       )}
