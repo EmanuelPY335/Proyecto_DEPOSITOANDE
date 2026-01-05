@@ -21,7 +21,7 @@ from solicitudes import solicitudes_bp # <--- Tu nuevo archivo
 # ✅ NUEVO IMPORT: Traemos el blueprint correcto
 from materiales import materiales_bp
 from notificaciones import notificaciones_bp
-
+from vales import vales_bp
 from db import (
     db, Usuario, Empleado, Deposito, PasswordResetToken, Rol, Permiso, permiso_x_rol
 )
@@ -43,6 +43,7 @@ app.register_blueprint(materiales_bp, url_prefix="/api")
 app.register_blueprint(movimientos_bp, url_prefix="/api")
 app.register_blueprint(solicitudes_bp)
 app.register_blueprint(notificaciones_bp, url_prefix='/api')
+app.register_blueprint(vales_bp, url_prefix="/api")
 # --- CORS (Con soporte para React y Raspberry Pi) ---
 CORS(
     app,

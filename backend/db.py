@@ -39,18 +39,30 @@ class Rol(db.Model):
     # 2. Usuarios (Uno a Muchos) - CORREGIDO: Usamos back_populates para evitar conflicto
     usuarios = db.relationship('Usuario', back_populates='rol', lazy=True)
 
+# En backend/db.py
+
 class Deposito(db.Model):
     __tablename__ = 'deposito'
     ID_DEPOSITO = db.Column(db.Integer, primary_key=True)
     NOMBRE = db.Column(db.String(60))
-    DIRECCION = db.Column(db.String(60))
+    DIRECCION = db.Column(db.String(100)) # Aumentamos un poco el tamaño por si acaso
+    
+    # --- NUEVOS CAMPOS DE UBICACIÓN ---
+    LATITUD = db.Column(db.Float, nullable=True)
+    LONGITUD = db.Column(db.Float, nullable=True)
+    # ----------------------------------
 
     # Relaciones
-    # (Agregamos backref si es necesario en el futuro)
     inventario_items = db.relationship('Inventario', backref='deposito', lazy=True)
 
     def to_dict(self):
-        return {"ID_DEPOSITO": self.ID_DEPOSITO, "NOMBRE": self.NOMBRE}
+        return {
+            "ID_DEPOSITO": self.ID_DEPOSITO, 
+            "NOMBRE": self.NOMBRE,
+            "DIRECCION": self.DIRECCION,
+            "LATITUD": self.LATITUD,
+            "LONGITUD": self.LONGITUD
+        }
 
 class Empleado(db.Model):
     __tablename__ = 'empleado'
@@ -190,11 +202,17 @@ class TipoMovimiento(db.Model):
 class MovimientoMaterial(db.Model):
     __tablename__ = 'movimiento_material'
     ID_MOVIMIENTO = db.Column(db.Integer, primary_key=True)
+    # ... (tus columnas existentes) ...
     ID_TIPO_MOVIMIENTO = db.Column(db.Integer, db.ForeignKey('tipo_movimiento.ID_TIPO_MOVIMIENTO'), nullable=False)
     ID_EMPLEADO = db.Column(db.Integer, db.ForeignKey('empleado.ID_EMPLEADO'), nullable=False)
     ID_DEPOSITO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
     ID_LOTE = db.Column(db.Integer, db.ForeignKey('lote.ID_LOTE'), nullable=False)
     
+    # --- [NUEVO CAMPO] ---
+    # Vincula el movimiento de stock con el documento de traslado
+    ID_VALE = db.Column(db.Integer, db.ForeignKey('vale.ID_VALE'), nullable=True) 
+    # ---------------------
+
     FECHA_MOVIMIENTO = db.Column(db.Date, default=datetime.date.today)
     CANTIDAD = db.Column(db.Float)
     OBSERVACIONES = db.Column(db.String(254))
@@ -204,6 +222,8 @@ class MovimientoMaterial(db.Model):
     empleado = db.relationship('Empleado')
     deposito = db.relationship('Deposito')
     lote = db.relationship('Lote')
+    # Relación opcional con vale
+    vale = db.relationship('Vale')
 
 # ---------------------------------------------------------
 # MODELOS DE VEHÍCULOS Y GPS
@@ -380,3 +400,86 @@ class Notificacion(db.Model):
             "fecha": self.FECHA_CREACION.strftime('%Y-%m-%d %H:%M'),
             "id_orden": self.ID_ORDEN
         }
+    
+# ---------------------------------------------------------
+# MODELOS PARA GESTIÓN DE TRASLADOS (VALES / REMISIONES)
+# ---------------------------------------------------------
+# ---------------------------------------------------------
+# [NUEVO] MODELOS PARA GESTIÓN DE TRASLADOS (VALES / REMISIONES)
+# ---------------------------------------------------------
+# En backend/db.py
+
+class EstadoVale(db.Model):
+    __tablename__ = 'estado_vale'
+    
+    # Asegúrate de que los nombres de las variables (izquierda) sean exactos:
+    ID_ESTADO_VALE = db.Column(db.Integer, primary_key=True)
+    
+    # AQUÍ ESTÁ EL ERROR: Antes seguro decía "NOMBRE = ...", cámbialo a:
+    estado_vale = db.Column(db.String(50), nullable=False)
+
+class Vale(db.Model):
+    """
+    Documento maestro del traslado.
+    Vincula: Origen, Destino, Camión, Chofer y los responsables de cada etapa.
+    """
+    __tablename__ = 'vale'
+    ID_VALE = db.Column(db.Integer, primary_key=True)
+    
+    # LOGÍSTICA
+    ID_DEPOSITO_ORIGEN = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
+    ID_DEPOSITO_DESTINO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
+    
+    # RESPONSABLES
+    ID_USUARIO_CREADOR = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO')) # Inventario que armó el paquete
+    ID_USUARIO_APROBADOR_SALIDA = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=True) # Admin Origen
+    ID_USUARIO_RECEPTOR = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=True) # Admin Destino
+    
+    # TRANSPORTE
+    ID_CHOFER = db.Column(db.Integer, db.ForeignKey('empleado.ID_EMPLEADO'), nullable=False)
+    ID_VEHICULO = db.Column(db.Integer, db.ForeignKey('vehiculo.ID_VEHICULO'), nullable=False)
+    
+    # ESTADO Y TIEMPOS
+    ID_ESTADO_VALE = db.Column(db.Integer, db.ForeignKey('estado_vale.ID_ESTADO_VALE'), default=1)
+    FECHA_CREACION = db.Column(db.DateTime, default=datetime.datetime.now)
+    FECHA_SALIDA = db.Column(db.DateTime, nullable=True) # Momento exacto que sale a ruta
+    FECHA_LLEGADA = db.Column(db.DateTime, nullable=True) # Momento exacto que llega a destino
+    
+    OBSERVACIONES = db.Column(db.String(255))
+    
+    # Relaciones SQLAlchemy
+    origen = db.relationship('Deposito', foreign_keys=[ID_DEPOSITO_ORIGEN])
+    destino = db.relationship('Deposito', foreign_keys=[ID_DEPOSITO_DESTINO])
+    chofer = db.relationship('Empleado', foreign_keys=[ID_CHOFER])
+    vehiculo = db.relationship('Vehiculo')
+    estado = db.relationship('EstadoVale')
+    detalles = db.relationship('DetalleVale', backref='vale', cascade="all, delete-orphan")
+
+    def to_dict(self):
+        return {
+            "id": self.ID_VALE,
+            "origen": self.origen.NOMBRE,
+            "destino": self.destino.NOMBRE,
+            "chofer": f"{self.chofer.NOMBRE} {self.chofer.APELLIDO}",
+            "vehiculo": f"{self.vehiculo.MARCA} - {self.vehiculo.MATRICULA}",
+            "estado": self.estado.NOMBRE if self.estado else "Desconocido",
+            "fecha_creacion": self.FECHA_CREACION.strftime('%Y-%m-%d %H:%M'),
+            "fecha_salida": self.FECHA_SALIDA.strftime('%Y-%m-%d %H:%M') if self.FECHA_SALIDA else None,
+            "latitud_origen": self.origen.LATITUD,  # Útil para el mapa
+            "longitud_origen": self.origen.LONGITUD,
+            "latitud_destino": self.destino.LATITUD,
+            "longitud_destino": self.destino.LONGITUD
+        }
+
+class DetalleVale(db.Model):
+    """
+    Los items individuales dentro del camión.
+    """
+    __tablename__ = 'detalle_vale'
+    ID_DETALLE_VALE = db.Column(db.Integer, primary_key=True)
+    ID_VALE = db.Column(db.Integer, db.ForeignKey('vale.ID_VALE'), nullable=False)
+    ID_MATERIAL = db.Column(db.Integer, db.ForeignKey('material.ID_MATERIAL'), nullable=False)
+    CANTIDAD = db.Column(db.Float, nullable=False)
+    
+    material = db.relationship('Material')
+

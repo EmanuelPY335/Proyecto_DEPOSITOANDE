@@ -1,9 +1,9 @@
-# mapa.py
 from flask import Blueprint, request, jsonify
 from flask_socketio import SocketIO
-from datetime import datetime, timezone, timedelta # Imports modernos y centralizados
+from datetime import datetime, timezone, timedelta
 from flask_jwt_extended import jwt_required
-from db import db, Vehiculo, PosicionGps
+# 1. AGREGAMOS 'Deposito' A LAS IMPORTACIONES
+from db import db, Vehiculo, PosicionGps, Deposito 
 
 mapa_bp = Blueprint("mapa", __name__)
 socketio = SocketIO()
@@ -42,7 +42,7 @@ def receive_gps_data():
         except ValueError:
             return jsonify({'error': 'LATITUD y LONGITUD deben ser valores numéricos'}), 400
 
-        # Usamos datetime.now(timezone.utc) en lugar de utcnow()
+        # Usamos datetime.now(timezone.utc)
         ahora_utc = datetime.now(timezone.utc)
 
         # Registrar posición en la base
@@ -80,7 +80,6 @@ def receive_gps_data():
 def get_active_vehicles():
     """Obtiene vehículos activos en las últimas 2 horas"""
     try:
-        # Usamos datetime.now(timezone.utc) para el cálculo
         two_hours_ago = datetime.now(timezone.utc) - timedelta(hours=2)
 
         latest_positions = db.session.query(
@@ -109,7 +108,8 @@ def get_active_vehicles():
                 'MARCA': vehiculo.MARCA,
                 'LATITUD': float(position.LATITUD),
                 'LONGITUD': float(position.LONGITUD),
-                'last_update': position.FECHA_HORA.isoformat()
+                'last_update': position.FECHA_HORA.isoformat(),
+                'TIPO': 'VEHICULO' # Útil para el frontend diferenciar íconos
             })
 
         return jsonify(result), 200
@@ -133,7 +133,7 @@ def get_vehicle_location(id_vehiculo):
 
         vehiculo = Vehiculo.query.get(id_vehiculo)
 
-        # 🔹 Conversión a hora local Paraguay
+        # Conversión a hora local Paraguay
         from datetime import timezone, timedelta
         PY_TZ = timezone(timedelta(hours=-3))
         fecha_local = latest_position.FECHA_HORA.astimezone(PY_TZ)
@@ -149,4 +149,35 @@ def get_vehicle_location(id_vehiculo):
 
     except Exception as e:
         print(f"[ERROR /vehicles/<id>/location] {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ---------------- NUEVA RUTA: OBTENER DEPÓSITOS ----------------
+@mapa_bp.route("/depositos", methods=["GET"])
+@jwt_required()
+def get_depositos():
+    """
+    Obtiene la lista de depósitos con sus coordenadas para mostrarlos 
+    como marcadores estáticos en el mapa.
+    """
+    try:
+        depositos = Deposito.query.all()
+        result = []
+
+        for dep in depositos:
+            # Solo enviamos depósitos que tengan coordenadas configuradas
+            if dep.LATITUD and dep.LONGITUD:
+                result.append({
+                    'ID_DEPOSITO': dep.ID_DEPOSITO,
+                    'NOMBRE': dep.NOMBRE,
+                    'DIRECCION': getattr(dep, 'DIRECCION', 'Sin dirección'),
+                    'LATITUD': float(dep.LATITUD),
+                    'LONGITUD': float(dep.LONGITUD),
+                    'TIPO': 'DEPOSITO' # Identificador para usar icono de "casa/bodega"
+                })
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        print(f"[ERROR /depositos] {e}")
         return jsonify({'error': str(e)}), 500
