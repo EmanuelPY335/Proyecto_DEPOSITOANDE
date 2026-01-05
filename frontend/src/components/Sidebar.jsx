@@ -1,8 +1,8 @@
 // src/components/Sidebar.jsx
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom"; 
-import { Home, Settings, HelpCircle, FileText, LogOut, Package } from "lucide-react"; 
-import { hasPermission } from "../utils/auth"; // Importamos el helper
+import { Home, Settings, HelpCircle, FileText, LogOut, Package, ArrowRightLeft, DollarSign } from "lucide-react"; 
+import { hasPermission } from "../utils/auth"; 
 
 const Sidebar = () => {
   const location = useLocation();
@@ -13,25 +13,26 @@ const Sidebar = () => {
     navigate("/"); 
   };
 
-  // CONSTRUCCIÓN DINÁMICA DEL MENÚ
   const sidebarLinks = [];
 
-  // 1. Home (Siempre visible)
+  // 1. Home
   sidebarLinks.push({ path: "/home", label: "Inicio", icon: <Home size={18} /> });
 
-  // 2. Inventario (Solo si tiene permiso o es Admin)
+  // 2. Inventario
   if (hasPermission("gestion_materiales")) {
-      sidebarLinks.push({ 
-          path: "/materiales", 
-          label: "Inventario", 
-          icon: <Package size={18} /> 
-      });
+      sidebarLinks.push({ path: "/materiales", label: "Inventario", icon: <Package size={18} /> });
   }
+  
+  // 3. Movimientos
+  sidebarLinks.push({ path: "/movimientos", label: "Movimientos", icon: <ArrowRightLeft size={18} /> });
 
-  // 3. Informes (Podemos usar un permiso o dejarlo abierto)
+  // 4. ✅ GASTOS (Debe coincidir EXACTAMENTE con App.jsx)
+  sidebarLinks.push({ path: "/gastos", label: "Gastos", icon: <DollarSign size={18} /> });
+
+  // 5. Informes
   sidebarLinks.push({ path: "/reports", label: "Informes", icon: <FileText size={18} /> });
 
-  // 4. Configuración (Protegido)
+  // 6. Configuración
   if (hasPermission("gestion_roles")) {
       sidebarLinks.push({ path: "/config", label: "Configuración", icon: <Settings size={18} /> });
   } else {

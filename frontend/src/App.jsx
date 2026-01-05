@@ -7,7 +7,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Mapa from "./pages/Mapa";
-import Pag2 from "./pages/Pag2";
+import Pag2 from "./pages/Pag2"; // ESTA ES LA PÁGINA DE GASTOS
 import ResetPassword from "./pages/ResetPassword";
 import Profile from "./pages/Profile";
 import Roles from "./pages/Roles";
@@ -16,26 +16,22 @@ import Config from "./pages/Config";
 import OrdenesTrabajo from "./pages/OrdenesTrabajo";
 import Materiales from "./pages/Materiales"; 
 import PedidosEntrantes from "./pages/PedidosEntrantes";
+import Movimientos from "./pages/Movimientos"; 
 import Layout from "./components/Layout";
 
 // --- Lógica de Permisos ---
 const isLoggedIn = () => !!sessionStorage.getItem("access_token");
 
-// ✅ NUEVA FUNCIÓN: Verifica si tiene el permiso específico
 const hasPermission = (requiredPermission) => {
   const userRole = sessionStorage.getItem("user_rol");
-  
-  // Master_Admin siempre tiene acceso a todo
   if (userRole === "Master_Admin") return true; 
-
-  // Recuperar permisos guardados
   const storedPermisos = sessionStorage.getItem("user_permissions");
   const permisos = storedPermisos ? JSON.parse(storedPermisos) : [];
-  
   return permisos.includes(requiredPermission);
 };
 
-// 1. Ruta Protegida Básica
+// --- Componentes de Protección ---
+
 const ProtectedRoute = ({ children }) => {
   if (!isLoggedIn()) {
     return <Navigate to="/" replace state={{ message: "Error: Ingrese con un correo válido." }} />;
@@ -43,7 +39,6 @@ const ProtectedRoute = ({ children }) => {
   return <Layout>{children}</Layout>;
 };
 
-// 2. Ruta Autenticada (Sin Layout)
 const AuthenticatedRoute = ({ children }) => {
   if (!isLoggedIn()) {
     return <Navigate to="/" replace state={{ message: "Error: Ingrese con un correo válido." }} />;
@@ -51,30 +46,20 @@ const AuthenticatedRoute = ({ children }) => {
   return children;
 };
 
-// 3. Ruta Admin (Solo para gestión de roles, estricta para Admins)
 const AdminRoute = ({ children }) => {
   const userRole = sessionStorage.getItem("user_rol");
   if (!isLoggedIn()) return <Navigate to="/" replace />;
-  
-  // Solo Admin y Master_Admin pueden entrar aquí (ej: para crear Roles)
   if (userRole !== "Admin" && userRole !== "Master_Admin") {
+    // ESTA ES LA REDIRECCIÓN QUE PODRÍA ESTAR MOLESTANDO SI USARAS ADMINROUTE
     return <Navigate to="/home" replace state={{ message: "Acceso restringido a Administradores." }} />;
   }
   return <Layout>{children}</Layout>;
 };
 
-// ✅ 4. NUEVA RUTA: PROTECCIÓN POR PERMISO (La que necesitas)
 const PermissionRoute = ({ children, requiredPermission }) => {
   if (!isLoggedIn()) return <Navigate to="/" replace />;
-  
   if (!hasPermission(requiredPermission)) {
-    return (
-      <Navigate 
-        to="/home" 
-        replace 
-        state={{ message: `No tienes permisos para acceder a: ${requiredPermission}` }} 
-      />
-    );
+    return <Navigate to="/home" replace state={{ message: `No tienes permisos para acceder a: ${requiredPermission}` }} />;
   }
   return <Layout>{children}</Layout>;
 };
@@ -86,7 +71,6 @@ function App() {
     <ThemeProvider>
       <Router>
         <Routes>
-            
           {/* --- RUTAS PÚBLICAS --- */}
           <Route path="/" element={<Login />} />
           <Route path="/reset-password/:token" element={<ResetPassword />} />
@@ -96,66 +80,48 @@ function App() {
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/config" element={<ProtectedRoute><Config /></ProtectedRoute>} />
             
-          {/* --- RUTAS CON PERMISOS ESPECÍFICOS --- */}
-          
-          {/* Antes usabas AdminRoute, ahora usa PermissionRoute con el permiso 'gestion_empleados' */}
+          {/* --- GESTIÓN --- */}
           <Route 
             path="/empleados" 
-            element={
-              <PermissionRoute requiredPermission="gestion_empleados">
-                <Empleados />
-              </PermissionRoute>
-            } 
+            element={<PermissionRoute requiredPermission="gestion_empleados"><Empleados /></PermissionRoute>} 
           />
 
           <Route 
             path="/materiales" 
-            element={
-              <PermissionRoute requiredPermission="gestion_materiales">
-                <Materiales />
-              </PermissionRoute>
-            } 
+            element={<PermissionRoute requiredPermission="gestion_materiales"><Materiales /></PermissionRoute>} 
           />
 
           <Route 
             path="/ordenes-trabajo" 
-            element={
-              <ProtectedRoute>
-                <OrdenesTrabajo />
-              </ProtectedRoute>
-            } 
+            element={<ProtectedRoute><OrdenesTrabajo /></ProtectedRoute>} 
           />
           
           <Route 
-             path="/pag2" 
+             path="/movimientos" 
+             element={<ProtectedRoute><Movimientos /></ProtectedRoute>} 
+          />
+
+          {/* ✅ RUTA GASTOS: Verificamos que apunte a Pag2 y sea ProtectedRoute */}
+          <Route 
+             path="/gastos" 
              element={
-               <PermissionRoute requiredPermission="gestion_movimientos">
+               <ProtectedRoute>
                  <Pag2 />
-               </PermissionRoute>
+               </ProtectedRoute>
              } 
           />
 
           {/* --- RUTAS ESPECIALES --- */}
           <Route path="/mapa" element={<AuthenticatedRoute><Mapa /></AuthenticatedRoute>} />
-
-          {/* --- RUTAS SOLO ADMIN --- */}
-          {/* Roles sigue siendo solo para admins, así que AdminRoute está bien aquí */}
           <Route path="/roles" element={<AdminRoute><Roles /></AdminRoute>} />
-            
           <Route 
             path="/pedidos-entrantes" 
-            element={
-              <ProtectedRoute>
-                  <Layout fullWidth={true}>
-                      <PedidosEntrantes />
-                  </Layout>
-              </ProtectedRoute>
-            } 
+            element={<ProtectedRoute><Layout fullWidth={true}><PedidosEntrantes /></Layout></ProtectedRoute>} 
           />
 
-          {/* --- FALLBACK --- */}
+          {/* --- FALLBACK (CATCH-ALL) --- */}
+          {/* Si ninguna ruta de arriba coincide, te manda al home. */}
           <Route path="*" element={<Navigate to="/home" replace />} />
-            
         </Routes>
       </Router>
     </ThemeProvider>

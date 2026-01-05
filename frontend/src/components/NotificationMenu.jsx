@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Bell, Check, Clock, Trash2 } from "lucide-react"; // Iconos necesarios
+import { Bell, Clock } from "lucide-react";  // Iconos necesarios
 import { apiFetch } from "../utils/api";
 import { useNavigate } from "react-router-dom";
 import "../styles/NotificationMenu.css"; // Asegúrate de crear este CSS (abajo te lo dejo)

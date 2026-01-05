@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Plus, CheckCircle, AlertCircle,
   User, ArrowRight, ArrowLeft, MapPin, UserPlus,
-  Trash2, ShieldAlert, Send, Edit, Calendar, Wrench
+  Trash2, ShieldAlert, Send, Edit, Calendar, Wrench, ArrowRightLeft, Box
 } from "lucide-react";
 import "../styles/Ordenes.css";
 
@@ -15,10 +15,7 @@ const OrdenesTrabajo = () => {
   const [ordenes, setOrdenes] = useState([]);
   const [depositos, setDepositos] = useState([]);
   const [rolUser, setRolUser] = useState("");
-  
-  // ✅ NUEVO ESTADO: Controla si el usuario tiene poder de gestión (Admin, Master o Permiso)
   const [canManage, setCanManage] = useState(false);
-  
   const navigate = useNavigate();
 
   const [showModalNew, setShowModalNew] = useState(false);
@@ -28,8 +25,10 @@ const OrdenesTrabajo = () => {
 
   const [avancesList, setAvancesList] = useState([]);
   const [nuevoMensaje, setNuevoMensaje] = useState("");
-
   const [step, setStep] = useState(1);
+  
+  // --- Estado para Inventario (si es movimiento) ---
+  const [inventario, setInventario] = useState([]);
 
   const [newOrden, setNewOrden] = useState({
     titulo: "",
@@ -37,7 +36,12 @@ const OrdenesTrabajo = () => {
     prioridad: "Media",
     id_deposito: "",
     id_empleado: null,
-    fecha_limite: ""
+    fecha_limite: "",
+    // Campos Movimiento
+    tipo_orden: "General", // General | Movimiento
+    id_lote: "",
+    cantidad: 0,
+    nueva_ubicacion: ""
   });
 
   const [editForm, setEditForm] = useState({
@@ -48,73 +52,63 @@ const OrdenesTrabajo = () => {
   });
 
   useEffect(() => {
-    // 1. Obtener Rol y Permisos
     const rol = sessionStorage.getItem("user_rol") || "";
     const permisosStr = sessionStorage.getItem("user_permissions");
     const permisos = permisosStr ? JSON.parse(permisosStr) : [];
-    
     setRolUser(rol);
-
-    // 2. Definir quién puede gestionar (Crear, Editar, Borrar, Asignar)
-    // Pasa si es Master, Admin O si tiene el permiso 'gestion_ordenes'
-    const hasPower = rol === "Master_Admin" || rol === "Admin" || permisos.includes("gestion_ordenes");
-    setCanManage(hasPower);
-
+    setCanManage(rol === "Master_Admin" || rol === "Admin" || permisos.includes("gestion_ordenes"));
     loadOrdenes();
     loadRecursos();
   }, []);
 
+  // Cargar inventario cuando se selecciona Tipo: Movimiento
+  useEffect(() => {
+    if (showModalNew && newOrden.tipo_orden === "Movimiento") {
+        const fetchInventario = async () => {
+            try {
+                const data = await apiFetch(`${API_BASE_URL}/api/recursos/inventario-local`);
+                setInventario(data || []);
+            } catch (e) { console.error(e); }
+        };
+        fetchInventario();
+    }
+  }, [newOrden.tipo_orden, showModalNew]);
+
   const loadOrdenes = async () => {
     try {
-      const data = await apiFetch("http://127.0.0.1:5000/api/ordenes");
+      const data = await apiFetch(`${API_BASE_URL}/api/ordenes`);
       setOrdenes(data || []);
     } catch (e) { console.error(e); }
   };
 
   const loadRecursos = async () => {
     try {
-      const dep = await apiFetch("http://127.0.0.1:5000/api/depositos");
+      const dep = await apiFetch(`${API_BASE_URL}/api/depositos`);
       setDepositos(dep || []);
     } catch (e) { console.error(e); }
   };
 
-  // --- CREAR ORDEN ---
   const handleCreateSubmit = async (e) => {
     e.preventDefault(); 
-
     if (step === 1) {
-        if (newOrden.titulo && newOrden.titulo.trim() !== "") {
-            setStep(2); 
-        } else {
-            alert("El título es obligatorio para continuar.");
-        }
+        if (newOrden.titulo?.trim()) setStep(2); 
+        else alert("El título es obligatorio.");
         return;
     }
-
     try {
       const payload = { ...newOrden };
-
-      // Si NO es Master Admin, borramos el depósito seleccionado 
-      // (El backend usará el depósito del usuario logueado automáticamente)
-      if (rolUser !== "Master_Admin") {
-          delete payload.id_deposito;
-      }
-
+      if (rolUser !== "Master_Admin") delete payload.id_deposito;
       if (!payload.id_empleado) payload.id_empleado = null; 
 
-      await apiFetch("http://127.0.0.1:5000/api/ordenes", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-
+      await apiFetch(`${API_BASE_URL}/api/ordenes`, { method: "POST", body: JSON.stringify(payload) });
       setShowModalNew(false);
       setStep(1);
-      setNewOrden({ titulo: "", descripcion: "", prioridad: "Media", id_deposito: "", id_empleado: null, fecha_limite: "" });
+      setNewOrden({ 
+          titulo: "", descripcion: "", prioridad: "Media", id_deposito: "", id_empleado: null, fecha_limite: "",
+          tipo_orden: "General", id_lote: "", cantidad: 0, nueva_ubicacion: "" 
+      });
       loadOrdenes();
-
-    } catch (err) {
-      alert("Error al crear orden: " + err.message);
-    }
+    } catch (err) { alert("Error: " + err.message); }
   };
 
   const openEditModal = (orden) => {
@@ -131,18 +125,13 @@ const OrdenesTrabajo = () => {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
-      await apiFetch(`http://127.0.0.1:5000/api/ordenes/${selectedOrden.id}`, {
+      await apiFetch(`${API_BASE_URL}/api/ordenes/${selectedOrden.id}`, {
         method: "PUT",
-        body: JSON.stringify({
-          accion: "editar_info",
-          ...editForm
-        })
+        body: JSON.stringify({ accion: "editar_info", ...editForm })
       });
       setShowModalEdit(false);
       loadOrdenes();
-    } catch (err) {
-      alert("Error al editar: " + err.message);
-    }
+    } catch (err) { alert("Error: " + err.message); }
   };
 
   const openUpdateModal = async (o) => {
@@ -150,7 +139,7 @@ const OrdenesTrabajo = () => {
     setNuevoMensaje("");
     setAvancesList([]);
     try {
-        const data = await apiFetch(`http://127.0.0.1:5000/api/ordenes/${o.id}/avances`);
+        const data = await apiFetch(`${API_BASE_URL}/api/ordenes/${o.id}/avances`);
         setAvancesList(data || []);
     } catch (e) { console.error(e); }
     setShowModalUpdate(true);
@@ -159,9 +148,8 @@ const OrdenesTrabajo = () => {
   const handlePostAvance = async () => {
     if (!nuevoMensaje.trim()) return;
     try {
-        const resp = await apiFetch(`http://127.0.0.1:5000/api/ordenes/${selectedOrden.id}/avances`, {
-            method: "POST",
-            body: JSON.stringify({ mensaje: nuevoMensaje })
+        const resp = await apiFetch(`${API_BASE_URL}/api/ordenes/${selectedOrden.id}/avances`, {
+            method: "POST", body: JSON.stringify({ mensaje: nuevoMensaje })
         });
         if (resp.success) {
             setAvancesList([...avancesList, resp.avance]);
@@ -171,11 +159,10 @@ const OrdenesTrabajo = () => {
   };
 
   const handleFinalizarTarea = async () => {
-    if(!window.confirm("¿Confirmar que la tarea está terminada?")) return;
+    if(!window.confirm("¿Confirmar que la tarea está terminada? Se registrará el movimiento si corresponde.")) return;
     try {
-        await apiFetch(`http://127.0.0.1:5000/api/ordenes/${selectedOrden.id}`, {
-            method: "PUT",
-            body: JSON.stringify({ nuevo_estado: "Aprobada" }) 
+        await apiFetch(`${API_BASE_URL}/api/ordenes/${selectedOrden.id}`, {
+            method: "PUT", body: JSON.stringify({ nuevo_estado: "Aprobada" }) 
         });
         setShowModalUpdate(false);
         loadOrdenes(); 
@@ -185,9 +172,9 @@ const OrdenesTrabajo = () => {
   const handleGoToAssign = (orden) => navigate("/empleados", { state: { assigningOrden: orden } });
 
   const deleteSoft = async (id) => {
-    if (!window.confirm("¿Mover a papelera?")) return;
+    if (!window.confirm("¿Papelera?")) return;
     try {
-      await apiFetch(`http://127.0.0.1:5000/api/ordenes/${id}`, { method: "DELETE" });
+      await apiFetch(`${API_BASE_URL}/api/ordenes/${id}`, { method: "DELETE" });
       setOrdenes(ordenes.filter(o => o.id !== id));
     } catch (error) { alert(error.message); }
   };
@@ -195,7 +182,7 @@ const OrdenesTrabajo = () => {
   const permaDelete = async (id) => {
     if (!window.confirm("⚠️ ¿Destruir permanentemente?")) return;
     try {
-      await apiFetch(`http://127.0.0.1:5000/api/ordenes/${id}/perma`, { method: "DELETE" });
+      await apiFetch(`${API_BASE_URL}/api/ordenes/${id}/perma`, { method: "DELETE" });
       setOrdenes(ordenes.filter(o => o.id !== id));
     } catch (error) { alert(error.message); }
   };
@@ -209,7 +196,6 @@ const OrdenesTrabajo = () => {
             <h1>Órdenes de Trabajo</h1>
             <p className="subtitle">Gestión y monitoreo de tareas.</p>
           </div>
-          {/* ✅ CORREGIDO: Ahora usa canManage en lugar de rol fijo */}
           {canManage && (
             <button className="btn-new" onClick={() => setShowModalNew(true)}>
               <Plus size={18} /> Crear Orden
@@ -236,12 +222,16 @@ const OrdenesTrabajo = () => {
               <div key={orden.id} className={`orden-card priority-${orden.prioridad.toLowerCase()}`}>
                 <div className="orden-header">
                   <span className={`badge-estado ${estadoClase}`}>{estadoTexto}</span>
+                  {orden.tipo_orden === "Movimiento" && (
+                    <span className="badge-estado" style={{background:'#0ea5e9', color:'white', marginLeft:'5px', display:'inline-flex', alignItems:'center', gap:'3px'}}>
+                        <ArrowRightLeft size={10}/> Movimiento
+                    </span>
+                  )}
                   <span className="orden-date">{orden.fecha_inicio}</span>
                 </div>
 
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
                     <h3>{orden.titulo}</h3>
-                    {/* ✅ CORREGIDO: Botón editar info */}
                     {canManage && (
                         <button className="btn-icon-simple" onClick={() => openEditModal(orden)} title="Editar información">
                             <Edit size={16} />
@@ -250,6 +240,16 @@ const OrdenesTrabajo = () => {
                 </div>
 
                 <p className="orden-desc">{orden.descripcion}</p>
+
+                {/* Mostrar detalles de Movimiento si es el caso */}
+                {orden.tipo_orden === "Movimiento" && (
+                    <div style={{background:'#f0f9ff', padding:'8px', borderRadius:'6px', margin:'10px 0', fontSize:'0.85rem', color:'#0369a1', border:'1px solid #bae6fd'}}>
+                        <div style={{fontWeight:'bold', display:'flex', alignItems:'center', gap:'5px'}}>
+                            <Box size={14}/> Mover {orden.cantidad_mov}u
+                        </div>
+                        <div>A: {orden.nueva_ubicacion}</div>
+                    </div>
+                )}
 
                 {orden.fecha_limite_fmt && (
                     <div style={{fontSize: '0.85rem', color: isExpired ? '#991b1b' : '#e11d48', marginBottom: '10px', display:'flex', alignItems:'center', gap:'5px', fontWeight: 500}}>
@@ -289,7 +289,6 @@ const OrdenesTrabajo = () => {
                 </div>
 
                 <div className="orden-actions">
-                  {/* ✅ CORREGIDO: Botón Asignar */}
                   {(!orden.empleado_nombre || orden.empleado_nombre.toLowerCase().includes("sin asignar")) &&
                     canManage && (
                       <button className="btn-action primary" onClick={() => handleGoToAssign(orden)}>
@@ -299,21 +298,18 @@ const OrdenesTrabajo = () => {
 
                   {orden.empleado_nombre && !orden.empleado_nombre.toLowerCase().includes("sin asignar") && (
                       <button className="btn-action secondary" onClick={() => openUpdateModal(orden)}>
-                        {/* Si es Manager, ve Bitácora. Si es empleado, ve Avance */}
                         {canManage 
                             ? "Ver Bitácora" 
-                            : (isCompleted || isExpired ? "Ver Bitácora" : "Avance")
+                            : (isCompleted || isExpired ? "Ver Bitácora" : "Avance / Finalizar")
                         }
                       </button>
                   )}
 
-                  {/* ✅ CORREGIDO: Botón Papelera */}
                   {canManage && (
                     <button className="btn-action danger" onClick={() => deleteSoft(orden.id)} style={{marginLeft: 'auto', flex: '0 0 auto', width:'40px'}}>
                       <Trash2 size={16} />
                     </button>
                   )}
-                  {/* Master Admin sigue siendo el único que puede eliminar permanentemente */}
                   {rolUser === "Master_Admin" && (
                     <button className="btn-action danger" onClick={() => permaDelete(orden.id)} style={{backgroundColor: '#7f1d1d', flex: '0 0 auto', width:'40px'}}>
                       <ShieldAlert size={16} />
@@ -348,26 +344,73 @@ const OrdenesTrabajo = () => {
 
                 {step === 2 && (
                   <div className="fade-in">
-                    <div className="input-group">
-                      <label>Prioridad</label>
-                      <select className="discord-select" value={newOrden.prioridad} onChange={(e) => setNewOrden({ ...newOrden, prioridad: e.target.value })}>
-                        <option value="Baja">🟢 Baja</option>
-                        <option value="Media">🟡 Media</option>
-                        <option value="Alta">🔴 Alta</option>
-                      </select>
+                    {/* SELECCION TIPO DE ORDEN */}
+                    <div className="input-group" style={{marginBottom:'15px'}}>
+                        <label>Tipo de Tarea</label>
+                        <div style={{display:'flex', gap:'10px'}}>
+                            <button type="button" 
+                                className={`btn-status ${newOrden.tipo_orden === 'General' ? 'btn-primary' : ''}`}
+                                onClick={() => setNewOrden({...newOrden, tipo_orden: 'General'})}>
+                                General
+                            </button>
+                            <button type="button" 
+                                className={`btn-status ${newOrden.tipo_orden === 'Movimiento' ? 'btn-primary' : ''}`}
+                                onClick={() => setNewOrden({...newOrden, tipo_orden: 'Movimiento'})}>
+                                <ArrowRightLeft size={14} style={{marginRight:5}}/> Movimiento Local
+                            </button>
+                        </div>
                     </div>
-                    <div className="input-group">
-                        <label>Fecha Límite (Opcional)</label>
-                        <input type="datetime-local" className="discord-select" value={newOrden.fecha_limite} onChange={(e) => setNewOrden({ ...newOrden, fecha_limite: e.target.value })} />
-                    </div>
+
+                    {newOrden.tipo_orden === "Movimiento" ? (
+                        <div style={{background:'#f8fafc', padding:'10px', borderRadius:'8px', border:'1px solid #e2e8f0', marginBottom:'15px'}}>
+                            <div className="input-group">
+                                <label>Material / Lote a Mover</label>
+                                <select className="discord-select" 
+                                    value={newOrden.id_lote} 
+                                    onChange={(e) => setNewOrden({...newOrden, id_lote: e.target.value})} required>
+                                    <option value="">-- Seleccionar Material del Stock --</option>
+                                    {inventario.map(item => (
+                                        <option key={item.lote_id} value={item.lote_id}>
+                                            {item.material} (Lote: {item.lote_id}) - Disp: {item.cantidad} {item.unidad}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="row-2" style={{display:'flex', gap:'10px'}}>
+                                <div className="input-group">
+                                    <label>Cantidad</label>
+                                    <input type="number" step="0.01" required 
+                                        value={newOrden.cantidad} 
+                                        onChange={(e) => setNewOrden({...newOrden, cantidad: parseFloat(e.target.value)})}/>
+                                </div>
+                                <div className="input-group">
+                                    <label>Nueva Ubicación (Sección)</label>
+                                    <input type="text" placeholder="Ej: Pasillo B, Estante 3" required 
+                                        value={newOrden.nueva_ubicacion} 
+                                        onChange={(e) => setNewOrden({...newOrden, nueva_ubicacion: e.target.value})}/>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="input-group">
+                              <label>Prioridad</label>
+                              <select className="discord-select" value={newOrden.prioridad} onChange={(e) => setNewOrden({ ...newOrden, prioridad: e.target.value })}>
+                                <option value="Baja">🟢 Baja</option>
+                                <option value="Media">🟡 Media</option>
+                                <option value="Alta">🔴 Alta</option>
+                              </select>
+                            </div>
+                            <div className="input-group">
+                                <label>Fecha Límite (Opcional)</label>
+                                <input type="datetime-local" className="discord-select" value={newOrden.fecha_limite} onChange={(e) => setNewOrden({ ...newOrden, fecha_limite: e.target.value })} />
+                            </div>
+                        </>
+                    )}
                     
-                    {/* Lógica de Depósito:
-                       Solo Master_Admin ve el selector. 
-                       Admin y Gerentes verán el aviso de "Asignación automática".
-                    */}
                     {rolUser === "Master_Admin" ? (
                       <div className="input-group" style={{ marginTop: '15px' }}>
-                        <label>Depósito</label>
+                        <label>Depósito (Master Admin)</label>
                         <select className="discord-select" required value={newOrden.id_deposito} onChange={(e) => setNewOrden({ ...newOrden, id_deposito: e.target.value })}>
                           <option value="">-- Seleccionar --</option>
                           {depositos.map((d) => (<option key={d.ID_DEPOSITO} value={d.ID_DEPOSITO}>{d.NOMBRE}</option>))}
@@ -445,9 +488,8 @@ const OrdenesTrabajo = () => {
                         )}
                     </div>
 
-                    {/* ✅ CORREGIDO: Los Gestores (Admin/Gerente) NO pueden escribir avances, solo leer. */}
                     {selectedOrden.estado !== "Aprobada" && selectedOrden.estado !== "Completada" && selectedOrden.estado !== "Finalizada" && selectedOrden.estado !== "Fin de tiempo limite" && 
-                     !canManage && ( // <--- Si NO es manager, puede escribir
+                     !canManage && ( 
                         <div style={{display: 'flex', gap: '8px', marginBottom: '15px'}}>
                             <input type="text" className="input-field" placeholder="Escribe tu avance..." value={nuevoMensaje} onChange={(e) => setNuevoMensaje(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handlePostAvance()} autoFocus />
                             <button className="btn-save" onClick={handlePostAvance} title="Enviar"><Send size={16}/></button>
@@ -457,7 +499,6 @@ const OrdenesTrabajo = () => {
                     <div style={{display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #eee', paddingTop: '15px'}}>
                         <button className="btn-status btn-danger" onClick={() => setShowModalUpdate(false)}>Cerrar</button>
                         
-                        {/* Botón Finalizar Tarea: Solo para el empleado que la hace (No managers) */}
                         {selectedOrden.estado !== "Aprobada" && selectedOrden.estado !== "Completada" && selectedOrden.estado !== "Finalizada" && selectedOrden.estado !== "Fin de tiempo limite" && 
                          !canManage && (
                             <button className="btn-save" style={{background: '#23a559'}} onClick={handleFinalizarTarea}>

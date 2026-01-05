@@ -289,6 +289,13 @@ class OrdenTrabajo(db.Model):
     TIEMPO_EMPLEADO = db.Column(db.String(50), nullable=True)
     ELIMINADA = db.Column(db.Boolean, default=False)
 
+    # --- NUEVOS CAMPOS PARA MOVIMIENTOS (AQUÍ ESTABA EL ERROR) ---
+    TIPO_ORDEN = db.Column(db.String(20), default="General")
+    ID_LOTE_OBJETIVO = db.Column(db.Integer, db.ForeignKey('lote.ID_LOTE'), nullable=True)
+    CANTIDAD_MOVIMIENTO = db.Column(db.Float, default=0)
+    NUEVA_UBICACION = db.Column(db.String(100), nullable=True)
+    # -------------------------------------------------------------
+
     # Relaciones SQL
     estado = db.relationship('EstadoOrden')
     deposito = db.relationship('Deposito')
@@ -313,7 +320,12 @@ class OrdenTrabajo(db.Model):
             "deposito_id": self.ID_DEPOSITO,
             "empleado_nombre": f"{self.empleado.NOMBRE} {self.empleado.APELLIDO}" if self.empleado else "Sin asignar",
             "empleado_id": self.ID_EMPLEADO,
-            "empleado_avatar": self.empleado.usuario.AVATAR if (self.empleado and self.empleado.usuario) else None
+            "empleado_avatar": self.empleado.usuario.AVATAR if (self.empleado and self.empleado.usuario) else None,
+            
+            # Datos Movimiento
+            "tipo_orden": self.TIPO_ORDEN,
+            "cantidad_mov": self.CANTIDAD_MOVIMIENTO,
+            "nueva_ubicacion": self.NUEVA_UBICACION
         }
 
 class AvanceOrden(db.Model):
@@ -482,4 +494,51 @@ class DetalleVale(db.Model):
     CANTIDAD = db.Column(db.Float, nullable=False)
     
     material = db.relationship('Material')
+# [backend/db.py] - Agregar al final
 
+# ---------------------------------------------------------
+# GASTOS Y FINANZAS
+# ---------------------------------------------------------
+
+class CategoriaGasto(db.Model):
+    __tablename__ = 'categoria_gasto'
+    ID_CATEGORIA = db.Column(db.Integer, primary_key=True)
+    NOMBRE = db.Column(db.String(50), unique=True, nullable=False)
+    COLOR = db.Column(db.String(20), default="#6b7280") # Para gráficas/UI
+
+class Gasto(db.Model):
+    __tablename__ = 'gasto'
+    ID_GASTO = db.Column(db.Integer, primary_key=True)
+    
+    # Detalles
+    TITULO = db.Column(db.String(100), nullable=False)
+    DESCRIPCION = db.Column(db.String(255))
+    MONTO = db.Column(db.Float, nullable=False)
+    FECHA = db.Column(db.DateTime, default=datetime.datetime.now)
+    
+    # Relaciones
+    ID_CATEGORIA = db.Column(db.Integer, db.ForeignKey('categoria_gasto.ID_CATEGORIA'), nullable=False)
+    ID_USUARIO = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=False) # Quién registró
+    ID_DEPOSITO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=True) # Si es gasto de sucursal
+    
+    # Opcional: Comprobante (URL o nombre archivo)
+    COMPROBANTE = db.Column(db.String(255), nullable=True)
+    
+    # Objetos
+    categoria = db.relationship('CategoriaGasto')
+    usuario = db.relationship('Usuario')
+    deposito = db.relationship('Deposito')
+
+    def to_dict(self):
+        return {
+            "id": self.ID_GASTO,
+            "titulo": self.TITULO,
+            "descripcion": self.DESCRIPCION,
+            "monto": self.MONTO,
+            "fecha": self.FECHA.strftime('%Y-%m-%d %H:%M'),
+            "fecha_iso": self.FECHA.strftime('%Y-%m-%d'),
+            "categoria": self.categoria.NOMBRE if self.categoria else "General",
+            "color": self.categoria.COLOR if self.categoria else "#ccc",
+            "autor": f"{self.usuario.empleado.NOMBRE} {self.usuario.empleado.APELLIDO}" if self.usuario and self.usuario.empleado else self.usuario.CORREO,
+            "deposito": self.deposito.NOMBRE if self.deposito else "General"
+        }

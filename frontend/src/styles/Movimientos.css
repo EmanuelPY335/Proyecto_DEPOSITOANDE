@@ -1,0 +1,146 @@
+/* frontend/src/styles/Movimientos.css */
+
+/* ⚠️ IMPORTANTE: No redefinimos .dashboard-layout ni .content-dashboard 
+   porque eso ya lo maneja Layout.jsx y rompería el scroll global. */
+
+/* --- Encabezado --- */
+.page-header {
+  display: flex;
+  justify_content: space-between;
+  align-items: flex-end;
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid var(--border-color, #e5e7eb);
+}
+
+.page-header h1 {
+  font-size: 1.8rem;
+  color: var(--text-primary, #1f2937);
+  margin: 0;
+  font-weight: 700;
+}
+
+.subtitle {
+  color: var(--text-secondary, #6b7280);
+  margin: 5px 0 0 0;
+  font-size: 0.95rem;
+}
+
+/* --- Filtros (Botones superiores) --- */
+.filters {
+  display: flex;
+  gap: 10px;
+  background: var(--bg-card, white);
+  padding: 5px;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px var(--shadow-color, rgba(0,0,0,0.05));
+}
+
+.btn-status {
+  background: transparent;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-status:hover {
+  background-color: var(--bg-body, #f3f4f6);
+  color: var(--text-primary, #374151);
+}
+
+.btn-status.btn-primary {
+  background-color: #eff6ff;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+/* --- Tarjeta Contenedora de la Tabla --- */
+.discord-card {
+  background-color: var(--bg-card, white);
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px var(--shadow-color, rgba(0, 0, 0, 0.1));
+  padding: 20px;
+  overflow-x: auto; /* Para tablas anchas en móvil */
+}
+
+/* --- Tabla Estilo "Discord" / Moderno --- */
+.discord-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.discord-table thead tr {
+  background-color: var(--bg-input, #f9fafb);
+  border-bottom: 2px solid var(--border-color, #e5e7eb);
+}
+
+.discord-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-weight: 600;
+  color: var(--text-secondary, #4b5563);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.discord-table tbody tr {
+  border-bottom: 1px solid var(--border-color, #f3f4f6);
+  transition: background-color 0.15s ease;
+}
+
+.discord-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.discord-table tbody tr:hover {
+  background-color: var(--bg-input, #f9fafb);
+}
+
+.discord-table td {
+  padding: 14px 16px;
+  color: var(--text-primary, #1f2937);
+  vertical-align: middle;
+}
+
+/* --- Badges y Elementos Internos --- */
+.badge-estado {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Colores específicos para badges de movimientos */
+.badge-estado.pendiente { /* Usado para Locales/Internos */
+  background-color: #dbeafe; /* Azul claro */
+  color: #1e40af;
+}
+
+.badge-estado.completada { /* Usado para Traslados */
+  background-color: #ede9fe; /* Violeta claro */
+  color: #5b21b6;
+}
+
+/* Iconos y textos alineados */
+td .flex-align {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8em;
+  color: var(--text-secondary, #888);
+}

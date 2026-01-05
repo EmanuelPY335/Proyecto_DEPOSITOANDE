@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import "../styles/Home.css"; 
 import { 
-  Box, TrendingUp, Users, Clipboard, FileText, Layers, Shield, ShieldAlert
+  Box, TrendingUp, Users, Clipboard, FileText,Shield, ShieldAlert,DollarSign
 } from "lucide-react"; 
 
 const Home = () => {
@@ -72,14 +72,16 @@ const Home = () => {
           )}
 
           {can("gestion_movimientos") && (
-            <div className="card card-pag2">
-              <div className="card-header">
-                <Layers size={30} className="card-main-icon" />
-                <h3>Gestionar Gastos</h3>
-              </div>
-              <p>Gestión de gastos dentro del depósito.</p>
-              <Link to="/pag2" className="card-button secondary">Ver Gastos</Link>
+          <div className="card card-pag2">
+            <div className="card-header">
+              {/* Cambiamos Layers por DollarSign para consistencia visual */}
+              <DollarSign size={30} className="card-main-icon" />
+              <h3>Gestionar Gastos</h3>
             </div>
+            <p>Gestión de gastos dentro del depósito.</p>
+            {/* Corregimos la ruta: de /pag2 a /gastos */}
+            <Link to="/gastos" className="card-button secondary">Ver Gastos</Link>
+          </div>
           )}
 
           {can("gestion_materiales") && (
