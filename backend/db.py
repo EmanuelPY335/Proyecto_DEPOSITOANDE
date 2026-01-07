@@ -114,7 +114,8 @@ class Usuario(db.Model):
             "TELEFONO": self.empleado.TELEFONO,
             "CORREO": self.CORREO,
             "AVATAR": self.AVATAR,
-            "BANNER_COLOR": self.BANNER_COLOR
+            "BANNER_COLOR": self.BANNER_COLOR,
+            "ID_DEPOSITO": self.empleado.ID_DEPOSITO
         }
 
 class PasswordResetToken(db.Model):
@@ -157,7 +158,7 @@ class Lote(db.Model):
     ID_MATERIAL = db.Column(db.Integer, db.ForeignKey('material.ID_MATERIAL'), nullable=False)
     FECHA_INGRESO = db.Column(db.Date, default=datetime.date.today)
     OBSERVACIONES = db.Column(db.String(254))
-
+    CODIGO = db.Column(db.String(50))
     # La relación 'material' se crea con el backref en Material
 
 class EstadoInventario(db.Model):

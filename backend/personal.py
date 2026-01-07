@@ -203,3 +203,33 @@ def toggle_estado_empleado(id_empleado):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": "Error al cambiar estado", "details": str(e)}), 500
+# En backend/personal.py
+
+# backend/personal.py
+
+# En backend/personal.py
+
+@personal_bp.route("/personal/choferes", methods=["GET"])
+@jwt_required()
+def get_choferes():
+    try:
+        # Buscamos usuarios con rol "Chofer"
+        choferes = Usuario.query.join(Rol).filter(Rol.NOMBRE_ROL == 'Chofer').all()
+        
+        resultado = []
+        for u in choferes:
+            # CORRECCIÓN: 
+            # 1. Verificamos que 'u.empleado' exista.
+            # 2. Accedemos a .NOMBRE y .APELLIDO (Mayúsculas, como en tu DB).
+            # 3. Devolvemos ID_EMPLEADO (necesario para la tabla Vale), no ID_USUARIO.
+            if u.empleado:
+                resultado.append({
+                    "id": u.empleado.ID_EMPLEADO, 
+                    "nombre": f"{u.empleado.NOMBRE} {u.empleado.APELLIDO}",
+                    "estado": "Disponible" 
+                })
+            
+        return jsonify(resultado), 200
+    except Exception as e:
+        print(f"Error cargando choferes: {e}") 
+        return jsonify({"error": str(e)}), 500

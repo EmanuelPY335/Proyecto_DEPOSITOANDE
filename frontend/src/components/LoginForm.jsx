@@ -60,15 +60,16 @@ const LoginForm = () => {
                 }
             });
 
-            if (perfilResponse.ok) {
+              if (perfilResponse.ok) {
                 const perfilData = await perfilResponse.json();
                 
-                // Guardamos datos actualizados del perfil
                 const nombreCompleto = `${perfilData.NOMBRE} ${perfilData.APELLIDO}`;
                 sessionStorage.setItem("user_nombre", nombreCompleto);
                 sessionStorage.setItem("user_rol", perfilData.rol);
+
+                // 🔥 AGREGAR ESTA LÍNEA IMPORTANTE 🔥
+                sessionStorage.setItem("user_deposito_id", perfilData.ID_DEPOSITO);
                 
-                // 🔥 GUARDAMOS LOS PERMISOS (Esto es lo que necesita el Home)
                 const permisos = perfilData.permisos || [];
                 sessionStorage.setItem("user_permissions", JSON.stringify(permisos));
 
