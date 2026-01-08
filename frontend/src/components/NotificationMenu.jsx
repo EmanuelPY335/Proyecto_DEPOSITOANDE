@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Bell, Clock } from "lucide-react";  // Iconos necesarios
+import { Bell, Clock, MapPin, CheckCircle, Info } from "lucide-react";
 import { apiFetch } from "../utils/api";
-import { useNavigate } from "react-router-dom";
-import "../styles/NotificationMenu.css"; // Asegúrate de crear este CSS (abajo te lo dejo)
+import { useNavigate } from "react-router-dom"; // Hook para navegar
+import "../styles/NotificationMenu.css";
 
 const NotificationMenu = () => {
   const [notificaciones, setNotificaciones] = useState([]);
@@ -10,108 +10,59 @@ const NotificationMenu = () => {
   const menuRef = useRef(null);
   const navigate = useNavigate();
 
-  // 1. Cargar notificaciones del backend
   const fetchNotificaciones = async () => {
     try {
       const data = await apiFetch("http://127.0.0.1:5000/api/notificaciones");
-      if (Array.isArray(data)) {
-        setNotificaciones(data);
-      }
-    } catch (error) {
-      console.error("Error cargando notificaciones:", error);
-    }
+      if (Array.isArray(data)) setNotificaciones(data);
+    } catch (error) { console.error(error); }
   };
 
-  // 2. Polling: Actualizar cada 15 segundos
   useEffect(() => {
     fetchNotificaciones();
-    const interval = setInterval(fetchNotificaciones, 15000);
-
-    // Cerrar al hacer clic fuera
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
+    const interval = setInterval(fetchNotificaciones, 10000); // Polling cada 10s
+    
+    const handleClickOutside = (e) => {
+        if (menuRef.current && !menuRef.current.contains(e.target)) setIsOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
-
     return () => {
-      clearInterval(interval);
-      document.removeEventListener("mousedown", handleClickOutside);
+        clearInterval(interval);
+        document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
-  // 3. Calcular no leídas
-  const unreadCount = notificaciones.filter(n => !n.leida).length;
-
-  // 4. Manejar clic en una notificación
-  const handleNotificationClick = async (noti) => {
-    try {
-      // Marcar como leída si no lo está
-      if (!noti.leida) {
-        await apiFetch(`http://127.0.0.1:5000/api/notificaciones/leer/${noti.id}`, { method: "PUT" });
-        // Actualizar estado local rápido
-        setNotificaciones(prev => 
-          prev.map(n => n.id === noti.id ? { ...n, leida: true } : n)
-        );
-      }
-
-      setIsOpen(false);
-
-      // Redirigir a Órdenes si corresponde
-      if (noti.id_orden) {
-        navigate("/ordenes-trabajo");
-      }
-    } catch (e) {
-      console.error(e);
+  const handleNotificationClick = async (n) => {
+    // 1. Marcar como leída (Opcional: llamar a API aquí)
+    
+    // 2. Redirigir
+    setIsOpen(false);
+    if (n.link) {
+        navigate(n.link); // Si es de tipo Ruta, va a /mapa
+    } else if (n.id_orden) {
+        navigate("/ordenes-trabajo"); // Si es orden normal
     }
   };
 
-  // 5. Marcar todo como leído
-  const markAllRead = async () => {
-    try {
-        await apiFetch(`http://127.0.0.1:5000/api/notificaciones/leer-todas`, { method: "PUT" });
-        setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })));
-    } catch (e) { console.error(e); }
-  };
+  const unreadCount = notificaciones.filter(n => !n.leida).length;
 
   return (
-    <div className="notification-container" ref={menuRef}>
-      
-      {/* --- BOTÓN CAMPANA --- */}
-      <button 
-        className={`bell-btn ${isOpen ? 'active' : ''}`} 
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <Bell size={22} className={unreadCount > 0 ? "bell-ringing" : ""} />
-        
-        {/* Badge Rojo */}
-        {unreadCount > 0 && (
-          <span className="notification-badge bounce-in">
-            {unreadCount > 9 ? "9+" : unreadCount}
-          </span>
-        )}
-      </button>
+    <div className="notification-wrapper" ref={menuRef}>
+      <div className="notification-icon" onClick={() => setIsOpen(!isOpen)}>
+        <Bell size={22} color="white" />
+        {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
+      </div>
 
-      {/* --- MENÚ DROPDOWN --- */}
       {isOpen && (
-        <div className="notification-dropdown fade-in-quick">
+        <div className="notification-dropdown">
           <div className="dropdown-header">
             <h3>Notificaciones</h3>
-            {unreadCount > 0 ? (
-                <button className="mark-read-text" onClick={markAllRead}>
-                    Marcar todo leido
-                </button>
-            ) : (
-                <span className="status-text">Estás al día ✅</span>
-            )}
           </div>
 
           <div className="dropdown-content-list">
             {notificaciones.length === 0 ? (
               <div className="empty-state">
                 <Bell size={32} style={{opacity: 0.2, marginBottom: 10}} />
-                <p>No tienes notificaciones nuevas</p>
+                <p>Sin novedades</p>
               </div>
             ) : (
               notificaciones.map((n) => (
@@ -119,9 +70,13 @@ const NotificationMenu = () => {
                   key={n.id} 
                   className={`noti-item ${!n.leida ? "unread" : "read"}`}
                   onClick={() => handleNotificationClick(n)}
+                  style={{cursor: 'pointer'}}
                 >
                   <div className="noti-indicator">
-                    {!n.leida && <div className="blue-dot" />}
+                    {/* Icono diferenciado */}
+                    {n.tipo === "Ruta" ? <MapPin size={18} color="#3b82f6"/> : 
+                     n.tipo === "Alerta" ? <Info size={18} color="#f59e0b"/> :
+                     <CheckCircle size={18} color="#10b981"/>}
                   </div>
                   <div className="noti-body">
                     <p className="noti-msg">{n.mensaje}</p>

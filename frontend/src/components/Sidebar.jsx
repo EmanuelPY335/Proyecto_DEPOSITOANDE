@@ -1,7 +1,7 @@
 // src/components/Sidebar.jsx
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom"; 
-import { Home, Settings, HelpCircle, FileText, LogOut, Package, ArrowRightLeft, DollarSign } from "lucide-react"; 
+import { Home, Settings, HelpCircle, FileText, Package, ArrowRightLeft, DollarSign } from "lucide-react"; 
 import { hasPermission } from "../utils/auth"; 
 
 const Sidebar = () => {
@@ -15,22 +15,29 @@ const Sidebar = () => {
 
   const sidebarLinks = [];
 
-  // 1. Home
+  // 1. Home (Visible para todos)
   sidebarLinks.push({ path: "/home", label: "Inicio", icon: <Home size={18} /> });
 
-  // 2. Inventario
+  // 2. Inventario (Solo quien tenga permiso)
   if (hasPermission("gestion_materiales")) {
       sidebarLinks.push({ path: "/materiales", label: "Inventario", icon: <Package size={18} /> });
   }
   
-  // 3. Movimientos
-  sidebarLinks.push({ path: "/movimientos", label: "Movimientos", icon: <ArrowRightLeft size={18} /> });
+  // 3. Movimientos (Solo Master Admin, Admin o Personal Inventario)
+  // Usamos un permiso específico o verificamos rol en auth.js, pero asumiremos 'gestion_movimientos'
+  if (hasPermission("gestion_movimientos")) {
+      sidebarLinks.push({ path: "/movimientos", label: "Movimientos", icon: <ArrowRightLeft size={18} /> });
+  }
 
-  // 4. ✅ GASTOS (Debe coincidir EXACTAMENTE con App.jsx)
-  sidebarLinks.push({ path: "/gastos", label: "Gastos", icon: <DollarSign size={18} /> });
+  // 4. Gastos (Solo Admins)
+  if (hasPermission("gestion_gastos")) {
+      sidebarLinks.push({ path: "/gastos", label: "Gastos", icon: <DollarSign size={18} /> });
+  }
 
-  // 5. Informes
-  sidebarLinks.push({ path: "/reports", label: "Informes", icon: <FileText size={18} /> });
+  // 5. Informes (Solo Admins)
+  if (hasPermission("ver_reportes")) {
+      sidebarLinks.push({ path: "/reports", label: "Informes", icon: <FileText size={18} /> });
+  }
 
   // 6. Configuración
   if (hasPermission("gestion_roles")) {
@@ -58,11 +65,11 @@ const Sidebar = () => {
         
         <ul style={{marginTop: 'auto'}}> 
            <li>
-              <button onClick={handleLogout} className="sidebar-link" style={{width: '100%', background: 'none', border: 'none', cursor: 'pointer'}}>
-                <LogOut size={18} /> 
-                <span className="sidebar-label">Cerrar Sesión</span>
+              <button onClick={handleLogout} className="sidebar-link" style={{width: '100%', background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444'}}>
+                 <span style={{marginRight: '10px'}}>🚪</span>
+                 <span className="sidebar-label">Cerrar Sesion</span>
               </button>
-            </li>
+           </li>
         </ul>
       </nav>
     </div>

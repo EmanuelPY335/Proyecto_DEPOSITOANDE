@@ -1,13 +1,11 @@
 // src/pages/Mapa.jsx
-
 import React, { useEffect, useState, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet"; // <--- Importamos Polyline
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "../styles/Mapa.css"; 
 import io from "socket.io-client"; 
 import { apiFetch } from "../utils/api";
-
 import { Link } from "react-router-dom";
 import { Settings, Bell, UserCircle } from "lucide-react";
 import "../styles/Home.css"; 
@@ -16,32 +14,23 @@ import MapSidebar from "../components/MapSidebar";
 
 const BACKEND_URL = "http://127.0.0.1:5000";
 
-// --------------------------------------------------------
-// 1. ARREGLO DE ICONOS (MÉTODO CDN - EL MÁS SEGURO)
-// --------------------------------------------------------
-// Borramos la configuración por defecto que busca archivos locales
+// --- CONFIGURACIÓN DE ICONOS ---
 delete L.Icon.Default.prototype._getIconUrl;
-
-// Forzamos a Leaflet a usar imágenes desde un servidor seguro (CDN)
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-// Icono Rojo para Depósitos (También desde internet)
 const depositoIcon = new L.Icon({
   iconUrl: iconoDepositoImg,
-  iconSize: [40, 40],        // Tamaño en pixeles [ancho, alto] (¡Ajústalo a tu gusto!)
-  iconAnchor: [20, 40],      // Punto del icono que toca el mapa [mitad_ancho, alto]
-  popupAnchor: [0, -40],     // Donde sale el popup respecto al anchor
-  className: 'mi-icono-personalizado'
+  iconSize: [40, 40],
+  iconAnchor: [20, 40],
+  popupAnchor: [0, -40],
 });
-// --------------------------------------------------------
 
 const DashboardNavbar = () => {
   const [userName] = useState(sessionStorage.getItem("user_nombre") || "Usuario");
-  
   return (
     <nav className="navbar-dashboard">
       <div className="navbar-left">
@@ -49,9 +38,7 @@ const DashboardNavbar = () => {
         <span className="navbar-brand-title">SISDEPO</span>
       </div>
       <div className="navbar-right">
-        <div className="notification-icon-wrapper">
-          <Bell size={20} />
-        </div>
+        <div className="notification-icon-wrapper"><Bell size={20} /></div>
         <Link to="/profile" className="navbar-profile-link">
           <UserCircle size={28} className="profile-icon" />
           <span className="profile-name">{userName}</span>
@@ -64,30 +51,41 @@ const DashboardNavbar = () => {
 export default function Mapa() { 
   const [vehiculos, setVehiculos] = useState({});
   const [depositos, setDepositos] = useState([]);
+  const [rutasChofer, setRutasChofer] = useState([]); // <--- NUEVO ESTADO PARA RUTA
   const [mapCenter, setMapCenter] = useState([-25.2637, -57.5759]);
   const [loaded, setLoaded] = useState(false);
   const mapRef = useRef();
 
+  // Obtenemos rol para saber si cargar rutas
+  const userRole = sessionStorage.getItem("user_rol");
+
   useEffect(() => {
     async function fetchData() {
       try {
+        // 1. Cargar Vehículos
         const dataVehiculos = await apiFetch(`${BACKEND_URL}/api/vehicles/active`);
-        // Convertimos array a objeto para actualizar fácil con sockets
         const vehiculosPorId = (dataVehiculos || []).reduce((acc, vehiculo) => {
           acc[vehiculo.ID_VEHICULO] = vehiculo;
           return acc;
         }, {});
         setVehiculos(vehiculosPorId);
 
+        // 2. Cargar Depósitos
         const dataDepositos = await apiFetch(`${BACKEND_URL}/api/depositos`);
         setDepositos(dataDepositos || []);
 
-        // Lógica de centrado
-        if (dataVehiculos && dataVehiculos.length > 0) {
-          setMapCenter([dataVehiculos[0].LATITUD, dataVehiculos[0].LONGITUD]);
-        } else if (dataDepositos && dataDepositos.length > 0) {
-           setMapCenter([dataDepositos[0].LATITUD, dataDepositos[0].LONGITUD]);
+        // 3. SI ES CHOFER, CARGAR SU RUTA ASIGNADA
+        if (userRole === "Chofer") {
+            const dataRutas = await apiFetch(`${BACKEND_URL}/api/chofer/mi_ruta`);
+            setRutasChofer(dataRutas || []);
+            
+            // Si tiene ruta, centramos el mapa en el origen de la primera ruta
+            if (dataRutas && dataRutas.length > 0 && dataRutas[0].puntos.length > 0) {
+                const p = dataRutas[0].puntos[0];
+                setMapCenter([p.lat, p.lng]);
+            }
         }
+
         setLoaded(true);
       } catch (error) {
         console.error("Error cargando datos:", error.message);
@@ -96,6 +94,7 @@ export default function Mapa() {
     }
     fetchData();
 
+    // Socket.IO para GPS en tiempo real
     const socket = io(BACKEND_URL, {
       auth: { token: sessionStorage.getItem("access_token") }
     });
@@ -114,9 +113,9 @@ export default function Mapa() {
     });
 
     return () => { socket.disconnect(); };
-  }, []); 
+  }, [userRole]); 
 
-  // Fix para el renderizado del mapa
+  // Fix renderizado
   useEffect(() => {
     if (loaded && mapRef.current) {
       setTimeout(() => {
@@ -133,13 +132,7 @@ export default function Mapa() {
         <MapSidebar />
         
         <div className="content-dashboard-map">
-          
-          {!loaded && (
-            <div className="loading-map">
-              <div className="spinner"></div>
-              <p>Cargando mapa...</p>
-            </div>
-          )}
+          {!loaded && <div className="loading-map"><div className="spinner"></div><p>Cargando mapa...</p></div>}
 
           {loaded && (
             <MapContainer
@@ -149,12 +142,20 @@ export default function Mapa() {
               scrollWheelZoom={true}
               className="leaflet-map-container"
             >
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; OpenStreetMap'
-              />
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
               
-              {/* Marcadores de Depósitos (ROJOS) */}
+              {/* DIBUJAR RUTA DEL CHOFER (LÍNEA AZUL) */}
+              {rutasChofer.map((ruta) => (
+                  <Polyline 
+                    key={ruta.id_grupo}
+                    positions={ruta.puntos.map(p => [p.lat, p.lng])}
+                    color="#3b82f6" // Azul brillante
+                    weight={5}
+                    dashArray="10, 10" // Línea punteada estilo Bolt/Uber
+                  />
+              ))}
+
+              {/* MARCADORES DE DEPÓSITOS */}
               {depositos.map((dep) => (
                 <Marker
                     key={`dep-${dep.ID_DEPOSITO}`}
@@ -168,13 +169,10 @@ export default function Mapa() {
                 </Marker>
               ))}
 
-              {/* Marcadores de Vehículos (AZULES - POR DEFECTO) */}
+              {/* MARCADORES DE VEHÍCULOS (GPS) */}
               {Object.values(vehiculos).map((v) => (
                 (v.LATITUD && v.LONGITUD) && (
-                  <Marker 
-                    key={`veh-${v.ID_VEHICULO}`} 
-                    position={[v.LATITUD, v.LONGITUD]}
-                  >
+                  <Marker key={`veh-${v.ID_VEHICULO}`} position={[v.LATITUD, v.LONGITUD]}>
                     <Popup>
                       <strong>🚗 {v.MATRICULA}</strong><br />
                       <small>ID: {v.ID_VEHICULO}</small>

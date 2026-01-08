@@ -457,7 +457,7 @@ class Vale(db.Model):
     FECHA_CREACION = db.Column(db.DateTime, default=datetime.datetime.now)
     FECHA_SALIDA = db.Column(db.DateTime, nullable=True) # Momento exacto que sale a ruta
     FECHA_LLEGADA = db.Column(db.DateTime, nullable=True) # Momento exacto que llega a destino
-    
+    GRUPO_RUTA = db.Column(db.String(50), nullable=True) # Ej: "RUTA-20231027-X99"
     OBSERVACIONES = db.Column(db.String(255))
     
     # Relaciones SQLAlchemy
@@ -484,17 +484,23 @@ class Vale(db.Model):
             "longitud_destino": self.destino.LONGITUD
         }
 
+# backend/db.py (Solo la clase DetalleVale)
+
+# En backend/db.py
+
 class DetalleVale(db.Model):
-    """
-    Los items individuales dentro del camión.
-    """
     __tablename__ = 'detalle_vale'
     ID_DETALLE_VALE = db.Column(db.Integer, primary_key=True)
     ID_VALE = db.Column(db.Integer, db.ForeignKey('vale.ID_VALE'), nullable=False)
+    ID_LOTE = db.Column(db.Integer, db.ForeignKey('lote.ID_LOTE'), nullable=False)
     ID_MATERIAL = db.Column(db.Integer, db.ForeignKey('material.ID_MATERIAL'), nullable=False)
-    CANTIDAD = db.Column(db.Float, nullable=False)
     
+    # --- CAMBIO AQUÍ: Usamos el nombre real de tu tabla ---
+    CANTIDAD_SOLICITADA = db.Column(db.Float, nullable=False) 
+    # -----------------------------------------------------
+
     material = db.relationship('Material')
+    lote = db.relationship('Lote')
 # [backend/db.py] - Agregar al final
 
 # ---------------------------------------------------------
