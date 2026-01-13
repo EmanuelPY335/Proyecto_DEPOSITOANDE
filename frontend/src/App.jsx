@@ -15,7 +15,7 @@ import Empleados from "./pages/Empleados";
 import Config from "./pages/Config"; 
 import OrdenesTrabajo from "./pages/OrdenesTrabajo";
 import Materiales from "./pages/Materiales"; 
-import PedidosEntrantes from "./pages/PedidosEntrantes";
+import PedidosEntrantes from "./components/HistorialPedidos";
 import Movimientos from "./pages/Movimientos"; 
 import Layout from "./components/Layout";
 
@@ -115,7 +115,7 @@ function App() {
           <Route path="/mapa" element={<AuthenticatedRoute><Mapa /></AuthenticatedRoute>} />
           <Route path="/roles" element={<AdminRoute><Roles /></AdminRoute>} />
           <Route 
-            path="/pedidos-entrantes" 
+            path="/historialpedidos" 
             element={<ProtectedRoute><Layout fullWidth={true}><PedidosEntrantes /></Layout></ProtectedRoute>} 
           />
 

@@ -1,0 +1,289 @@
+/* src/styles/SolicitudModal.css */
+
+/* --- Estructura del Modal --- */
+.modal-backdrop {
+  z-index: 1100;
+  /* Asumiendo que tienes estilos base para el backdrop en index.css */
+}
+
+.solicitud-modal-content {
+  max-width: 700px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #333;
+  margin-bottom: 15px;
+}
+
+.modal-body {
+  overflow-y: auto;
+  padding-right: 5px;
+  flex: 1;
+}
+
+/* --- Grupos de Inputs --- */
+.input-group-row {
+  margin-bottom: 20px;
+}
+
+.input-group-label {
+  color: #3b82f6;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.loading-text {
+  color: #aaa;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.select-proveedor {
+  border: 1px solid #444;
+  width: 100%;
+}
+
+.select-proveedor.active {
+  border-color: #10b981;
+}
+
+.warning-text {
+  color: #eab308;
+  font-size: 0.8rem;
+  margin-top: 4px;
+  display: block;
+}
+
+/* --- Sección Agregar Materiales --- */
+.add-item-section {
+  background: #1e1f22;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #333;
+  margin-bottom: 20px;
+  transition: opacity 0.3s;
+}
+
+.add-item-section.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.section-title {
+  font-weight: bold;
+  margin-bottom: 10px;
+  display: block;
+  color: #ddd;
+}
+
+.add-item-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+/* --- Buscador y Dropdown --- */
+.search-container {
+  flex: 2 1 200px;
+  position: relative;
+}
+
+.field-label {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.search-input-wrapper {
+  margin: 0;
+  background: #111;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 4px;
+  border: 1px solid #333;
+}
+
+.search-input {
+  background: transparent;
+  color: white;
+  border: none;
+  width: 100%;
+  height: 38px;
+  outline: none;
+}
+
+.dropdown-results {
+  position: absolute;
+  width: 100%;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #2b2d31;
+  border: 1px solid #444;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+
+.dropdown-item {
+  padding: 10px;
+  cursor: pointer;
+  border-bottom: 1px solid #333;
+  font-size: 0.9rem;
+  color: white;
+}
+
+.dropdown-item:hover {
+  background-color: #404249;
+}
+
+/* --- Selector de Lote --- */
+.lote-container {
+  flex: 1 1 150px;
+}
+
+.lote-select-wrapper {
+  background: #111;
+  padding: 0 5px;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  border: 1px solid #333;
+}
+
+.lote-select {
+  border: none;
+  background: transparent;
+  height: 38px;
+  color: white;
+  width: 100%;
+  outline: none;
+}
+
+/* --- Input Cantidad --- */
+.qty-container {
+  width: 100px;
+  position: relative; /* Para el tooltip de max */
+}
+
+.qty-input {
+  height: 40px;
+  width: 100%;
+}
+
+.max-stock-indicator {
+  position: absolute;
+  right: 5px;
+  bottom: -18px;
+  font-size: 0.7rem;
+  color: #10b981;
+}
+
+/* --- Botones --- */
+.btn-add {
+  height: 40px;
+  padding: 0 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- Feedback y Mensajes --- */
+.feedback-area {
+  margin-top: 10px;
+  min-height: 20px;
+  font-size: 0.85rem;
+}
+
+.text-searching { color: #eab308; }
+.text-error { color: #ef4444; display: flex; align-items: center; gap: 4px; }
+.text-success { color: #10b981; }
+
+/* --- Tabla Resumen --- */
+.resumen-container {
+  max-height: 200px;
+  overflow-y: auto;
+  border-top: 1px solid #444;
+  padding-top: 10px;
+}
+
+.resumen-title {
+  font-size: 0.9rem;
+  color: #aaa;
+  margin-bottom: 10px;
+}
+
+.empty-cart-msg {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  border: 1px dashed #444;
+  border-radius: 8px;
+}
+
+.table-row {
+  border-bottom: 1px solid #2b2d31;
+}
+
+.col-material {
+  padding: 8px;
+}
+
+.material-name {
+  font-weight: bold;
+  color: white;
+}
+
+.lote-badge {
+  font-size: 0.8rem;
+  color: #f59e0b;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.col-qty {
+  text-align: right;
+  color: #10b981;
+  font-weight: bold;
+  padding: 8px;
+}
+
+.btn-remove {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 5px;
+}
+
+.btn-remove:hover {
+  color: #ff6b6b;
+}
+
+/* --- Footer --- */
+.modal-footer {
+  margin-top: auto;
+  padding-top: 15px;
+  border-top: 1px solid #333;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

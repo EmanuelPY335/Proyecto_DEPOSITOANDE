@@ -77,6 +77,7 @@ class Empleado(db.Model):
 
     # Relaciones
     usuario = db.relationship('Usuario', back_populates='empleado', uselist=False)
+    deposito = db.relationship('Deposito')
     # Nota: Deposito no tiene back_populates explicito aquí, pero está bien.
 
 class Usuario(db.Model):
@@ -354,40 +355,41 @@ class EstadoSolicitud(db.Model):
     ID_ESTADO = db.Column(db.Integer, primary_key=True)
     NOMBRE = db.Column(db.String(50)) # 1: Pendiente, 2: En Preparación, 3: En Tránsito, 4: Recibido, 5: Rechazado
 
-class SolicitudMaterial(db.Model):
-    __tablename__ = 'solicitud_material'
+class SolicitudStock(db.Model):
+    __tablename__ = 'solicitud_stock'
     ID_SOLICITUD = db.Column(db.Integer, primary_key=True)
     
-    # ¿Quién pide? (El que necesita el material)
+    # Cabecera
     ID_DEPOSITO_SOLICITANTE = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
     ID_USUARIO_SOLICITANTE = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=False)
-    
-    # ¿A quién le pide? (El que tiene el stock)
     ID_DEPOSITO_PROVEEDOR = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
     
-    # ¿Qué pide? (Material genérico, no lote específico aún)
-    ID_MATERIAL = db.Column(db.Integer, db.ForeignKey('material.ID_MATERIAL'), nullable=False)
-    CANTIDAD = db.Column(db.Float, nullable=False)
-    
-    # Control de flujo
     ID_ESTADO = db.Column(db.Integer, db.ForeignKey('estado_solicitud.ID_ESTADO'), default=1)
     FECHA_SOLICITUD = db.Column(db.DateTime, default=datetime.datetime.now)
     FECHA_CIERRE = db.Column(db.DateTime, nullable=True)
-    OBSERVACION = db.Column(db.String(255))
-
-    # --- CAMPOS PARA EL FUTURO (Multi-encargo y Camiones) ---
-    # Cuando se apruebe y se asigne a un camión, llenaremos esto:
-    ID_VEHICULO_ASIGNADO = db.Column(db.Integer, db.ForeignKey('vehiculo.ID_VEHICULO'), nullable=True)
-    # Cuando salga físicamente del depósito proveedor:
-    ID_MOVIMIENTO_SALIDA = db.Column(db.Integer, db.ForeignKey('movimiento_material.ID_MOVIMIENTO'), nullable=True)
+    OBSERVACION_GENERAL = db.Column(db.String(255))
 
     # Relaciones
-    material = db.relationship('Material')
-    estado = db.relationship('EstadoSolicitud')
     dep_solicitante = db.relationship('Deposito', foreign_keys=[ID_DEPOSITO_SOLICITANTE])
     dep_proveedor = db.relationship('Deposito', foreign_keys=[ID_DEPOSITO_PROVEEDOR])
     usuario = db.relationship('Usuario')
+    estado = db.relationship('EstadoSolicitud')
+    
+    # RELACIÓN CLAVE: Una solicitud tiene muchos detalles
+    detalles = db.relationship('DetalleSolicitud', backref='solicitud', cascade="all, delete-orphan")
 
+class DetalleSolicitud(db.Model):
+    __tablename__ = 'detalle_solicitud'
+    ID_DETALLE = db.Column(db.Integer, primary_key=True)
+    
+    ID_SOLICITUD = db.Column(db.Integer, db.ForeignKey('solicitud_stock.ID_SOLICITUD'), nullable=False)
+    ID_MATERIAL = db.Column(db.Integer, db.ForeignKey('material.ID_MATERIAL'), nullable=False)
+    
+    CANTIDAD = db.Column(db.Float, nullable=False)
+    OBSERVACION_ITEM = db.Column(db.String(100), nullable=True)
+
+    # Relaciones
+    material = db.relationship('Material')
 
 class Notificacion(db.Model):
     __tablename__ = 'notificaciones'
@@ -549,3 +551,4 @@ class Gasto(db.Model):
             "autor": f"{self.usuario.empleado.NOMBRE} {self.usuario.empleado.APELLIDO}" if self.usuario and self.usuario.empleado else self.usuario.CORREO,
             "deposito": self.deposito.NOMBRE if self.deposito else "General"
         }
+

@@ -304,3 +304,15 @@ body {
     grid-template-columns: 1fr; /* 1 columna en móviles */
   }
 }
+/* ==== FIX ESPACIO DERECHO (SEGURO) ==== */
+.dashboard-layout,
+.main-area {
+  width: 100%;
+  max-width: 100%;
+}
+
+.content-dashboard {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}

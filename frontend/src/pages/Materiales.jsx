@@ -3,8 +3,8 @@ import React, { useState, useEffect } from "react";
 import { apiFetch } from "../utils/api";
 import { 
   Box, Plus, Search, Filter, AlertTriangle, Package, 
-  Layers, Ruler, Hash, Edit, Trash2, X, Save, ShieldAlert, Truck, Check, Send
-} from "lucide-react";
+  Layers, Ruler, Hash, Edit, Trash2, X, Save, ShieldAlert, Truck, Check, ShoppingCart
+} from "lucide-react"; // NOTA: Quitamos 'Send' de los imports
 import LotesModal from "../components/LotesModal"; 
 import SolicitudModal from "../components/SolicitudModal"; 
 import "../styles/Materiales.css";
@@ -22,31 +22,31 @@ const Materiales = () => {
   const [filterCategory, setFilterCategory] = useState("Todas");
   const [filterStock, setFilterStock] = useState("Todos");
 
-  // Estados para modales
-  const [showModal, setShowModal] = useState(false);
-  const [selectedMaterialLotes, setSelectedMaterialLotes] = useState(null);
+  // --- ESTADOS PARA MODALES ---
+  const [showModal, setShowModal] = useState(false); // Modal Nuevo/Editar Material
+  const [selectedMaterialLotes, setSelectedMaterialLotes] = useState(null); // Modal Lotes
+  
+  // --- ESTADOS PARA SOLICITUD ---
+  const [showSolicitudModal, setShowSolicitudModal] = useState(false); 
   const [solicitudMat, setSolicitudMat] = useState(null); 
   
   // Formulario y Permisos
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState(null);
   const [rolUser, setRolUser] = useState("");
-  const [hasAccess, setHasAccess] = useState(false); // ✅ NUEVO ESTADO DE ACCESO
+  const [hasAccess, setHasAccess] = useState(false); 
 
   const [formData, setFormData] = useState({
     codigo_unico: "", nombre: "", cantidad: "", unidad_medida: "unid", categoria: "General", stock_minimo: "5"
   });
 
   useEffect(() => {
-    // 1. OBTENER ROL Y PERMISOS DE SESSION STORAGE
     const rol = sessionStorage.getItem("user_rol");
     const permisosStr = sessionStorage.getItem("user_permissions");
     const permisos = permisosStr ? JSON.parse(permisosStr) : [];
 
     setRolUser(rol);
 
-    // 2. VERIFICAR SI TIENE PERMISO (Dinámico)
-    // Pasa si es Master/Admin, si es Personal_Inventario (legacy) o si tiene el permiso explícito
     const canAccess = 
         rol === "Master_Admin" || 
         rol === "Admin" || 
@@ -55,7 +55,6 @@ const Materiales = () => {
 
     setHasAccess(canAccess);
 
-    // 3. CARGAR DATOS SI TIENE PERMISO
     if (canAccess) {
         loadData();
     } else {
@@ -75,14 +74,37 @@ const Materiales = () => {
       setDepositos(depData || []);
     } catch (e) {
       console.error(e);
-      // Si el backend devuelve 403, aquí podríamos manejarlo, 
-      // pero el chequeo inicial previene la llamada usualmente.
     } finally {
       setLoading(false);
     }
   };
 
-  // --- LÓGICA DE FILTRADO AVANZADO ---
+  // --- HANDLER PARA SOLICITUD GENERAL ---
+  const openSolicitudGeneral = () => {
+      setSolicitudMat(null); // Sin material inicial
+      setShowSolicitudModal(true);
+  };
+
+  const handleConfirmarSolicitud = async (datos) => {
+    try {
+        const response = await apiFetch(`${API_URL}/api/solicitudes`, {
+            method: "POST",
+            body: JSON.stringify(datos)
+        });
+        
+        if (response.success) {
+            alert("✅ Solicitud enviada exitosamente.");
+            setShowSolicitudModal(false); 
+            setSolicitudMat(null);
+        } else {
+            alert("Error: " + (response.error || "No se pudo crear la solicitud"));
+        }
+    } catch (e) {
+        alert("Error de conexión: " + e.message);
+    }
+  };
+
+  // --- LÓGICA DE FILTRADO ---
   const filteredMaterials = materiales.filter(m => {
     const matchesText = m.NOMBRE.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         String(m.CODIGO_UNICO).includes(searchTerm);
@@ -99,7 +121,6 @@ const Materiales = () => {
     return matchesText && matchesCategory && matchesStock;
   });
 
-  // ✅ BLOQUEO DE RENDERIZADO: Usamos la variable hasAccess calculada dinámicamente
   if (!loading && !hasAccess) {
       return (
           <div className="fade-in" style={{display:'flex', flexDirection: 'column', justifyContent:'center', alignItems:'center', height:'60vh', color:'#4b5563'}}>
@@ -110,7 +131,6 @@ const Materiales = () => {
       );
   }
 
-  // Métricas
   const totalItems = materiales.length;
   const stockBajo = materiales.filter(m => m.CANTIDAD <= (m.STOCK_MINIMO || 5)).length;
 
@@ -171,10 +191,16 @@ const Materiales = () => {
             <h1>Inventario</h1>
             <p className="subtitle">Gestión de materiales y stock del depósito.</p>
           </div>
-          {/* ✅ BOTÓN NUEVO: Solo visible si tiene acceso (ya validado arriba) */}
-          <button className="btn-new" onClick={openNewModal}>
-            <Plus size={18} /> Nuevo Material
-          </button>
+          <div style={{display:'flex', gap:'10px'}}>
+            {/* BOTÓN GENERAL DE SOLICITUD */}
+            <button className="btn-new" onClick={openSolicitudGeneral} style={{backgroundColor: '#f59e0b'}}>
+               <ShoppingCart size={18} /> Nueva Solicitud
+            </button>
+            
+            <button className="btn-new" onClick={openNewModal}>
+               <Plus size={18} /> Nuevo Material
+            </button>
+          </div>
         </div>
 
         {/* MÉTRICAS */}
@@ -274,18 +300,17 @@ const Materiales = () => {
                       <td className="text-muted">{m.UNIDAD || m.UNIDAD_MEDIDA}</td>
                       <td style={{textAlign: 'right'}}>
                         
-                        {/* BOTÓN SOLICITUD: Visible para todos los que entraron aquí */}
-                        <button className="btn-icon" onClick={() => setSolicitudMat(m)} title="Solicitar a otro depósito" style={{color: '#d97706', backgroundColor: '#fffbeb', marginRight: '5px'}}>
-                            <Send size={18} style={{ transform: 'rotate(-45deg)', marginLeft: -2 }}/>
-                        </button>
+                        {/* 🚫 AQUÍ SE QUITÓ EL BOTÓN DEL AVIONCITO */}
 
+                        {/* BOTÓN VER LOTES */}
                         <button className="btn-icon" onClick={() => setSelectedMaterialLotes(m)} title="Gestionar Lotes y Transferencias" style={{color: '#6366f1', backgroundColor: '#eef2ff', marginRight: '5px'}}>
                             <Truck size={18}/>
                         </button>
 
+                        {/* BOTÓN EDITAR */}
                         <button className="btn-icon" onClick={() => openEditModal(m)} title="Editar"><Edit size={18}/></button>
                         
-                        {/* ✅ BOTÓN ELIMINAR: Ahora visible si tienes permiso de gestión o eres admin */}
+                        {/* BOTÓN ELIMINAR */}
                         {hasAccess && (
                             <button className="btn-icon danger" onClick={() => handleDelete(m.ID_MATERIAL)} title="Eliminar"><Trash2 size={18}/></button>
                         )}
@@ -298,9 +323,25 @@ const Materiales = () => {
           </table>
         </div>
 
-        {selectedMaterialLotes && <LotesModal material={selectedMaterialLotes} depositos={depositos} onClose={() => { setSelectedMaterialLotes(null); loadData(); }} />}
+        {/* MODALES */}
+        
+        {selectedMaterialLotes && (
+            <LotesModal 
+                material={selectedMaterialLotes} 
+                depositos={depositos} 
+                onClose={() => { setSelectedMaterialLotes(null); loadData(); }} 
+            />
+        )}
 
-        {solicitudMat && <SolicitudModal material={solicitudMat} depositos={depositos} onClose={() => setSolicitudMat(null)} />}
+        {/* MODAL SOLICITUD (GENERALIZADO) */}
+        {showSolicitudModal && (
+            <SolicitudModal 
+                materialInicial={solicitudMat} 
+                depositos={depositos} 
+                onClose={() => setShowSolicitudModal(false)}
+                onConfirm={handleConfirmarSolicitud}
+            />
+        )}
 
         {showModal && (
           <div className="modal-backdrop">

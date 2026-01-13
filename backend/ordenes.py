@@ -4,7 +4,7 @@ from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from datetime import datetime, date
 from sqlalchemy import text
 # 1. IMPORTAMOS Modelos necesarios (Incluyendo Inventario y Movimientos)
-from db import db, OrdenTrabajo, EstadoOrden, Empleado, Usuario, AvanceOrden, Notificacion, Inventario, MovimientoMaterial, TipoMovimiento
+from db import db, OrdenTrabajo, EstadoOrden, Empleado, Usuario, AvanceOrden, Notificacion, Inventario, MovimientoMaterial, TipoMovimiento, SolicitudStock
 
 ordenes_bp = Blueprint("ordenes", __name__)
 
@@ -120,7 +120,7 @@ def get_ordenes():
         print(f"Error get_ordenes: {e}")
         return jsonify({"error": str(e)}), 500
 
-# --- 2. CREAR ORDEN ---
+# --- 2. CREAR ORDEN (MANUAL) ---
 @ordenes_bp.route("/ordenes", methods=["POST"])
 @jwt_required()
 def create_orden():
@@ -146,7 +146,7 @@ def create_orden():
         
         if not id_deposito: return jsonify({"error": "Falta depósito o usuario no asignado a uno."}), 400
 
-        # Validar Empleado
+        # Validar Empleado (Permite NULL)
         id_empleado = data.get("id_empleado")
         
         # --- NUEVO: DATOS DE MOVIMIENTO ---
@@ -166,7 +166,7 @@ def create_orden():
             DESCRIPCION=data.get("descripcion"),
             PRIORIDAD=data.get("prioridad", "Media"),
             ID_DEPOSITO=id_deposito,
-            ID_EMPLEADO=id_empleado,
+            ID_EMPLEADO=id_empleado if id_empleado else None,
             ID_ESTADO_ORDEN=estado_pendiente.ID_ESTADO_ORDEN,
             FECHA_INICIO=datetime.now(),
             FECHA_LIMITE=fecha_limite,
@@ -181,7 +181,7 @@ def create_orden():
         db.session.add(nueva_orden)
         db.session.flush()
 
-        # Notificación
+        # Notificación (Solo si hay empleado asignado)
         if nueva_orden.ID_EMPLEADO:
             usuario_dest = Usuario.query.filter_by(ID_EMPLEADO=nueva_orden.ID_EMPLEADO).first()
             if usuario_dest:
@@ -342,3 +342,96 @@ def perma_delete_orden(id_orden):
 def get_ordenes_por_empleado(id_empleado):
     ordenes = OrdenTrabajo.query.filter_by(ID_EMPLEADO=id_empleado, ELIMINADA=False).order_by(OrdenTrabajo.FECHA_INICIO.desc()).all()
     return jsonify([o.to_dict() for o in ordenes]), 200
+
+@ordenes_bp.route('/ordenes/crear-desde-solicitud', methods=['POST'])
+@jwt_required()
+def crear_orden_solicitud():
+    """
+    Convierte una Solicitud de Material en una Orden de Trabajo.
+    Puede crearse SIN empleado asignado (pendiente de asignación).
+    """
+    if not tiene_permiso_ordenes():
+        return jsonify({"error": "No autorizado"}), 403
+
+    data = request.json
+    id_solicitud = data.get('id_solicitud')
+    id_empleado = data.get('id_empleado') # Puede ser None o no venir
+    
+    if not id_solicitud:
+        return jsonify({"error": "Faltan datos (solicitud)"}), 400
+
+    try:
+        solicitud = SolicitudStock.query.get(id_solicitud)
+        if not solicitud: return jsonify({"error": "Solicitud no encontrada"}), 404
+
+        # --- CORRECCIÓN AQUÍ: Construir descripción desde los detalles ---
+        items_desc = []
+        if solicitud.detalles:
+            for d in solicitud.detalles:
+                # Accedemos a la relación .material para obtener nombre y unidad
+                nombre_mat = d.material.NOMBRE if d.material else "Material desconocido"
+                unidad_mat = d.material.UNIDAD_MEDIDA if d.material else "u."
+                items_desc.append(f"- {nombre_mat}: {d.CANTIDAD} {unidad_mat}")
+            
+            texto_detalle = "\n".join(items_desc)
+        else:
+            texto_detalle = "Sin detalles registrados."
+
+        # Usamos OBSERVACION_GENERAL en lugar de OBSERVACION
+        obs_solicitud = solicitud.OBSERVACION_GENERAL or 'Ninguna'
+        
+        descripcion_final = (
+            f"Armar pedido para {solicitud.dep_solicitante.NOMBRE}.\n\n"
+            f"Items:\n{texto_detalle}\n\n"
+            f"Obs Solicitud: {obs_solicitud}"
+        )
+        # -------------------------------------------------------------
+
+        # 1. Crear la Orden
+        nueva_orden = OrdenTrabajo(
+            ID_ESTADO_ORDEN=1, # Pendiente
+            ID_DEPOSITO=solicitud.ID_DEPOSITO_PROVEEDOR, 
+            ID_EMPLEADO=id_empleado if id_empleado else None,
+            TITULO=f"Preparar Pedido #{id_solicitud} - {solicitud.dep_solicitante.NOMBRE}",
+            DESCRIPCION=descripcion_final, # <--- Usamos la descripción generada arriba
+            PRIORIDAD="Alta",
+            FECHA_INICIO=datetime.now(),
+            TIPO_ORDEN="Logistica",
+            FECHA_LIMITE=None 
+        )
+        db.session.add(nueva_orden)
+        
+        # 2. Actualizar Estado de la Solicitud -> 2 (En Proceso)
+        solicitud.ID_ESTADO = 2
+        
+        # 3. Notificar al Empleado (SOLO SI SE ASIGNÓ AHORA)
+        usuario_empleado = None
+        if id_empleado:
+            usuario_empleado = Usuario.query.filter_by(ID_EMPLEADO=id_empleado).first()
+            if usuario_empleado:
+                noti = Notificacion(
+                    ID_USUARIO=usuario_empleado.ID_USUARIO,
+                    ID_ORDEN=None, 
+                    MENSAJE=f"📋 Tarea Asignada: Preparar pedido #{id_solicitud}",
+                    LEIDA=False,
+                    FECHA_CREACION=datetime.now(),
+                )
+                db.session.add(noti)
+
+        db.session.commit()
+        
+        # Actualizar ID de orden en notificación si hubo asignación
+        if usuario_empleado and 'noti' in locals():
+            noti.ID_ORDEN = nueva_orden.ID_ORDEN
+            db.session.commit()
+
+        return jsonify({
+            "success": True, 
+            "message": "Orden creada." + (" Pendiente de asignación." if not id_empleado else " Asignada correctamente."),
+            "orden_id": nueva_orden.ID_ORDEN
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creando orden: {e}") # Importante para ver errores en consola
+        return jsonify({"error": str(e)}), 500

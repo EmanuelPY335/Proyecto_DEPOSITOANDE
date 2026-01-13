@@ -14,6 +14,9 @@ from flask_mail import Mail, Message
 from ordenes import ordenes_bp
 from mapa import mapa_bp, socketio
 from perfil import perfil_bp
+# main.py
+from depositos import depositos_bp # O donde lo hayas guardado
+
 from personal import personal_bp
 from roles_permisos import role_required, crear_rol, roles_bp
 from solicitudes import solicitudes_bp # <--- Tu nuevo archivo
@@ -45,6 +48,7 @@ app.register_blueprint(solicitudes_bp)
 app.register_blueprint(notificaciones_bp, url_prefix='/api')
 app.register_blueprint(vales_bp, url_prefix="/api")
 app.register_blueprint(gastos_bp, url_prefix="/api")
+app.register_blueprint(depositos_bp)
 # --- CORS (Con soporte para React y Raspberry Pi) ---
 CORS(
     app,

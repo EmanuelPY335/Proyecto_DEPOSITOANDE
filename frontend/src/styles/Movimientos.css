@@ -1,146 +1,309 @@
-/* frontend/src/styles/Movimientos.css */
-
-/* ⚠️ IMPORTANTE: No redefinimos .dashboard-layout ni .content-dashboard 
-   porque eso ya lo maneja Layout.jsx y rompería el scroll global. */
-
-/* --- Encabezado --- */
-.page-header {
-  display: flex;
-  justify_content: space-between;
-  align-items: flex-end;
-  margin-bottom: 25px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid var(--border-color, #e5e7eb);
+/* --- ESTILOS BASE (TU CÓDIGO) --- */
+.historial-card {
+  width: 100%;
+  max-width: 100%;
+  margin: 20px 0 0 0;
+  box-sizing: border-box;
 }
 
-.page-header h1 {
-  font-size: 1.8rem;
-  color: var(--text-primary, #1f2937);
-  margin: 0;
-  font-weight: 700;
-}
-
-.subtitle {
-  color: var(--text-secondary, #6b7280);
-  margin: 5px 0 0 0;
-  font-size: 0.95rem;
-}
-
-/* --- Filtros (Botones superiores) --- */
-.filters {
-  display: flex;
-  gap: 10px;
-  background: var(--bg-card, white);
-  padding: 5px;
-  border-radius: 8px;
-  box-shadow: 0 1px 2px var(--shadow-color, rgba(0,0,0,0.05));
-}
-
-.btn-status {
-  background: transparent;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--text-secondary, #6b7280);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-status:hover {
-  background-color: var(--bg-body, #f3f4f6);
-  color: var(--text-primary, #374151);
-}
-
-.btn-status.btn-primary {
-  background-color: #eff6ff;
-  color: #2563eb;
-  font-weight: 600;
-}
-
-/* --- Tarjeta Contenedora de la Tabla --- */
-.discord-card {
-  background-color: var(--bg-card, white);
-  border-radius: 12px;
-  box-shadow: 0 4px 6px -1px var(--shadow-color, rgba(0, 0, 0, 0.1));
-  padding: 20px;
-  overflow-x: auto; /* Para tablas anchas en móvil */
-}
-
-/* --- Tabla Estilo "Discord" / Moderno --- */
-.discord-table {
+.historial-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.95rem;
+  box-sizing: border-box;
 }
 
-.discord-table thead tr {
-  background-color: var(--bg-input, #f9fafb);
-  border-bottom: 2px solid var(--border-color, #e5e7eb);
+/* --- TABS (PESTAÑAS) --- */
+.tabs-header {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e5e7eb;
 }
 
-.discord-table th {
-  text-align: left;
-  padding: 12px 16px;
+.tab-btn {
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  color: #6b7280;
   font-weight: 600;
-  color: var(--text-secondary, #4b5563);
-  text-transform: uppercase;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-}
-
-.discord-table tbody tr {
-  border-bottom: 1px solid var(--border-color, #f3f4f6);
-  transition: background-color 0.15s ease;
-}
-
-.discord-table tbody tr:last-child {
-  border-bottom: none;
-}
-
-.discord-table tbody tr:hover {
-  background-color: var(--bg-input, #f9fafb);
-}
-
-.discord-table td {
-  padding: 14px 16px;
-  color: var(--text-primary, #1f2937);
-  vertical-align: middle;
-}
-
-/* --- Badges y Elementos Internos --- */
-.badge-estado {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* Colores específicos para badges de movimientos */
-.badge-estado.pendiente { /* Usado para Locales/Internos */
-  background-color: #dbeafe; /* Azul claro */
-  color: #1e40af;
-}
-
-.badge-estado.completada { /* Usado para Traslados */
-  background-color: #ede9fe; /* Violeta claro */
-  color: #5b21b6;
-}
-
-/* Iconos y textos alineados */
-td .flex-align {
   display: flex;
   align-items: center;
   gap: 8px;
+  transition: all 0.2s;
 }
 
-small {
+.tab-btn.active-blue {
+  border-bottom-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.tab-btn.active-yellow {
+  border-bottom-color: #f59e0b;
+  color: #f59e0b;
+}
+
+/* --- TABLA Y CELDAS --- */
+.table-responsive {
+  overflow-x: auto;
+}
+
+.historial-table th, 
+.historial-table td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid #333; /* Ajusta según tu tema oscuro */
+}
+
+.cell-id {
+  color: #eab308;
+  font-weight: bold;
+}
+
+.cell-subtext {
+  color: #888;
+  font-size: 0.85em;
   display: block;
-  margin-top: 2px;
+}
+
+.cell-quantity {
+  color: #10b981;
+  font-weight: bold;
+}
+
+.cell-obs {
   font-size: 0.8em;
-  color: var(--text-secondary, #888);
+  color: #aaa;
+  font-style: italic;
+  margin-top: 4px;
+}
+
+/* --- BADGES (ETIQUETAS) --- */
+.badge-estado {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  display: inline-block;
+}
+
+.badge-interno {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-ruta {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.badge-sin-asignar {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.badge-solo-lectura {
+  background: #334155;
+  color: #94a3b8;
+}
+
+.badge-ready {
+  color: #10b981;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* --- BOTONES DE ACCIÓN --- */
+.actions-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn-small {
+  font-size: 0.8rem !important;
+  white-space: nowrap;
+  padding: 5px 10px !important;
+}
+
+.btn-icon-only {
+  padding: 5px 8px !important;
+}
+
+.btn-print {
+  background: #475569;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- WIZARD (MODAL NUEVA RUTA) --- */
+.modal-wizard {
+  width: 900px;
+  height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.wizard-header {
+  padding: 20px;
+  border-bottom: 1px solid #444;
+}
+
+.wizard-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.wizard-steps .step {
+  color: #666;
+  font-weight: bold;
+}
+
+.wizard-steps .step.active {
+  color: #3b82f6;
+}
+
+.wizard-steps .line {
+  height: 2px;
+  width: 50px;
+  background: #444;
+  margin: 0 10px;
+}
+
+.wizard-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.wizard-footer {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid #444;
+  padding: 15px;
+  background: #1e1f22; /* Ajusta a tu fondo */
+}
+
+/* Layouts internos del Wizard */
+.wizard-row {
+  display: flex;
+  gap: 20px;
+  margin-top: 15px;
+}
+
+.wizard-col {
+  flex: 1;
+}
+
+.wizard-map-container {
+  flex: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid #444;
+  min-height: 300px;
+  position: relative;
+}
+
+/* Selección de Carga */
+.load-selector-container {
+  display: flex;
+  gap: 20px;
+  height: 400px;
+}
+
+.stops-sidebar {
+  width: 30%;
+  border-right: 1px solid #444;
+  padding-right: 10px;
+  overflow-y: auto;
+}
+
+.stop-item {
+  padding: 15px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #1e1f22;
+  color: #ccc;
+  transition: background 0.2s;
+}
+
+.stop-item.active {
+  background: #3b82f6;
+  color: white;
+}
+
+.load-form-row {
+  background: #111;
+  padding: 10px;
+  border-radius: 6px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 15px;
+}
+
+.load-list {
+  overflow-y: auto;
+  max-height: 250px;
+}
+
+.load-list-item {
+  border-bottom: 1px solid #333;
+  padding: 8px 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.empty-state {
+    padding: 30px;
+    color: #999;
+    text-align: center;
+    font-style: italic;
+}
+
+.actions-cell {
+    /* Asegura que la celda no se expanda innecesariamente */
+    width: 1px; 
+    white-space: nowrap;
+}
+
+.actions-group {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+/* Estilo para el botón secundario (Ojo) */
+.btn-action.secondary {
+    background-color: #3b82f6; /* Azul */
+    color: white;
+}
+.btn-action.secondary:hover {
+    background-color: #2563eb;
+}
+
+.btn-icon-only {
+    padding: 6px 8px !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.btn-icon-only:active {
+    transform: scale(0.95);
 }

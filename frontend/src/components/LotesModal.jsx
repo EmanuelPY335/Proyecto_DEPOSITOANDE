@@ -1,11 +1,10 @@
-// frontend/src/components/LotesModal.jsx
+// src/components/LotesModal.jsx
 import React, { useState, useEffect } from "react";
 import { apiFetch } from "../utils/api";
 import { 
-    X, Plus, ArrowRightLeft, Truck, 
-    AlertTriangle, CheckCircle, Search, Barcode 
+    X, Plus, AlertTriangle, CheckCircle, Search, Barcode
 } from "lucide-react";
-import "../styles/EmployeeModal.css"; 
+import "../styles/LotesModal.css"; 
 
 const LotesModal = ({ material, onClose, depositos }) => {
   const [lotes, setLotes] = useState([]);
@@ -15,8 +14,6 @@ const LotesModal = ({ material, onClose, depositos }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEstado, setFilterEstado] = useState("Todos");
   const [filterDeposito, setFilterDeposito] = useState("Todos");
-
-  const [transferData, setTransferData] = useState(null);
 
   // --- GENERADOR DE CÓDIGO ÚNICO ---
   const generarCodigo = () => {
@@ -85,41 +82,6 @@ const LotesModal = ({ material, onClose, depositos }) => {
     } catch (e) { alert(e.message); }
   };
 
-  const openTransferModal = (lote) => {
-    if (lote.estado === 'Dañado') return alert("No transferir material dañado.");
-    setTransferData({
-      id_lote: lote.lote_id,
-      codigo: lote.codigo || "S/C",
-      id_deposito_origen: lote.deposito_id, 
-      nombre_origen: lote.deposito,
-      cantidad_disponible: lote.cantidad,
-      id_deposito_destino: depositos.length > 0 ? depositos[0].ID_DEPOSITO : "",
-      cantidad_transferir: "",
-      observacion: ""
-    });
-  };
-
-  const handleTransfer = async (e) => {
-    e.preventDefault();
-    if (!transferData) return;
-    if (Number(transferData.cantidad_transferir) > Number(transferData.cantidad_disponible)) return alert("Excede stock.");
-    try {
-      await apiFetch("http://127.0.0.1:5000/api/transferencia", {
-        method: "POST",
-        body: JSON.stringify({
-            id_lote: transferData.id_lote,
-            id_deposito_origen: transferData.id_deposito_origen, 
-            id_deposito_destino: transferData.id_deposito_destino,
-            cantidad: transferData.cantidad_transferir,
-            observacion: transferData.observacion
-        })
-      });
-      alert("Transferencia exitosa.");
-      setTransferData(null); 
-      loadLotes(); 
-    } catch (error) { alert("Error: " + error.message); }
-  };
-
   const renderBadge = (cat) => {
     const map = { 'Conductores': 'badge-blue', 'Aisladores': 'badge-purple', 'Protección': 'badge-orange', 'Ferretería': 'badge-gray' };
     return <span className={`category-badge ${map[cat] || 'badge-default'}`} style={{fontSize: '0.8rem', padding: '4px 10px'}}>{cat}</span>;
@@ -129,6 +91,7 @@ const LotesModal = ({ material, onClose, depositos }) => {
     <div className="modal-backdrop" style={{zIndex: 1000}}>
       <div className="discord-card modal-content" style={{ maxWidth: '950px' }}>
         
+        {/* HEADER */}
         <div className="modal-header" style={{borderBottom: '1px solid #3f3f46', paddingBottom: '15px'}}>
           <div className="header-info">
              <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'5px'}}>
@@ -141,10 +104,11 @@ const LotesModal = ({ material, onClose, depositos }) => {
         </div>
 
         <div className="modal-body">
-            {/* FORMULARIO DE INGRESO */}
+            
+            {/* FORMULARIO DE INGRESO (Recepción de Mercadería) */}
             <div style={{ background: '#2b2d31', padding: '15px', borderRadius: '8px', marginBottom: '25px', border: '1px solid #1e1f22' }}>
                 <h4 style={{marginBottom: '15px', color: '#e5e7eb', display:'flex', alignItems:'center', gap:'8px'}}>
-                    <Plus size={18} className="text-green"/> Recepción de Material
+                    <Plus size={18} className="text-green"/> Recepción Manual (Ingreso)
                 </h4>
                 <form onSubmit={handleAlta} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.8fr 0.8fr 1fr auto', gap: '10px', alignItems: 'end' }}>
                     
@@ -166,7 +130,28 @@ const LotesModal = ({ material, onClose, depositos }) => {
                     </div>
                     <div className="input-group">
                         <label style={{color:'#9ca3af', fontSize:'0.8rem'}}>Cantidad</label>
-                        <input type="number" required value={newIngreso.cantidad} onChange={e => setNewIngreso({...newIngreso, cantidad: e.target.value})} placeholder="0.00" className="discord-input"/>
+                        <div style={{position: 'relative'}}>
+                            <input 
+                                type="number" 
+                                required 
+                                value={newIngreso.cantidad} 
+                                onChange={e => setNewIngreso({...newIngreso, cantidad: e.target.value})} 
+                                placeholder="0.00" 
+                                className="discord-input"
+                                style={{paddingRight: '60px'}} // Espacio para el texto de unidad
+                            />
+                            <span style={{
+                                position: 'absolute', 
+                                right: '10px', 
+                                top: '50%', 
+                                transform: 'translateY(-50%)', 
+                                color: '#9ca3af', 
+                                fontSize: '0.8rem',
+                                pointerEvents: 'none'
+                            }}>
+                                {material.UNIDAD || material.UNIDAD_MEDIDA}
+                            </span>
+                        </div>
                     </div>
                     <div className="input-group">
                         <label style={{color:'#9ca3af', fontSize:'0.8rem'}}>Observación</label>
@@ -176,7 +161,7 @@ const LotesModal = ({ material, onClose, depositos }) => {
                 </form>
             </div>
 
-            {/* TABLA DE LOTES - CORREGIDO (Sin comentarios dentro de <tr>) */}
+            {/* BARRA DE FILTROS */}
             <div className="toolbar-container">
                 <div className="search-wrapper-pro">
                     <Search size={18} className="search-icon-pro"/>
@@ -189,6 +174,7 @@ const LotesModal = ({ material, onClose, depositos }) => {
                 </select>
             </div>
 
+            {/* TABLA DE LOTES */}
             {loading ? <p>Cargando...</p> : (
                 <div className="table-scroll-container">
                     <table className="styled-table" style={{width: '100%', borderCollapse: 'collapse'}}>
@@ -225,13 +211,12 @@ const LotesModal = ({ material, onClose, depositos }) => {
                                             }}>{lote.estado}</span>
                                         </td>
                                         <td style={{fontSize: '0.85rem', maxWidth: '150px'}}>{lote.observaciones}</td>
-                                        <td style={{textAlign:'right', display:'flex', justifyContent:'flex-end', gap:'8px'}}>
-                                            <button className="btn-icon" style={{backgroundColor: lote.estado === 'Dañado' ? '#22c55e' : '#ef4444', color: 'white'}}
-                                                onClick={() => handleToggleEstado(lote)}>
+                                        <td style={{textAlign:'right'}}>
+                                            <button className="btn-icon" style={{backgroundColor: lote.estado === 'Dañado' ? '#22c55e' : '#ef4444', color: 'white', marginLeft: 'auto'}}
+                                                onClick={() => handleToggleEstado(lote)}
+                                                title={lote.estado === 'Dañado' ? 'Marcar como Disponible' : 'Marcar como Dañado'}
+                                            >
                                                 {lote.estado === 'Dañado' ? <CheckCircle size={16}/> : <AlertTriangle size={16}/>}
-                                            </button>
-                                            <button className="btn-transfer-pro" onClick={() => openTransferModal(lote)} disabled={lote.estado === 'Dañado'}>
-                                                <ArrowRightLeft size={16}/> Transferir
                                             </button>
                                         </td>
                                     </tr>
@@ -242,42 +227,6 @@ const LotesModal = ({ material, onClose, depositos }) => {
                 </div>
             )}
         </div>
-
-        {/* MODAL TRANSFERENCIA */}
-        {transferData && (
-            <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 20}}>
-                <div style={{background: '#1e1f22', padding: '25px', borderRadius: '8px', width: '400px', border: '1px solid #4b5563'}}>
-                    <h3 style={{marginBottom: '15px', color: '#60a5fa', display:'flex', alignItems:'center', gap:'10px'}}><Truck size={20}/> Transferir</h3>
-                    <div style={{background:'#2b2d31', padding:'10px', borderRadius:'5px', marginBottom:'15px', fontSize:'0.9rem'}}>
-                        <p><strong>Lote:</strong> <span style={{fontFamily:'monospace', color:'#fbbf24'}}>{transferData.codigo}</span></p>
-                        <p><strong>Origen:</strong> {transferData.nombre_origen}</p>
-                        <p><strong>Disponible:</strong> {transferData.cantidad_disponible}</p>
-                    </div>
-                    <form onSubmit={handleTransfer}>
-                        <div className="input-group" style={{marginBottom: '10px'}}>
-                            <label style={{color:'#ccc'}}>Destino</label>
-                            <select className="discord-select" value={transferData.id_deposito_destino} onChange={e => setTransferData({...transferData, id_deposito_destino: e.target.value})}>
-                                {depositos.filter(d => String(d.ID_DEPOSITO) !== String(transferData.id_deposito_origen)).map(d => (
-                                    <option key={d.ID_DEPOSITO} value={d.ID_DEPOSITO}>{d.NOMBRE}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="input-group" style={{marginBottom: '10px'}}>
-                            <label style={{color:'#ccc'}}>Cantidad</label>
-                            <input type="number" className="discord-input" required max={transferData.cantidad_disponible} value={transferData.cantidad_transferir} onChange={e => setTransferData({...transferData, cantidad_transferir: e.target.value})}/>
-                        </div>
-                        <div className="input-group" style={{marginBottom: '15px'}}>
-                            <label style={{color:'#ccc'}}>Motivo / Vale</label>
-                            <input type="text" className="discord-input" value={transferData.observacion} onChange={e => setTransferData({...transferData, observacion: e.target.value})}/>
-                        </div>
-                        <div style={{display:'flex', gap:'10px', justifyContent:'flex-end'}}>
-                            <button type="button" className="btn-status" onClick={() => setTransferData(null)}>Cancelar</button>
-                            <button type="submit" className="btn-save">Confirmar</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        )}
       </div>
     </div>
   );

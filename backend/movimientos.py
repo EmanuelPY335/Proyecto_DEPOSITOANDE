@@ -1,12 +1,12 @@
-# backend/movimientos.py
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
-from db import db, Inventario, MovimientoMaterial, TipoMovimiento, Lote, Empleado, Material, EstadoInventario, Usuario, Deposito
+from flask_cors import cross_origin # Importante para los deletes
+from db import db, Inventario, MovimientoMaterial, TipoMovimiento, Lote, Empleado, Material, EstadoInventario, Usuario, Deposito, Vale # <--- Asegúrate de importar Vale
 from datetime import date, datetime
 
 movimientos_bp = Blueprint("movimientos", __name__)
 
-# --- 1. HISTORIAL UNIFICADO (NUEVO) ---
+# --- 1. HISTORIAL UNIFICADO (CORREGIDO) ---
 @movimientos_bp.route("/movimientos", methods=["GET"])
 @jwt_required()
 def get_historial_movimientos():
@@ -15,7 +15,6 @@ def get_historial_movimientos():
     rol_nombre = claims.get("rol_nombre")
 
     try:
-        # Query base uniendo tablas para obtener nombres
         query = db.session.query(MovimientoMaterial)\
             .join(TipoMovimiento)\
             .join(Lote)\
@@ -23,28 +22,36 @@ def get_historial_movimientos():
             .join(Empleado)\
             .join(Deposito)
 
-        # Lógica de Filtrado por Depósito
         if rol_nombre != "Master_Admin":
             usuario = Usuario.query.get(user_id)
             if not usuario or not usuario.empleado or not usuario.empleado.ID_DEPOSITO:
-                # Si no tiene depósito asignado, no ve movimientos
                 return jsonify([]), 200
             
             mi_deposito_id = usuario.empleado.ID_DEPOSITO
-            
-            # Filtramos movimientos que ocurrieron en MI depósito
-            # (Ya sea un movimiento interno, una salida desde aquí o una entrada hacia aquí)
             query = query.filter(MovimientoMaterial.ID_DEPOSITO == mi_deposito_id)
 
-        # Ordenar: Más recientes primero
         movimientos = query.order_by(MovimientoMaterial.FECHA_MOVIMIENTO.desc(), MovimientoMaterial.ID_MOVIMIENTO.desc()).all()
 
         resultado = []
         for mov in movimientos:
-            # Determinamos si es local o traslado basado en el nombre del tipo
             tipo_nombre = mov.tipo.TIPO_MOVIMIENTO
             es_local = "Interno" in tipo_nombre
             
+            # --- LÓGICA VEHÍCULO ---
+            nombre_vehiculo = "N/A"
+            if mov.vale and mov.vale.vehiculo:
+                v = mov.vale.vehiculo
+                nombre_vehiculo = f"{v.MARCA} {v.MODELO} ({v.MATRICULA})"
+
+            # --- LÓGICA DESTINO (NUEVA) ---
+            # Si hay un vale, el destino es el depósito destino del vale.
+            # Si es local, el destino es el mismo depósito.
+            nombre_destino = "N/A"
+            if mov.vale and mov.vale.destino:
+                nombre_destino = mov.vale.destino.NOMBRE
+            elif es_local:
+                nombre_destino = mov.deposito.NOMBRE # Mismo lugar
+
             data = {
                 "id": mov.ID_MOVIMIENTO,
                 "fecha": mov.FECHA_MOVIMIENTO.strftime("%Y-%m-%d"),
@@ -56,8 +63,10 @@ def get_historial_movimientos():
                 "cantidad": mov.CANTIDAD,
                 "unidad": mov.lote.material.UNIDAD_MEDIDA,
                 "responsable": f"{mov.empleado.NOMBRE} {mov.empleado.APELLIDO}",
-                "deposito": mov.deposito.NOMBRE,
-                "observacion": mov.OBSERVACIONES
+                "deposito": mov.deposito.NOMBRE, # Origen del movimiento
+                "destino_final": nombre_destino, # <--- CAMPO NUEVO
+                "observacion": mov.OBSERVACIONES,
+                "vehiculo": nombre_vehiculo 
             }
             resultado.append(data)
 
@@ -67,10 +76,15 @@ def get_historial_movimientos():
         print(f"Error historial movimientos: {e}")
         return jsonify({"error": str(e)}), 500
 
-# --- 2. TRANSFERENCIA ENTRE DEPOSITOS (EXISTENTE) ---
+    except Exception as e:
+        print(f"Error historial movimientos: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# --- 2. TRANSFERENCIA ENTRE DEPOSITOS ---
 @movimientos_bp.route("/transferencia", methods=["POST"])
 @jwt_required()
 def realizar_transferencia():
+    # ... (Tu código de transferencia se mantiene igual) ...
     claims = get_jwt()
     usuario_id = claims.get("sub") 
     
@@ -91,12 +105,10 @@ def realizar_transferencia():
         if cantidad <= 0: return jsonify({"error": "Cantidad > 0"}), 400
         if id_origen == id_destino: return jsonify({"error": "Origen y destino iguales"}), 400
 
-        # Validar Stock Origen
         inv_origen = Inventario.query.filter_by(ID_DEPOSITO=id_origen, ID_LOTE=id_lote).first()
         if not inv_origen or inv_origen.CANTIDAD_ACTUAL < cantidad:
             return jsonify({"error": f"Stock insuficiente. Disp: {inv_origen.CANTIDAD_ACTUAL if inv_origen else 0}"}), 400
 
-        # Tipos de Movimiento
         def get_tipo(nombre):
             t = TipoMovimiento.query.filter_by(TIPO_MOVIMIENTO=nombre).first()
             if not t:
@@ -108,7 +120,6 @@ def realizar_transferencia():
         tipo_salida = get_tipo("Salida por Transferencia")
         tipo_entrada = get_tipo("Entrada por Transferencia")
 
-        # Ejecutar Movimiento
         inv_origen.CANTIDAD_ACTUAL -= cantidad
         
         mov_salida = MovimientoMaterial(
@@ -136,7 +147,7 @@ def realizar_transferencia():
         mov_entrada = MovimientoMaterial(
             ID_TIPO_MOVIMIENTO=tipo_entrada.ID_TIPO_MOVIMIENTO,
             ID_EMPLEADO=id_empleado_autor,
-            ID_DEPOSITO=id_destino, # Aquí se registra en el destino
+            ID_DEPOSITO=id_destino, 
             ID_LOTE=id_lote,
             FECHA_MOVIMIENTO=date.today(),
             CANTIDAD=cantidad,
@@ -147,6 +158,42 @@ def realizar_transferencia():
         db.session.commit()
         return jsonify({"success": True, "message": "Transferencia realizada."}), 200
 
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+# ==========================================
+#      RUTAS DE BORRADO (Agregadas previamente)
+# ==========================================
+
+@movimientos_bp.route("/movimientos/<int:id>", methods=["DELETE"])
+@jwt_required()
+@cross_origin()
+def soft_delete_movimiento(id):
+    try:
+        mov = MovimientoMaterial.query.get(id)
+        if not mov:
+            return jsonify({"error": "Movimiento no encontrado"}), 404
+        
+        db.session.delete(mov) 
+        db.session.commit()
+        return jsonify({"success": True, "message": "Movimiento eliminado (Soft)"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@movimientos_bp.route("/movimientos/<int:id>/perma", methods=["DELETE"])
+@cross_origin()
+@jwt_required()
+def perma_delete_movimiento(id):
+    try:
+        mov = MovimientoMaterial.query.get(id)
+        if not mov:
+            return jsonify({"error": "Movimiento no encontrado"}), 404
+        
+        db.session.delete(mov)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Movimiento eliminado permanentemente"}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500

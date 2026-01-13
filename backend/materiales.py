@@ -1,7 +1,7 @@
 # backend/materiales.py
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from sqlalchemy import text
+from sqlalchemy import text, or_
 from db import db, Material, Lote, Inventario, Deposito, EstadoInventario, Usuario
 from datetime import datetime
 
@@ -38,14 +38,41 @@ def tiene_permiso_materiales(tipo="lectura"):
 @materiales_bp.route("/materiales", methods=["GET"])
 @jwt_required()
 def get_materiales():
+    # ... validación de permisos ...
     if not tiene_permiso_materiales():
         return jsonify({"error": "Acceso denegado"}), 403
-    try:
-        materiales = Material.query.order_by(Material.CATEGORIA, Material.NOMBRE).all()
-        return jsonify([m.to_dict() for m in materiales]), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
+    try:
+        search_query = request.args.get('q', '').strip()
+        
+        query = Material.query
+        
+        # 1. FILTRADO (WHERE)
+        if search_query:
+            search_pattern = f"%{search_query}%"
+            query = query.filter(
+                or_(
+                    Material.NOMBRE.ilike(search_pattern),
+                    Material.CODIGO_UNICO.ilike(search_pattern)
+                )
+            )
+
+        # 2. ORDENAMIENTO (ORDER BY) - ¡ESTO DEBE IR ANTES DEL LIMIT!
+        query = query.order_by(Material.CATEGORIA, Material.NOMBRE)
+
+        # 3. LÍMITE (LIMIT) - Solo si hay búsqueda para optimizar
+        if search_query:
+            query = query.limit(20)
+
+        # 4. EJECUTAR
+        materiales = query.all()
+
+        return jsonify([m.to_dict() for m in materiales]), 200
+
+    except Exception as e:
+        print(f"Error buscando materiales: {e}")
+        return jsonify({"error": str(e)}), 500
+    
 @materiales_bp.route("/materiales", methods=["POST"])
 @jwt_required()
 def create_material():

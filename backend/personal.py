@@ -1,23 +1,17 @@
-# sisdepo/backend/personal.py
+# backend/personal.py
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from sqlalchemy import text  # Necesario para consultas SQL directas
-
-# Importamos los modelos
+from sqlalchemy import text
 from db import db, Empleado, Usuario, Rol, Deposito
 
-# (Opcional) Mantenemos el import por si lo usas en otras rutas, 
-# pero NO lo usaremos en las funciones de abajo.
-from roles_permisos import role_required 
-
 personal_bp = Blueprint("personal", __name__)
+
 # ---------------------------------------------------------
-# HELPER: VERIFICACIÓN DE PERMISOS (Final)
+# HELPER: VERIFICACIÓN DE PERMISOS
 # ---------------------------------------------------------
 def tiene_permiso_gestion_empleados():
     """
-    Devuelve True si el usuario es Admin/Master_Admin 
-    O si tiene el permiso 'gestion_empleados' asignado en la BD.
+    Verifica si el usuario tiene permisos de ALTO NIVEL (Crear/Editar/Borrar).
     """
     try:
         current_user_id = get_jwt_identity()
@@ -28,14 +22,9 @@ def tiene_permiso_gestion_empleados():
 
         nombre_rol = usuario.rol.NOMBRE_ROL
 
-        # 1. Acceso Directo para Superusuarios
         if nombre_rol in ["Master_Admin", "Admin"]:
             return True
 
-        # 2. Verificación Dinámica con tus tablas exactas:
-        # Tablas: permiso_x_rol, permiso
-        # Columnas asimiladas: ID_ROL, ID_PERMISO, NOMBRE_PERMISO
-        
         sql = text("""
             SELECT 1 
             FROM permiso_x_rol pxr
@@ -52,7 +41,6 @@ def tiene_permiso_gestion_empleados():
 
     except Exception as e:
         print(f"Error verificando permisos: {e}")
-        # Si falla (ej: la columna se llama NOMBRE en vez de NOMBRE_PERMISO), deniega por seguridad
         return False
 
 # ---------------------------------------------------------
@@ -61,12 +49,25 @@ def tiene_permiso_gestion_empleados():
 @personal_bp.route("/empleados", methods=["GET"])
 @jwt_required()
 def get_empleados():
-    # 1. Verificación manual de seguridad
-    if not tiene_permiso_gestion_empleados():
+    # Obtener el usuario actual para verificar su rol
+    current_user_id = get_jwt_identity()
+    usuario = Usuario.query.get(current_user_id)
+    
+    if not usuario:
+        return jsonify({"message": "Usuario no identificado"}), 401
+
+    nombre_rol = usuario.rol.NOMBRE_ROL if usuario.rol else ""
+
+    # --- CORRECCIÓN DE SEGURIDAD ---
+    # Permitimos ver la lista si:
+    # 1. Tiene permiso de gestión total (Admin/Master)
+    # 2. O SI ES 'Personal_Inventario' (Necesario para asignar órdenes de trabajo)
+    permiso_lectura = (nombre_rol == "Personal_Inventario") or tiene_permiso_gestion_empleados()
+
+    if not permiso_lectura:
         return jsonify({"message": "No tienes permisos para ver el personal."}), 403
 
     try:
-        # Hacemos la consulta uniendo Empleado, Usuario y Rol
         empleados_query = (
             db.session.query(Empleado, Usuario, Rol)
             .outerjoin(Usuario, Empleado.ID_EMPLEADO == Usuario.ID_EMPLEADO)
@@ -77,12 +78,10 @@ def get_empleados():
 
         resultado = []
         for empleado, usuario, rol in empleados_query:
-            # Formatear fecha
             fecha_nac_str = ""
             if empleado.FECHA_NACIMIENTO:
                 fecha_nac_str = empleado.FECHA_NACIMIENTO.strftime("%Y-%m-%d")
 
-            # Construimos el objeto JSON
             data_empleado = {
                 "id": empleado.ID_EMPLEADO,
                 "nombre": empleado.NOMBRE,
@@ -114,13 +113,18 @@ def get_empleados():
 @personal_bp.route("/empleados/simple", methods=["GET"])
 @jwt_required()
 def empleados_simple():
-    # 1. Verificación manual de seguridad
-    if not tiene_permiso_gestion_empleados():
+    # Misma lógica de permiso de lectura relajado para selectores
+    current_user_id = get_jwt_identity()
+    usuario = Usuario.query.get(current_user_id)
+    nombre_rol = usuario.rol.NOMBRE_ROL if usuario and usuario.rol else ""
+    
+    permiso_lectura = (nombre_rol == "Personal_Inventario") or tiene_permiso_gestion_empleados()
+
+    if not permiso_lectura:
         return jsonify({"message": "Acceso denegado"}), 403
 
     try:
         empleados = Empleado.query.filter_by(ESTADO_ACTIVO=True).all()
-
         lista = []
         for e in empleados:
             lista.append({
@@ -129,19 +133,16 @@ def empleados_simple():
                 "APELLIDO": e.APELLIDO,
                 "ID_DEPOSITO": e.ID_DEPOSITO
             })
-
         return jsonify(lista), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 # ---------------------------------------------------------
-# 2. EDITAR EMPLEADO (PUT)
+# 2. EDITAR EMPLEADO (PUT) - Mantiene seguridad estricta
 # ---------------------------------------------------------
 @personal_bp.route("/empleados/<int:id_empleado>", methods=["PUT"])
 @jwt_required()
 def update_empleado(id_empleado):
-    # 1. Verificación manual de seguridad
     if not tiene_permiso_gestion_empleados():
         return jsonify({"message": "No tienes permisos para editar empleados."}), 403
 
@@ -152,7 +153,6 @@ def update_empleado(id_empleado):
             
         data = request.json
         
-        # Actualizar datos de Empleado
         empleado.NOMBRE = data.get("nombre", empleado.NOMBRE)
         empleado.APELLIDO = data.get("apellido", empleado.APELLIDO)
         empleado.NUMERO_DOCUMENTO = data.get("NUMERO_DOCUMENTO", empleado.NUMERO_DOCUMENTO)
@@ -160,11 +160,9 @@ def update_empleado(id_empleado):
         empleado.FECHA_NACIMIENTO = data.get("FECHA_NACIMIENTO", empleado.FECHA_NACIMIENTO)
         empleado.ID_DEPOSITO = data.get("ID_DEPOSITO", empleado.ID_DEPOSITO)
         
-        # Actualizar datos de Usuario (Correo y Rol)
         if empleado.usuario:
             if "correo" in data:
                 empleado.usuario.CORREO = data.get("correo")
-
             if "rol_id" in data:
                 nuevo_rol_id = data.get("rol_id")
                 if nuevo_rol_id:
@@ -178,14 +176,12 @@ def update_empleado(id_empleado):
         print(f"[ERROR UPDATE] {e}")
         return jsonify({"error": "Error al actualizar", "details": str(e)}), 500
 
-
 # ---------------------------------------------------------
-# 3. CAMBIAR ESTADO (PUT)
+# 3. CAMBIAR ESTADO (PUT) - Mantiene seguridad estricta
 # ---------------------------------------------------------
 @personal_bp.route("/empleados/<int:id_empleado>/estado", methods=["PUT"])
 @jwt_required()
 def toggle_estado_empleado(id_empleado):
-    # 1. Verificación manual de seguridad
     if not tiene_permiso_gestion_empleados():
         return jsonify({"message": "No tienes permisos para cambiar estado."}), 403
 
@@ -203,32 +199,23 @@ def toggle_estado_empleado(id_empleado):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": "Error al cambiar estado", "details": str(e)}), 500
-# En backend/personal.py
 
-# backend/personal.py
-
-# En backend/personal.py
-
+# ---------------------------------------------------------
+# 4. CHOFERES
+# ---------------------------------------------------------
 @personal_bp.route("/personal/choferes", methods=["GET"])
 @jwt_required()
 def get_choferes():
     try:
-        # Buscamos usuarios con rol "Chofer"
         choferes = Usuario.query.join(Rol).filter(Rol.NOMBRE_ROL == 'Chofer').all()
-        
         resultado = []
         for u in choferes:
-            # CORRECCIÓN: 
-            # 1. Verificamos que 'u.empleado' exista.
-            # 2. Accedemos a .NOMBRE y .APELLIDO (Mayúsculas, como en tu DB).
-            # 3. Devolvemos ID_EMPLEADO (necesario para la tabla Vale), no ID_USUARIO.
             if u.empleado:
                 resultado.append({
                     "id": u.empleado.ID_EMPLEADO, 
                     "nombre": f"{u.empleado.NOMBRE} {u.empleado.APELLIDO}",
                     "estado": "Disponible" 
                 })
-            
         return jsonify(resultado), 200
     except Exception as e:
         print(f"Error cargando choferes: {e}") 

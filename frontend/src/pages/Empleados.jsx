@@ -37,7 +37,7 @@ const Empleados = () => {
     setIsLoading(true);
     try {
       const [empData, depData, rolData] = await Promise.all([
-        apiFetch(`${API}/api/empleados`),
+        apiFetch(`${API}/api/empleados`), // RESTAURADO A TU VERSIÓN ORIGINAL
         apiFetch(`${API}/api/depositos`),
         apiFetch(`${API}/api/roles`),
       ]);
@@ -51,7 +51,6 @@ const Empleados = () => {
     }
   };
 
-  // ... (funciones auxiliares formatText, getAvatarColor, renderAvatar siguen igual) ...
   const formatText = (text) => {
     if (!text) return "";
     return text.toString().toLowerCase().split(" ").map((word) => 
@@ -106,7 +105,7 @@ const Empleados = () => {
     navigate(location.pathname, { replace: true, state: {} });
   };
 
-  // ✅ AGREGAR ESTA FUNCIÓN: Guardar cambios de edición
+  // Guardar cambios de edición
   const handleSaveEmployee = async (formData) => {
     try {
         await apiFetch(`${API}/api/empleados/${formData.id}`, {
@@ -114,25 +113,23 @@ const Empleados = () => {
             body: JSON.stringify(formData)
         });
         alert("Empleado actualizado correctamente.");
-        loadData(); // Recargar lista
-        setSelectedEmployee(null); // Cerrar modal
+        loadData(); 
+        setSelectedEmployee(null); 
     } catch (error) {
         alert("Error al actualizar: " + error.message);
     }
   };
 
-  // ✅ AGREGAR ESTA FUNCIÓN: Activar/Desactivar cuenta
+  // Activar/Desactivar cuenta
   const handleToggleStatus = async (idEmpleado) => {
-    // Confirmación opcional
     if(!window.confirm("¿Seguro que deseas cambiar el estado de este empleado?")) return;
 
     try {
         await apiFetch(`${API}/api/empleados/${idEmpleado}/estado`, {
             method: "PUT"
         });
-        // alert("Estado actualizado."); // Opcional
-        loadData(); // Recargar la tabla para ver el cambio de color
-        setSelectedEmployee(null); // Cerrar modal
+        loadData(); 
+        setSelectedEmployee(null); 
     } catch (error) {
         alert("Error al cambiar estado: " + error.message);
     }
@@ -195,7 +192,6 @@ const Empleados = () => {
           )}
         </div>
 
-        {/* ... (SECCIÓN DEL BUSCADOR SE MANTIENE IGUAL) ... */}
         <div className="search-section">
           <div className="modern-search-bar">
             <Search className="search-icon-left" size={20} />
@@ -223,7 +219,6 @@ const Empleados = () => {
           </div>
         </div>
 
-        {/* ... (TABLA SE MANTIENE IGUAL) ... */}
         <div className="table-container">
           <table className="styled-table">
             <thead>
@@ -283,15 +278,14 @@ const Empleados = () => {
         </div>
       </div>
 
-      {/* ✅ AQUÍ ESTABA EL ERROR: AGREGAMOS onSave Y onToggleStatus */}
       {selectedEmployee && (
         <EmployeeModal 
             employee={selectedEmployee} 
             depositos={depositos} 
             roles={roles} 
             onClose={() => setSelectedEmployee(null)} 
-            onSave={handleSaveEmployee}          // <--- FALTABA ESTO
-            onToggleStatus={handleToggleStatus}  // <--- FALTABA ESTO (Error actual)
+            onSave={handleSaveEmployee}
+            onToggleStatus={handleToggleStatus}
         />
       )}
       

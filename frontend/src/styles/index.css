@@ -68,3 +68,9 @@ h1, h2, h3, h4 {
 p, span, label {
   color: var(--text-secondary);
 }
+
+.app-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+}
