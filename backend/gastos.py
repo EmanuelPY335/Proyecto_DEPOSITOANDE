@@ -1,109 +1,173 @@
-# backend/gastos.py
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
-from db import db, Gasto, CategoriaGasto, Usuario, Deposito
-from datetime import datetime
-from sqlalchemy import func
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from db import db, Gasto, CategoriaGasto, Vehiculo, Usuario, Deposito
+from sqlalchemy import extract, desc
+from roles_permisos import permission_required
 
-gastos_bp = Blueprint("gastos", __name__)
+gastos_bp = Blueprint('gastos', __name__)
 
-# --- 1. OBTENER GASTOS ---
-@gastos_bp.route("/gastos", methods=["GET"])
+# --- GET: OBTENER GASTOS (CON FILTROS DE FECHA Y SEGURIDAD POR DEPÓSITO) ---
+@gastos_bp.route('/gastos', methods=['GET'])
+@permission_required("gestion_gastos")
 @jwt_required()
 def get_gastos():
-    claims = get_jwt()
-    rol = claims.get("rol_nombre")
-    user_id = int(claims.get("sub"))
-    
-    # Filtros de URL (mes, año)
-    mes = request.args.get('mes', type=int)
-    year = request.args.get('year', datetime.now().year, type=int)
+    current_user_id = get_jwt_identity()
+    usuario = Usuario.query.get(current_user_id)
 
+    if not usuario:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    # 1. Obtener parámetros de filtro (Mes y Año)
+    mes = request.args.get('mes')
+    year = request.args.get('year')
+
+    # Iniciar la consulta base
     query = Gasto.query
 
-    # Si NO es Master Admin, solo ve gastos de su propio depósito (si tiene)
-    if rol != "Master_Admin":
-        usuario = Usuario.query.get(user_id)
+    # 2. SEGURIDAD: FILTRADO POR DEPÓSITO
+    # Si NO es Master Admin, restringimos la vista a su depósito asignado
+    if usuario.rol.NOMBRE_ROL != "Master_Admin":
         if usuario.empleado and usuario.empleado.ID_DEPOSITO:
+            # Esta es la línea clave: Filtra gastos que coincidan con el depósito del usuario
             query = query.filter(Gasto.ID_DEPOSITO == usuario.empleado.ID_DEPOSITO)
         else:
-            # Si no tiene depósito (ej. usuario nuevo), ve solo lo suyo
-            query = query.filter(Gasto.ID_USUARIO == user_id)
-
-    # Filtro por fecha (opcional)
-    if mes:
-        query = query.filter(db.extract('month', Gasto.FECHA) == mes)
+            # Si el usuario no tiene depósito asignado (raro), no ve nada por seguridad
+            return jsonify([]), 200
     
-    if year:
-        query = query.filter(db.extract('year', Gasto.FECHA) == year)
+    # (Si es Master_Admin, no entra al if y ve todo, o puedes agregar lógica para que elija depósito)
 
-    # Ordenar por más reciente
-    gastos = query.order_by(Gasto.FECHA.desc()).all()
+    # 3. APLICAR FILTROS DE FECHA (Si vienen en la URL)
+    if mes and year:
+        try:
+            query = query.filter(extract('month', Gasto.FECHA) == int(mes))
+            query = query.filter(extract('year', Gasto.FECHA) == int(year))
+        except ValueError:
+            pass # Si los datos no son números válidos, ignoramos el filtro
+
+    # Ordenar por fecha descendente (más nuevo primero)
+    gastos = query.order_by(desc(Gasto.FECHA)).all()
+
+    # 4. FORMATEAR RESPUESTA
+    resultado = []
+    for g in gastos:
+        # Obtener nombres relacionados
+        nombre_cat = g.categoria.NOMBRE if g.categoria else "Sin Categoría"
+        nombre_vehiculo = g.vehiculo.MATRICULA if g.vehiculo else None
+        nombre_deposito = g.deposito.NOMBRE if g.deposito else "Sin Depósito" # Útil para el PDF
+
+        # Colores para las categorías (Visual)
+        color_badge = "#64748b" # Gris default
+        cat_lower = nombre_cat.lower()
+        if "viáticos" in cat_lower: color_badge = "#f59e0b" # Naranja
+        elif "mantenimiento" in cat_lower: color_badge = "#ef4444" # Rojo
+        elif "insumos" in cat_lower: color_badge = "#3b82f6" # Azul
+        elif "servicios" in cat_lower: color_badge = "#10b981" # Verde
+
+        resultado.append({
+            "id": g.ID_GASTO,
+            "titulo": g.TITULO,
+            "descripcion": g.DESCRIPCION,
+            "monto": g.MONTO,
+            "fecha": g.FECHA.strftime('%d/%m/%Y %H:%M') if g.FECHA else "-",
+            "fecha_iso": g.FECHA.strftime('%Y-%m-%d') if g.FECHA else "", # Para ordenar en tabla
+            "categoria": nombre_cat,
+            "categoria_id": g.ID_CATEGORIA,
+            "vehiculo": nombre_vehiculo,
+            "deposito": nombre_deposito, # Enviamos el nombre del depósito al frontend
+            "color": color_badge
+        })
+
+    return jsonify(resultado), 200
+
+# --- GET: DATOS AUXILIARES (CATEGORÍAS Y VEHÍCULOS) ---
+@gastos_bp.route('/gastos/auxiliar', methods=['GET'])
+@permission_required("gestion_gastos")
+@jwt_required()
+def get_auxiliares():
+    current_user_id = get_jwt_identity()
+    usuario = Usuario.query.get(current_user_id)
+
+    # Categorías
+    categorias = CategoriaGasto.query.all()
+    cats_data = [{"id": c.ID_CATEGORIA, "nombre": c.NOMBRE} for c in categorias]
+
+    # Vehículos
+    # Lógica: Master Admin ve todos, los demás solo los de su depósito (si la tabla vehiculo tiene ID_DEPOSITO)
+    # Si Vehiculo no tiene ID_DEPOSITO, mostramos todos (o ajusta según tu modelo)
+    query_veh = Vehiculo.query
     
-    # Calcular Totales
-    total = sum(g.MONTO for g in gastos)
+    # Opcional: Filtrar vehículos por depósito si tu tabla Vehiculo tiene esa columna
+    # if usuario.rol.NOMBRE_ROL != "Master_Admin" and usuario.empleado.ID_DEPOSITO:
+    #    if hasattr(Vehiculo, 'ID_DEPOSITO'):
+    #        query_veh = query_veh.filter_by(ID_DEPOSITO=usuario.empleado.ID_DEPOSITO)
+
+    vehiculos = query_veh.all()
+    vehs_data = [{"id": v.ID_VEHICULO, "nombre": f"{v.MARCA} - {v.MATRICULA}"} for v in vehiculos]
 
     return jsonify({
-        "data": [g.to_dict() for g in gastos],
-        "total": total
+        "categorias": cats_data,
+        "vehiculos": vehs_data
     }), 200
 
-# --- 2. CREAR GASTO ---
-@gastos_bp.route("/gastos", methods=["POST"])
+# --- POST: CREAR GASTO ---
+@gastos_bp.route('/gastos', methods=['POST'])
+@permission_required("gestion_gastos")
 @jwt_required()
 def create_gasto():
+    current_user_id = get_jwt_identity()
+    usuario = Usuario.query.get(current_user_id)
     data = request.json
-    claims = get_jwt()
-    user_id = int(claims.get("sub"))
+
+    if not data.get('titulo') or not data.get('monto') or not data.get('categoria_id'):
+        return jsonify({"error": "Faltan datos obligatorios"}), 400
+
+    # Asignar automáticamente al depósito del usuario
+    id_deposito_usuario = usuario.empleado.ID_DEPOSITO if usuario.empleado else None
     
+    # Si es Master Admin y mandó un ID_DEPOSITO manual (futura mejora), úsalo. Si no, usa el suyo o 1.
+    if usuario.rol.NOMBRE_ROL == "Master_Admin" and data.get('id_deposito'):
+         id_deposito_usuario = data.get('id_deposito')
+
+    nuevo_gasto = Gasto(
+        TITULO=data['titulo'],
+        DESCRIPCION=data.get('descripcion', ''),
+        MONTO=data['monto'],
+        FECHA=db.func.current_timestamp(), # Fecha actual del servidor
+        ID_CATEGORIA=data['categoria_id'],
+        ID_USUARIO=current_user_id,
+        ID_DEPOSITO=id_deposito_usuario, # <--- SE GUARDA CON EL DEPÓSITO DEL USUARIO
+        ID_VEHICULO=data.get('id_vehiculo') if data.get('id_vehiculo') else None
+    )
+
     try:
-        usuario = Usuario.query.get(user_id)
-        id_deposito = usuario.empleado.ID_DEPOSITO if usuario.empleado else None
-
-        # Si es Master Admin, puede que mande el depósito en el body
-        if claims.get("rol_nombre") == "Master_Admin" and data.get("id_deposito"):
-            id_deposito = data.get("id_deposito")
-
-        nuevo_gasto = Gasto(
-            TITULO=data.get("titulo"),
-            DESCRIPCION=data.get("descripcion"),
-            MONTO=float(data.get("monto")),
-            FECHA=datetime.strptime(data.get("fecha"), "%Y-%m-%dT%H:%M") if data.get("fecha") else datetime.now(),
-            ID_CATEGORIA=int(data.get("id_categoria")),
-            ID_USUARIO=user_id,
-            ID_DEPOSITO=id_deposito
-        )
-
         db.session.add(nuevo_gasto)
         db.session.commit()
-
-        return jsonify({"success": True, "message": "Gasto registrado exitosamente."}), 201
+        return jsonify({"message": "Gasto registrado"}), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-# --- 3. ELIMINAR GASTO ---
-@gastos_bp.route("/gastos/<int:id>", methods=["DELETE"])
+# --- DELETE: ELIMINAR GASTO ---
+@gastos_bp.route('/gastos/<int:id>', methods=['DELETE'])
+@permission_required("gestion_gastos")
 @jwt_required()
 def delete_gasto(id):
-    gasto = Gasto.query.get(id)
-    if not gasto: return jsonify({"error": "No encontrado"}), 404
+    current_user_id = get_jwt_identity()
+    usuario = Usuario.query.get(current_user_id)
     
-    # Validar permisos (Solo el creador o Admin pueden borrar)
-    claims = get_jwt()
-    user_id = int(claims.get("sub"))
-    rol = claims.get("rol_nombre")
+    gasto = Gasto.query.get_or_404(id)
 
-    if gasto.ID_USUARIO != user_id and rol not in ["Master_Admin", "Admin"]:
-        return jsonify({"error": "No autorizado"}), 403
+    # Seguridad: Solo borrar si es Master Admin O si el gasto pertenece a mi depósito
+    es_master = usuario.rol.NOMBRE_ROL == "Master_Admin"
+    es_mi_deposito = usuario.empleado and usuario.empleado.ID_DEPOSITO == gasto.ID_DEPOSITO
 
-    db.session.delete(gasto)
-    db.session.commit()
-    return jsonify({"success": True}), 200
+    if not es_master and not es_mi_deposito:
+        return jsonify({"error": "No tienes permiso para eliminar este gasto"}), 403
 
-# --- 4. LISTAR CATEGORIAS ---
-@gastos_bp.route("/gastos/categorias", methods=["GET"])
-@jwt_required()
-def get_categorias():
-    cats = CategoriaGasto.query.all()
-    return jsonify([{"id": c.ID_CATEGORIA, "nombre": c.NOMBRE} for c in cats]), 200
+    try:
+        db.session.delete(gasto)
+        db.session.commit()
+        return jsonify({"message": "Eliminado"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500

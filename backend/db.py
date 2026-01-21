@@ -40,6 +40,13 @@ class Rol(db.Model):
     usuarios = db.relationship('Usuario', back_populates='rol', lazy=True)
 
 # En backend/db.py
+class Departamento(db.Model):
+    __tablename__ = 'departamentos' 
+    id_departamentos = db.Column(db.Integer, primary_key=True)
+    departamento = db.Column(db.String(60), nullable=False)
+    
+    # Esta línea permite hacer departamento.depositos
+    depositos = db.relationship('Deposito', back_populates='departamento_rel', lazy=True)
 
 class Deposito(db.Model):
     __tablename__ = 'deposito'
@@ -50,8 +57,10 @@ class Deposito(db.Model):
     # --- NUEVOS CAMPOS DE UBICACIÓN ---
     LATITUD = db.Column(db.Float, nullable=True)
     LONGITUD = db.Column(db.Float, nullable=True)
+    RADIO_MTS = db.Column(db.Integer, default=80)
+    id_departamentos = db.Column(db.Integer, db.ForeignKey('departamentos.id_departamentos'))
     # ----------------------------------
-
+    departamento_rel = db.relationship('Departamento', back_populates='depositos')
     # Relaciones
     inventario_items = db.relationship('Inventario', backref='deposito', lazy=True)
 
@@ -178,6 +187,7 @@ class Inventario(db.Model):
     # Relaciones
     # Deposito backref definido arriba
     lote = db.relationship('Lote', backref='inventarios')
+    # CAMBIO IMPORTANTE: Usamos ID_ESTADO en lugar de texto
     estado = db.relationship('EstadoInventario')
 
     def to_dict(self):
@@ -238,9 +248,26 @@ class Vehiculo(db.Model):
     MATRICULA = db.Column(db.String(10), nullable=False, unique=True)
     MARCA = db.Column(db.String(40))
     MODELO = db.Column(db.String(30))
+    # --- AGREGA ESTAS DOS LÍNEAS ---
+    LATITUD = db.Column(db.Float, nullable=True)
+    LONGITUD = db.Column(db.Float, nullable=True)
+    # --- [NUEVO] RELACIÓN CON ESTADO DE VEHÍCULO ---
+    ID_ESTADO = db.Column(db.Integer, db.ForeignKey('estado_vehiculo.ID_ESTADO'), nullable=False, default=1)
     
+    # Opcional: Campo de texto antiguo por compatibilidad (si quieres borrarlo, hazlo después)
+    chofer = db.relationship('Empleado', backref='vehiculos')
+    # -----------------------------------------------
     posiciones = db.relationship('PosicionGps', backref='vehiculo', lazy=True)
-
+class EstadoVehiculo(db.Model):
+    __tablename__ = 'estado_vehiculo'
+    ID_ESTADO = db.Column(db.Integer, primary_key=True)
+    NOMBRE = db.Column(db.String(50), nullable=False)
+    COLOR_HEX = db.Column(db.String(10)) # Guardamos el color aquí (ej: #10b981)
+    DESCRIPCION = db.Column(db.String(100))
+    
+    # Relación inversa
+    vehiculos = db.relationship('Vehiculo', backref='estado_rel', lazy=True)
+    
 class PosicionGps(db.Model):
     __tablename__ = "registro_gps"
     ID_REGISTRO_GPS = db.Column(db.Integer, primary_key=True)
@@ -253,15 +280,24 @@ class PosicionGps(db.Model):
 # MODELOS DE GESTIÓN (Asistencia y Órdenes)
 # ---------------------------------------------------------
 
+# En backend/db.py
+
 class Asistencia(db.Model):
     __tablename__ = 'asistencia'
     ID_ASISTENCIA = db.Column(db.Integer, primary_key=True)
     ID_EMPLEADO = db.Column(db.Integer, db.ForeignKey('empleado.ID_EMPLEADO'), nullable=False)
-    FECHA = db.Column(db.Date, default=datetime.date.today)
-    HORA_ENTRADA = db.Column(db.Time, nullable=True)
-    HORA_SALIDA = db.Column(db.Time, nullable=True)
-    OBSERVACION = db.Column(db.String(255))
+    
+    # --- CAMBIOS PARA TU ESTRUCTURA REAL ---
+    # Usamos DateTime para guardar fecha y hora juntas
+    FECHA_HORA_ENTRADA = db.Column(db.DateTime, default=datetime.datetime.now)
+    FECHA_HORA_SALIDA = db.Column(db.DateTime, nullable=True)
+    # ---------------------------------------
 
+
+    LATITUD_MARCADO = db.Column(db.Numeric(10, 8))
+    LONGITUD_MARCADO = db.Column(db.Numeric(11, 8))
+    METODO = db.Column(db.String(20)) # 'QR'
+    
     empleado = db.relationship('Empleado', backref='asistencias')
 
 class EstadoOrden(db.Model):
@@ -403,7 +439,7 @@ class Notificacion(db.Model):
     
     # CORRECCIÓN 2: Ya funcionará porque arreglamos el import arriba
     FECHA_CREACION = db.Column(db.DateTime, default=datetime.datetime.now)
-    
+    STARRED = db.Column(db.Boolean, default=False)
     # CORRECCIÓN 3: Aseguramos que busque la tabla 'orden_trabajo' (singular/snake_case)
     ID_ORDEN = db.Column(db.Integer, db.ForeignKey('orden_trabajo.ID_ORDEN'), nullable=True)
 
@@ -412,6 +448,7 @@ class Notificacion(db.Model):
             "id": self.ID_NOTIFICACION,
             "mensaje": self.MENSAJE,
             "leida": self.LEIDA,
+            "starred": self.STARRED,
             "fecha": self.FECHA_CREACION.strftime('%Y-%m-%d %H:%M'),
             "id_orden": self.ID_ORDEN
         }
@@ -527,16 +564,24 @@ class Gasto(db.Model):
     
     # Relaciones
     ID_CATEGORIA = db.Column(db.Integer, db.ForeignKey('categoria_gasto.ID_CATEGORIA'), nullable=False)
-    ID_USUARIO = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=False) # Quién registró
-    ID_DEPOSITO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=True) # Si es gasto de sucursal
+    ID_USUARIO = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=False)
+    ID_DEPOSITO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=True)
     
-    # Opcional: Comprobante (URL o nombre archivo)
+    # --- [NUEVO CAMPO] ---
+    ID_VEHICULO = db.Column(db.Integer, db.ForeignKey('vehiculo.ID_VEHICULO'), nullable=True)
+    # ---------------------
+
+    # Opcional: Comprobante
     COMPROBANTE = db.Column(db.String(255), nullable=True)
     
-    # Objetos
+    # Objetos Relacionales
     categoria = db.relationship('CategoriaGasto')
     usuario = db.relationship('Usuario')
     deposito = db.relationship('Deposito')
+    
+    # --- [NUEVA RELACIÓN] ---
+    vehiculo = db.relationship('Vehiculo')
+    # ------------------------
 
     def to_dict(self):
         return {
@@ -549,6 +594,9 @@ class Gasto(db.Model):
             "categoria": self.categoria.NOMBRE if self.categoria else "General",
             "color": self.categoria.COLOR if self.categoria else "#ccc",
             "autor": f"{self.usuario.empleado.NOMBRE} {self.usuario.empleado.APELLIDO}" if self.usuario and self.usuario.empleado else self.usuario.CORREO,
-            "deposito": self.deposito.NOMBRE if self.deposito else "General"
+            "deposito": self.deposito.NOMBRE if self.deposito else "General",
+            # --- [NUEVO DATO EN JSON] ---
+            "vehiculo": f"{self.vehiculo.MARCA} ({self.vehiculo.MATRICULA})" if self.vehiculo else None,
+            "vehiculo_id": self.ID_VEHICULO
+            # ----------------------------
         }
-

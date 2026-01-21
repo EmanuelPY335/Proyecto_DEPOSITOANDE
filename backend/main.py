@@ -13,6 +13,7 @@ from flask_mail import Mail, Message
 # --- IMPORTACIONES DE BLUEPRINTS ---
 from ordenes import ordenes_bp
 from mapa import mapa_bp, socketio
+from asistencia import asistencia_bp
 from perfil import perfil_bp
 # main.py
 from depositos import depositos_bp # O donde lo hayas guardado
@@ -39,6 +40,7 @@ app.register_blueprint(ordenes_bp, url_prefix="/api")
 app.register_blueprint(mapa_bp, url_prefix="/api")
 app.register_blueprint(perfil_bp, url_prefix="/api")
 app.register_blueprint(personal_bp, url_prefix="/api")
+app.register_blueprint(asistencia_bp, url_prefix='/api/asistencia')
 app.register_blueprint(roles_bp, url_prefix="/api")
 # ✅ NUEVO REGISTRO: Activamos el módulo de materiales
 app.register_blueprint(materiales_bp, url_prefix="/api")
@@ -52,18 +54,18 @@ app.register_blueprint(depositos_bp)
 # --- CORS (Con soporte para React y Raspberry Pi) ---
 CORS(
     app,
-    resources={r"/api/*": {
+    resources={r"/*": {  # r"/*" permite cualquier ruta
         "origins": [
-            "http://localhost:3000",
+            "http://localhost:3000", 
             "http://127.0.0.1:3000",
             "http://192.168.100.*",
             "http://192.168.0.*"
         ]
     }},
     supports_credentials=True,
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], # <--- CLAVE
     allow_headers=["Authorization", "Content-Type"]
 )
-
 # --- JWT ---
 app.config["JWT_SECRET_KEY"] = "clave_super_segura_sisdepo_2025"
 app.config["JWT_TOKEN_LOCATION"] = ["headers"]
@@ -91,13 +93,16 @@ db.init_app(app)
 socketio.init_app(
     app,
     cors_allowed_origins=[
+       
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://192.168.100.*",
-        "http://192.168.0.*"
+        "http://192.168.0.*",
+        "http://172.20.10.*"
     ],
     cors_allowed_headers=["Authorization", "Content-Type"]
 )
+# main.py - AÑADE ESTO DESPUÉS DE app = Flask(__name__)
 
 # -----------------------------------------------------------------
 # 🧩 AUTENTICACIÓN Y REGISTRO

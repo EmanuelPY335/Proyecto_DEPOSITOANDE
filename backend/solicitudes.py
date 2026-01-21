@@ -291,8 +291,8 @@ def rechazar_solicitud(id):
         solicitud.ID_ESTADO = id_rechazada
         
         # Concatenamos el motivo a la observación existente para no perder datos previos
-        obs_actual = solicitud.OBSERVACION if solicitud.OBSERVACION else ""
-        solicitud.OBSERVACION = f"{obs_actual} | [RECHAZADO]: {motivo}".strip()
+        obs_actual = solicitud.OBSERVACION_GENERAL if solicitud.OBSERVACION_GENERAL else ""
+        solicitud.OBSERVACION_GENERAL = f"{obs_actual} | [RECHAZADO]: {motivo}".strip()
 
         # 4. Guardar cambios
         db.session.commit()

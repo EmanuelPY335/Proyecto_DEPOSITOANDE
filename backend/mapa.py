@@ -2,8 +2,8 @@
 from flask import Blueprint, request, jsonify
 from flask_socketio import SocketIO
 from datetime import datetime, timezone, timedelta
-from flask_jwt_extended import jwt_required, get_jwt_identity # <--- IMPORTANTE: get_jwt_identity
-from db import db, Vehiculo, PosicionGps, Deposito, Vale, Usuario # <--- IMPORTANTE: Vale, Usuario
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from db import db, Vehiculo, PosicionGps, Deposito, Vale, Usuario
 
 mapa_bp = Blueprint("mapa", __name__)
 socketio = SocketIO()
@@ -64,42 +64,67 @@ def receive_gps_data():
 @jwt_required()
 def get_active_vehicles():
     try:
-        two_hours_ago = datetime.now(timezone.utc) - timedelta(hours=2)
-
-        latest_positions = db.session.query(
-            PosicionGps.ID_VEHICULO,
-            db.func.max(PosicionGps.FECHA_HORA).label('max_timestamp')
-        ).group_by(PosicionGps.ID_VEHICULO).subquery()
-
-        active_vehiculos = db.session.query(
-            Vehiculo, PosicionGps
-        ).join(
-            PosicionGps, Vehiculo.ID_VEHICULO == PosicionGps.ID_VEHICULO
-        ).join(
-            latest_positions,
-            (PosicionGps.ID_VEHICULO == latest_positions.c.ID_VEHICULO) &
-            (PosicionGps.FECHA_HORA == latest_positions.c.max_timestamp)
-        ).filter(
-            PosicionGps.FECHA_HORA >= two_hours_ago
-        ).all()
-
+        # 1. Traemos TODOS los vehículos registrados en el sistema
+        # (Esto asegura que aparezcan los que insertaste por SQL manualmente)
+        vehiculos = Vehiculo.query.all()
+        
         result = []
-        for vehiculo, position in active_vehiculos:
-            result.append({
-                'ID_VEHICULO': vehiculo.ID_VEHICULO,
-                'MATRICULA': vehiculo.MATRICULA,
-                'MODELO': vehiculo.MODELO,
-                'MARCA': vehiculo.MARCA,
-                'LATITUD': float(position.LATITUD),
-                'LONGITUD': float(position.LONGITUD),
-                'last_update': position.FECHA_HORA.isoformat(),
-                'TIPO': 'VEHICULO'
-            })
+        
+        for v in vehiculos:
+            # --- A. OBTENER ESTADO Y COLOR (Desde la nueva relación) ---
+            nombre_estado = "Desconocido"
+            color_estado = "#808080" # Gris por defecto si falla algo
+            
+            # Verificamos si existe la relación con la tabla estado_vehiculo
+            if hasattr(v, 'estado_rel') and v.estado_rel:
+                nombre_estado = v.estado_rel.NOMBRE
+                color_estado = v.estado_rel.COLOR_HEX or "#808080"
+            
+            # --- B. DETERMINAR COORDENADAS (Lógica Híbrida) ---
+            # Por defecto, usamos la coordenada 'estática' guardada en la tabla Vehículo
+            lat = v.LATITUD
+            lng = v.LONGITUD
+            
+            # Pero, si el vehículo tiene rastreo GPS real (ej: Raspberry), buscamos su última posición
+            # Esto sobreescribe la posición estática con la real en vivo
+            last_gps = PosicionGps.query.filter_by(ID_VEHICULO=v.ID_VEHICULO)\
+                                        .order_by(PosicionGps.FECHA_HORA.desc())\
+                                        .first()
+            
+            if last_gps:
+                # Opcional: Podrías poner un límite de tiempo aquí (ej: si el GPS es de hace 1 año, ignorarlo)
+                # Por ahora, usamos siempre el GPS si existe.
+                lat = float(last_gps.LATITUD)
+                lng = float(last_gps.LONGITUD)
+
+            # --- C. CONSTRUIR RESPUESTA ---
+            # Solo agregamos a la lista si tiene coordenadas válidas
+           # ✅ BIEN
+            if lat is not None and lng is not None:
+                nombre_chofer_str = "Sin Chofer"
+                if hasattr(v, 'chofer') and v.chofer:
+                    nombre_chofer_str = f"{v.chofer.NOMBRE} {v.chofer.APELLIDO}"
+                result.append({
+                    'ID_VEHICULO': v.ID_VEHICULO,
+                    'MATRICULA': v.MATRICULA,
+                    'MODELO': getattr(v, 'MODELO', ''), # getattr evita error si columna no existe
+                    'MARCA': getattr(v, 'MARCA', ''),
+                    'NOMBRE_CHOFER': nombre_chofer_str,
+                    
+                    # Datos vitales para el mapa nuevo
+                    'ESTADO': nombre_estado,
+                    'COLOR_ESTADO': color_estado, 
+                    
+                    # Coordenadas finales (Estáticas o GPS)
+                    'LATITUD': float(lat),
+                    'LONGITUD': float(lng),
+                    'TIPO': 'VEHICULO'
+                })
 
         return jsonify(result), 200
 
     except Exception as e:
-        print(f"[ERROR /vehicles/active] {e}")
+        print(f"❌ [ERROR /vehicles/active] {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -129,7 +154,7 @@ def get_vehicle_location(id_vehiculo):
         return jsonify({'error': str(e)}), 500
 
 
-# ---------------- DEPÓSITOS ----------------
+# ---------------- DEPÓSITOS (ACTUALIZADO CON DEPARTAMENTO) ----------------
 @mapa_bp.route("/depositos", methods=["GET"])
 @jwt_required()
 def get_depositos():
@@ -138,10 +163,19 @@ def get_depositos():
         result = []
         for dep in depositos:
             if dep.LATITUD and dep.LONGITUD:
+                
+                # --- AQUÍ ESTÁ EL CAMBIO CLAVE ---
+                # Obtenemos el nombre del departamento a través de la relación
+                nombre_depto = "Sin asignar"
+                if dep.departamento_rel:
+                    nombre_depto = dep.departamento_rel.departamento
+                # ---------------------------------
+
                 result.append({
                     'ID_DEPOSITO': dep.ID_DEPOSITO,
                     'NOMBRE': dep.NOMBRE,
                     'DIRECCION': getattr(dep, 'DIRECCION', 'Sin dirección'),
+                    'DEPARTAMENTO': nombre_depto, # <--- Enviamos este campo al Frontend
                     'LATITUD': float(dep.LATITUD),
                     'LONGITUD': float(dep.LONGITUD),
                     'TIPO': 'DEPOSITO'
@@ -152,14 +186,10 @@ def get_depositos():
         return jsonify({'error': str(e)}), 500
 
 
-# ---------------- [NUEVO] RUTA ASIGNADA AL CHOFER ----------------
+# ---------------- RUTA ASIGNADA AL CHOFER ----------------
 @mapa_bp.route("/chofer/mi_ruta", methods=["GET"])
 @jwt_required()
 def get_chofer_route():
-    """
-    Busca los vales asignados al usuario (chofer) que están pendientes o en tránsito
-    y devuelve las coordenadas para dibujar la ruta en el mapa.
-    """
     try:
         current_user_id = get_jwt_identity()
         usuario = Usuario.query.get(current_user_id)
@@ -176,19 +206,14 @@ def get_chofer_route():
         if not vales_activos:
             return jsonify([]), 200
 
-        # Construimos la estructura para el mapa
         rutas_agrupadas = {}
         
         for vale in vales_activos:
-            # Usamos el grupo o el ID individual
             grupo_id = vale.GRUPO_RUTA or f"vale-{vale.ID_VALE}"
             
             if grupo_id not in rutas_agrupadas:
                 rutas_agrupadas[grupo_id] = []
             
-            # Agregamos el segmento: Origen -> Destino
-            # Nota: Si los depósitos no tienen coordenadas, esto fallará, 
-            # así que validamos antes.
             if vale.origen.LATITUD and vale.origen.LONGITUD and vale.destino.LATITUD and vale.destino.LONGITUD:
                 rutas_agrupadas[grupo_id].append({
                     "lat": vale.origen.LATITUD,
@@ -199,7 +224,6 @@ def get_chofer_route():
                     "lng": vale.destino.LONGITUD
                 })
 
-        # Formato final para React Leaflet (Array de objetos)
         trayectos_finales = []
         for gid, puntos in rutas_agrupadas.items():
             trayectos_finales.append({
