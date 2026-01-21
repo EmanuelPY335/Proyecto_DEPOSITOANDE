@@ -7,7 +7,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Mapa from "./pages/Mapa";
-import Pag2 from "./pages/Pag2"; // ESTA ES LA PÁGINA DE GASTOS
+import Gastos from "./pages/Gastos";
 import ResetPassword from "./pages/ResetPassword";
 import Profile from "./pages/Profile";
 import Roles from "./pages/Roles";
@@ -15,9 +15,9 @@ import Empleados from "./pages/Empleados";
 import Config from "./pages/Config"; 
 import OrdenesTrabajo from "./pages/OrdenesTrabajo";
 import Materiales from "./pages/Materiales"; 
-import PedidosEntrantes from "./components/HistorialPedidos";
 import Movimientos from "./pages/Movimientos"; 
 import Layout from "./components/Layout";
+import Buzon from "./pages/Buzon";
 
 // --- Lógica de Permisos ---
 const isLoggedIn = () => !!sessionStorage.getItem("access_token");
@@ -30,42 +30,34 @@ const hasPermission = (requiredPermission) => {
   return permisos.includes(requiredPermission);
 };
 
-// --- Componentes de Protección ---
+// --- Componentes de Protección Actualizados ---
 
-const ProtectedRoute = ({ children }) => {
-  if (!isLoggedIn()) {
+// Acepta fullWidth para pasar al Layout
+const ProtectedRoute = ({ children, requireAuth = true, fullWidth = false }) => {
+  if (requireAuth && !isLoggedIn()) {
     return <Navigate to="/" replace state={{ message: "Error: Ingrese con un correo válido." }} />;
   }
-  return <Layout>{children}</Layout>;
+  return <Layout fullWidth={fullWidth}>{children}</Layout>;
 };
 
-const AuthenticatedRoute = ({ children }) => {
-  if (!isLoggedIn()) {
-    return <Navigate to="/" replace state={{ message: "Error: Ingrese con un correo válido." }} />;
-  }
-  return children;
-};
-
-const AdminRoute = ({ children }) => {
-  const userRole = sessionStorage.getItem("user_rol");
-  if (!isLoggedIn()) return <Navigate to="/" replace />;
-  if (userRole !== "Admin" && userRole !== "Master_Admin") {
-    // ESTA ES LA REDIRECCIÓN QUE PODRÍA ESTAR MOLESTANDO SI USARAS ADMINROUTE
-    return <Navigate to="/home" replace state={{ message: "Acceso restringido a Administradores." }} />;
-  }
-  return <Layout>{children}</Layout>;
-};
-
-const PermissionRoute = ({ children, requiredPermission }) => {
+const PermissionRoute = ({ children, requiredPermission, fullWidth = false }) => {
   if (!isLoggedIn()) return <Navigate to="/" replace />;
   if (!hasPermission(requiredPermission)) {
-    return <Navigate to="/home" replace state={{ message: `No tienes permisos para acceder a: ${requiredPermission}` }} />;
+    return <Navigate to="/home" replace state={{ message: `No tienes permisos para acceder: ${requiredPermission}` }} />;
+  }
+  return <Layout fullWidth={fullWidth}>{children}</Layout>;
+};
+
+const RoleRoute = ({ children, allowedRoles }) => {
+  if (!isLoggedIn()) return <Navigate to="/" replace />;
+  const userRole = sessionStorage.getItem("user_rol");
+  if (!allowedRoles.includes(userRole)) {
+    return <Navigate to="/home" replace state={{ message: `Acceso restringido a: ${allowedRoles.join(', ')}` }} />;
   }
   return <Layout>{children}</Layout>;
 };
 
 // --- APP PRINCIPAL ---
-
 function App() {
   return (
     <ThemeProvider>
@@ -79,8 +71,11 @@ function App() {
           <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/config" element={<ProtectedRoute><Config /></ProtectedRoute>} />
+          
+          {/* CAMBIO: Buzón ahora usa fullWidth={true} */}
+          <Route path="/buzon" element={<ProtectedRoute fullWidth={true}><Buzon /></ProtectedRoute>} />
             
-          {/* --- GESTIÓN --- */}
+          {/* --- GESTIÓN CON PERMISOS --- */}
           <Route 
             path="/empleados" 
             element={<PermissionRoute requiredPermission="gestion_empleados"><Empleados /></PermissionRoute>} 
@@ -97,30 +92,30 @@ function App() {
           />
           
           <Route 
-             path="/movimientos" 
-             element={<ProtectedRoute><Movimientos /></ProtectedRoute>} 
+            path="/movimientos" 
+            element={<PermissionRoute requiredPermission="gestion_movimientos"><Movimientos /></PermissionRoute>} 
           />
 
-          {/* ✅ RUTA GASTOS: Verificamos que apunte a Pag2 y sea ProtectedRoute */}
           <Route 
-             path="/gastos" 
-             element={
-               <ProtectedRoute>
-                 <Pag2 />
-               </ProtectedRoute>
-             } 
+            path="/gastos" 
+            element={<PermissionRoute requiredPermission="gestion_gastos"><Gastos /></PermissionRoute>} 
           />
 
           {/* --- RUTAS ESPECIALES --- */}
-          <Route path="/mapa" element={<AuthenticatedRoute><Mapa /></AuthenticatedRoute>} />
-          <Route path="/roles" element={<AdminRoute><Roles /></AdminRoute>} />
-          <Route 
-            path="/historialpedidos" 
-            element={<ProtectedRoute><Layout fullWidth={true}><PedidosEntrantes /></Layout></ProtectedRoute>} 
-          />
+          {/* CAMBIO: Mapa ahora usa fullWidth={true} */}
+          <Route path="/mapa" element={
+            <PermissionRoute requiredPermission="ver_mapa" fullWidth={true}>
+              <Mapa />
+            </PermissionRoute>
+          } />
+          
+          <Route path="/roles" element={
+            <RoleRoute allowedRoles={["Master_Admin", "Admin"]}>
+              <Roles />
+            </RoleRoute>
+          } />
 
-          {/* --- FALLBACK (CATCH-ALL) --- */}
-          {/* Si ninguna ruta de arriba coincide, te manda al home. */}
+          {/* --- FALLBACK --- */}
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
       </Router>

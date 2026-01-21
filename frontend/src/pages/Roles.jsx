@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from "react";
 import { apiFetch } from "../utils/api";
 import { 
-  Shield, Lock, UserCog, Plus, Save, ShieldAlert
+  Shield, Lock, UserCog, Plus, Save, ShieldAlert, 
+  Edit, Trash2, Check, X
 } from "lucide-react";
 import "../styles/Roles.css";
 
@@ -15,20 +16,25 @@ const Roles = () => {
   const [permisosAsignados, setPermisosAsignados] = useState([]); 
   const [loading, setLoading] = useState(true);
   
-  // Estado para crear rol
+  // Estados para crear/editar rol
   const [showNewRol, setShowNewRol] = useState(false);
   const [newRolName, setNewRolName] = useState("");
+  
+  // Estados para editar rol existente
+  const [editingRol, setEditingRol] = useState(null);
+  const [editRolName, setEditRolName] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
-  // 1. OBTENER EL ROL ACTUAL DEL USUARIO
   const currentUserRole = sessionStorage.getItem("user_rol");
+  const userPermissions = JSON.parse(sessionStorage.getItem("user_permissions") || "[]");
 
-  // 2. DEFINIR QUIÉN PUEDE ENTRAR AQUÍ
-  // Generalmente, solo el Master_Admin debería tocar roles y permisos.
-  const ALLOWED_ROLES = ["Master_Admin", "Admin"]; 
+  const puedeGestionarRoles = () => {
+    if (currentUserRole === "Master_Admin") return true;
+    return userPermissions.includes("gestion_roles");
+  };
 
   useEffect(() => {
-    // Solo cargamos datos si el usuario tiene permiso
-    if (ALLOWED_ROLES.includes(currentUserRole)) {
+    if (puedeGestionarRoles()) {
         loadInitialData();
     } else {
         setLoading(false);
@@ -42,11 +48,17 @@ const Roles = () => {
         apiFetch(`${API_URL}/api/roles`),
         apiFetch(`${API_URL}/api/permisos`)
       ]);
-      setRoles(rolesData || []);
+      
+      let rolesFiltrados = rolesData || [];
+      if (currentUserRole !== "Master_Admin") {
+        rolesFiltrados = rolesFiltrados.filter(rol => rol.nombre !== "Master_Admin");
+      }
+      
+      setRoles(rolesFiltrados);
       setPermisosDisponibles(permisosData || []);
       
-      if (rolesData && rolesData.length > 0) {
-        handleSelectRol(rolesData[0]);
+      if (rolesFiltrados.length > 0) {
+        handleSelectRol(rolesFiltrados[0]);
       }
     } catch (error) {
       console.error("Error cargando roles:", error);
@@ -55,32 +67,49 @@ const Roles = () => {
     }
   };
 
-  // 3. BLOQUEO DE SEGURIDAD (Renderizado Condicional)
-  if (!ALLOWED_ROLES.includes(currentUserRole)) {
+  if (!puedeGestionarRoles()) {
     return (
-        <div className="fade-in" style={{
-            display:'flex', 
-            flexDirection: 'column', 
-            justifyContent:'center', 
-            alignItems:'center', 
-            height:'60vh', 
-            color:'#4b5563',
-            textAlign: 'center'
-        }}>
+        <div className="fade-in" style={{textAlign: 'center', padding: '50px', color:'#4b5563'}}>
             <ShieldAlert size={64} style={{color:'#ef4444', marginBottom: 20}} />
             <h1>Acceso Restringido</h1>
-            <p>La configuración de Roles y Permisos es exclusiva del <strong>Master Admin</strong>.</p>
+            <p>Se requiere permiso de <strong>Gestión de Roles</strong>.</p>
         </div>
     );
   }
 
+  // ... (Funciones de edición/eliminación se mantienen igual, omitidas por brevedad pero funcionales) ...
+  const startEditRol = (rol, e) => { e.stopPropagation(); setEditingRol(rol.id); setEditRolName(rol.nombre); };
+  const cancelEditRol = () => { setEditingRol(null); setEditRolName(""); };
+  const saveEditRol = async (rolId) => {
+      // Lógica de guardado igual que antes
+      try {
+        await apiFetch(`${API_URL}/api/roles/${rolId}`, { method: "PUT", body: JSON.stringify({ nombre: editRolName }) });
+        setRoles(roles.map(rol => rol.id === rolId ? { ...rol, nombre: editRolName } : rol));
+        if (selectedRol && selectedRol.id === rolId) setSelectedRol({ ...selectedRol, nombre: editRolName });
+        setEditingRol(null);
+      } catch (error) { alert("Error: " + error.message); }
+  };
+  const confirmDeleteRol = (rol, e) => { e.stopPropagation(); setShowDeleteConfirm(rol.id); };
+  const cancelDelete = () => { setShowDeleteConfirm(null); };
+  const deleteRol = async (rolId) => {
+      try {
+        await apiFetch(`${API_URL}/api/roles/${rolId}`, { method: "DELETE" });
+        const nuevosRoles = roles.filter(rol => rol.id !== rolId);
+        setRoles(nuevosRoles);
+        if (selectedRol && selectedRol.id === rolId) handleSelectRol(nuevosRoles[0] || null);
+        setShowDeleteConfirm(null);
+      } catch (error) { alert("Error: " + error.message); }
+  };
+
   const handleSelectRol = async (rol) => {
+    if(!rol) { setSelectedRol(null); return; }
     setSelectedRol(rol);
+    setEditingRol(null);
+    setShowDeleteConfirm(null);
     try {
       const assignedIds = await apiFetch(`${API_URL}/api/roles/${rol.id}/permisos`);
       setPermisosAsignados(assignedIds || []);
     } catch (error) {
-      console.error(error);
       setPermisosAsignados([]);
     }
   };
@@ -117,34 +146,23 @@ const Roles = () => {
       setShowNewRol(false);
       setNewRolName("");
       loadInitialData(); 
-    } catch (error) {
-      alert(error.message);
-    }
+    } catch (error) { alert(error.message); }
   };
 
   return (
-    // Quitamos los divs de layout duplicados
     <div className="fade-in" style={{width: '100%'}}>
-       
        <div className="roles-container">
-           {/* --- PANEL IZQUIERDO: LISTA DE ROLES --- */}
+           {/* SIDEBAR */}
            <div className="roles-sidebar">
                <div className="sidebar-header">
                    <h2><Shield size={22}/> Roles</h2>
-                   <button className="btn-add-mini" onClick={() => setShowNewRol(true)} title="Crear Rol">
-                       <Plus size={18}/>
-                   </button>
+                   <button className="btn-add-mini" onClick={() => setShowNewRol(true)}><Plus size={18}/></button>
                </div>
 
+               {/* MODAL CREAR ROL (Integrado en sidebar) */}
                {showNewRol && (
                    <form onSubmit={handleCreateRol} className="new-rol-form fade-in">
-                       <input 
-                           autoFocus
-                           type="text" 
-                           placeholder="Nombre del Rol..." 
-                           value={newRolName}
-                           onChange={(e) => setNewRolName(e.target.value)}
-                       />
+                       <input autoFocus type="text" placeholder="Nombre..." value={newRolName} onChange={(e) => setNewRolName(e.target.value)} />
                        <div className="form-mini-actions">
                            <button type="button" onClick={() => setShowNewRol(false)} className="btn-cancel">✕</button>
                            <button type="submit" className="btn-confirm">✓</button>
@@ -153,50 +171,70 @@ const Roles = () => {
                )}
 
                <div className="roles-list">
-                   {loading ? <p className="loading-text">Cargando...</p> : 
-                    roles.map(rol => (
-                       <div 
-                           key={rol.id} 
-                           className={`rol-item ${selectedRol?.id === rol.id ? 'active' : ''}`}
-                           onClick={() => handleSelectRol(rol)}
-                       >
-                           <UserCog size={18}/>
-                           <span>{rol.nombre}</span>
-                           {rol.nombre === "Master_Admin" && <Lock size={14} className="lock-icon"/>}
+                   {loading ? <p style={{padding:10}}>Cargando...</p> : 
+                    roles.map(rol => {
+                      const isEditing = editingRol === rol.id;
+                      const isDeleting = showDeleteConfirm === rol.id;
+                      return (
+                       <div key={rol.id} className={`rol-item ${selectedRol?.id === rol.id ? 'active' : ''}`} onClick={() => !isEditing && !isDeleting && handleSelectRol(rol)}>
+                           {isEditing ? (
+                               <div className="rol-edit-form">
+                                 <input value={editRolName} onChange={e => setEditRolName(e.target.value)} onClick={e => e.stopPropagation()} className="rol-edit-input" autoFocus />
+                                 <button type="button" className="btn-icon-success" onClick={() => saveEditRol(rol.id)}><Check size={14}/></button>
+                                 <button type="button" className="btn-icon-cancel" onClick={cancelEditRol}><X size={14}/></button>
+                               </div>
+                           ) : isDeleting ? (
+                               <div className="rol-delete-confirm">
+                                 <span className="delete-text">¿Borrar?</span>
+                                 <button type="button" className="btn-icon-danger" onClick={() => deleteRol(rol.id)}><Check size={14}/></button>
+                                 <button type="button" className="btn-icon-cancel" onClick={cancelDelete}><X size={14}/></button>
+                               </div>
+                           ) : (
+                               <>
+                                 <UserCog size={18}/>
+                                 <span className="rol-name">{rol.nombre}</span>
+                                 {rol.nombre === "Master_Admin" && <Lock size={14} className="lock-icon"/>}
+                                 {/* Acciones Hover */}
+                                 {rol.nombre !== "Master_Admin" && currentUserRole === "Master_Admin" && (
+                                     <div className="rol-actions" onClick={e => e.stopPropagation()}>
+                                       <button className="btn-icon-edit" onClick={e => startEditRol(rol, e)}><Edit size={14}/></button>
+                                       <button className="btn-icon-delete" onClick={e => confirmDeleteRol(rol, e)}><Trash2 size={14}/></button>
+                                     </div>
+                                 )}
+                               </>
+                           )}
                        </div>
-                   ))}
+                      );
+                   })}
                </div>
            </div>
 
-           {/* --- PANEL DERECHO: MATRIZ DE PERMISOS --- */}
+           {/* MAIN CONTENT */}
            <div className="roles-main">
                {selectedRol ? (
                    <>
                        <div className="config-header">
                            <div>
-                               <h1>Configurando: <span className="highlight-rol">{selectedRol.nombre}</span></h1>
-                               <p>Define qué puede hacer este usuario en el sistema.</p>
+                               <h1>Rol: <span className="highlight-rol">{selectedRol.nombre}</span></h1>
+                               <p>Gestiona los permisos para este perfil.</p>
                            </div>
-                           <button className="btn-save-config" onClick={saveConfiguration}>
-                               <Save size={18}/> Guardar Cambios
+                           <button className="btn-save-config" onClick={saveConfiguration} disabled={selectedRol.nombre === "Master_Admin"}>
+                               <Save size={18}/> Guardar
                            </button>
                        </div>
-
                        <div className="permissions-grid">
                            {permisosDisponibles.map(permiso => {
                                const isActive = permisosAsignados.includes(permiso.id);
+                               const isMaster = selectedRol.nombre === "Master_Admin";
                                return (
-                                   <div 
-                                       key={permiso.id} 
-                                       className={`permiso-card ${isActive ? 'active' : ''}`}
-                                       onClick={() => togglePermiso(permiso.id)}
-                                   >
+                                   <div key={permiso.id} className={`permiso-card ${isActive ? 'active' : ''}`} onClick={() => !isMaster && togglePermiso(permiso.id)}>
                                        <div className="permiso-info">
                                            <h4>{permiso.nombre.replace(/_/g, " ")}</h4>
                                            <p>{permiso.descripcion}</p>
                                        </div>
-                                       <div className={`toggle-switch ${isActive ? 'on' : 'off'}`}>
+                                       <div className={`toggle-switch ${isActive ? 'on' : 'off'} ${isMaster ? 'locked' : ''}`}>
                                            <div className="toggle-knob"></div>
+                                           {isMaster && <Lock size={10} className="toggle-lock"/>}
                                        </div>
                                    </div>
                                );
@@ -206,7 +244,7 @@ const Roles = () => {
                ) : (
                    <div className="empty-selection">
                        <UserCog size={64} style={{opacity: 0.2}}/>
-                       <p>Selecciona un rol de la izquierda para editar sus permisos.</p>
+                       <p>Selecciona un rol para configurar.</p>
                    </div>
                )}
            </div>

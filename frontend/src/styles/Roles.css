@@ -17,24 +17,21 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   padding: 1.5rem;
   transition: box-shadow 0.3s ease;
-  margin-bottom: 2rem; /* Añadido espacio entre contenedores */
+  margin-bottom: 2rem;
 }
 
 .form-container:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
-/* Limita el ancho en la tabla de usuarios que es más ancha */
 .form-container-responsive {
   max-width: 1000px;
 }
 
-/* Wrapper para que las tablas sean responsivas horizontalmente */
 .table-wrapper {
   overflow-x: auto;
 }
 
-/* Estilo de tabla unificado, reemplaza los estilos en línea */
 .roles-table {
   width: 100%;
   border-collapse: collapse;
@@ -53,7 +50,7 @@
   border-bottom: 1px solid #eee;
   padding: 10px;
   font-size: 0.95rem;
-  vertical-align: middle; /* Centra verticalmente el contenido */
+  vertical-align: middle;
 }
 
 .roles-table tr:hover {
@@ -139,8 +136,8 @@ select:focus {
   background-color: #c9302c;
 }
 
-/* --- Estilos del Modal --- */
-.modal-backdrop {
+/* --- Estilos del Modal (RENOMBRADOS PARA EVITAR CONFLICTO) --- */
+.roles-modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
@@ -153,7 +150,7 @@ select:focus {
   z-index: 1000;
 }
 
-.modal-content {
+.roles-modal-content {
   background-color: white;
   padding: 1.5rem 2rem;
   border-radius: 1rem;
@@ -162,7 +159,7 @@ select:focus {
   max-width: 450px;
 }
 
-.modal-content h2 {
+.roles-modal-content h2 {
   margin-top: 0;
   margin-bottom: 1.5rem;
 }
@@ -184,7 +181,7 @@ select:focus {
   font-size: 1rem;
   border: 1px solid #ccc;
   border-radius: 6px;
-  box-sizing: border-box; /* Asegura que el padding no afecte el ancho */
+  box-sizing: border-box;
 }
 
 .modal-actions {
@@ -193,7 +190,6 @@ select:focus {
   gap: 0.75rem;
   margin-top: 2rem;
 }
-
 
 /* --- Mensajes de Feedback --- */
 .msg-success {
@@ -212,12 +208,12 @@ select:focus {
   margin-bottom: 1.5rem;
 }
 
-/* src/styles/Roles.css */
+/* --- LAYOUT ROLES --- */
 
 .roles-container {
     display: flex;
     gap: 20px;
-    height: calc(100vh - 120px); /* Ajustar según tu header */
+    height: calc(100vh - 120px);
     margin-top: 20px;
 }
 
@@ -330,3 +326,159 @@ select:focus {
 }
 .btn-cancel { background: #fee2e2; color: #ef4444; }
 .btn-confirm { background: #dcfce7; color: #16a34a; }
+
+/* Estilos para el contenido del item de rol */
+.rol-item-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rol-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Botones de acción del rol */
+.rol-actions {
+  display: flex;
+  gap: 5px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.rol-item:hover .rol-actions {
+  opacity: 1;
+}
+
+.btn-icon-edit, .btn-icon-delete, .btn-icon-success, .btn-icon-danger, .btn-icon-cancel {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-icon-edit { color: #3b82f6; background-color: #eff6ff; }
+.btn-icon-edit:hover { background-color: #dbeafe; color: #1d4ed8; }
+
+.btn-icon-delete { color: #ef4444; background-color: #fef2f2; }
+.btn-icon-delete:hover { background-color: #fee2e2; color: #dc2626; }
+
+.btn-icon-success { color: #10b981; background-color: #ecfdf5; }
+.btn-icon-success:hover { background-color: #d1fae5; color: #059669; }
+
+.btn-icon-danger { color: #ef4444; background-color: #fef2f2; }
+.btn-icon-danger:hover { background-color: #fee2e2; color: #dc2626; }
+
+.btn-icon-cancel { color: #6b7280; background-color: #f3f4f6; }
+.btn-icon-cancel:hover { background-color: #e5e7eb; color: #4b5563; }
+
+/* Formulario de edición dentro del item */
+.rol-edit-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.rol-edit-input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.rol-edit-actions, .rol-delete-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* Confirmación de eliminación */
+.rol-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.delete-text {
+  flex: 1;
+}
+
+/* Roles protegidos */
+.rol-item.protected {
+  background-color: #f9fafb;
+  border-left: 3px solid #f59e0b;
+}
+
+/* Footer de la lista de roles */
+.roles-footer {
+  padding: 10px 15px;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 10px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.text-muted {
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+/* Permisos deshabilitados para Master Admin */
+.permiso-card.disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.toggle-switch.locked {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.toggle-lock {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #6b7280;
+}
+
+/* Alertas */
+.alert {
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alert-warning {
+  background-color: #fef3c7;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+}
+
+/* Botón deshabilitado */
+.btn-save-config:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #9ca3af;
+}

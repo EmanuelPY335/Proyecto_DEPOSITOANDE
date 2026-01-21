@@ -307,3 +307,187 @@
 .btn-icon-only:active {
     transform: scale(0.95);
 }
+/* =========================
+   WIZARD PASO 3 – ESTILO CLARO
+========================= */
+
+.wizard-step-3 .load-selector-container {
+  display: flex;
+  gap: 24px;
+  height: 100%;
+}
+
+/* ---------- SIDEBAR ---------- */
+.wizard-step-3 .stops-sidebar {
+  width: 28%;
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.wizard-step-3 .stop-item {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+}
+
+.wizard-step-3 .stop-item:hover {
+  background: #f3f4f6;
+}
+
+.wizard-step-3 .stop-item.active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1e3a8a;
+}
+
+.wizard-step-3 .stop-item small {
+  color: #6b7280;
+}
+
+/* ---------- PANEL DERECHO ---------- */
+.wizard-step-3 .flex-1 {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 20px;
+  border: 1px solid #e5e7eb;
+}
+
+/* ---------- FORMULARIO ---------- */
+.wizard-step-3 .load-form-row {
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  border: 1px solid #e5e7eb;
+}
+
+/* inputs y selects perfectamente alineados */
+.wizard-step-3 .load-form-row input,
+.wizard-step-3 .load-form-row select {
+  height: 42px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 0.9rem;
+}
+
+.wizard-step-3 .load-form-row label {
+  color: #374151;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.wizard-step-3 .load-form-row input:focus,
+.wizard-step-3 .load-form-row select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+/* ---------- BOTÓN AGREGAR ---------- */
+.wizard-step-3 .load-form-row {
+  align-items: flex-end;
+}
+
+/* botón + */
+.wizard-step-3 .load-form-row .btn-icon-simple.success {
+  height: 42px;
+  width: 42px;
+  align-self: flex-end;
+  margin-bottom: 0;
+}
+
+.wizard-step-3 .load-form-row input,
+.wizard-step-3 .load-form-row select {
+  height: 42px;
+}
+
+/* botón + */
+.wizard-step-3 .load-form-row .btn-icon-simple.success {
+  height: 42px;
+  width: 42px;
+  min-width: 42px; /* IMPORTANTE: Evita que flexbox lo aplaste */
+  align-self: flex-end;
+  margin-bottom: 0;
+  
+  /* --- AGREGADO PARA VISIBILIDAD --- */
+  background-color: #3b82f6; /* Color azul para que se vea (igual al active) */
+  color: #ffffff;            /* Icono blanco */
+  border: none;
+  border-radius: 8px;        /* Mismo radio que los inputs */
+  cursor: pointer;
+  display: flex;             /* Para centrar el ícono + */
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  transition: background 0.2s ease;
+}
+
+/* ====== COLUMNA CANTIDAD ====== */
+.wizard-step-3 .qty-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+}
+
+/* wrapper input + unidad */
+.wizard-step-3 .qty-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* input cantidad */
+.wizard-step-3 .qty-input-wrapper input {
+  padding-right: 50px;
+  text-align: center;
+}
+
+/* texto unidad */
+.wizard-step-3 .qty-unit {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  color: #6b7280;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* asegurar que el botón + no se pierda */
+.wizard-step-3 .load-form-row > button {
+  align-self: flex-end;
+  margin-top: 18px;
+}
+ 
+.cantidad-input {
+  width: -2px;
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: #f9fafb;
+  transition: all 0.2s;
+
+}
+.cerrar-newruta {
+  position: absolute;
+  right: 55px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s, background-color 0.2s;
+}
+.cerrar-newruta:hover {
+  color: #fd0202;
+ 
+  }

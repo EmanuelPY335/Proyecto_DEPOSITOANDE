@@ -5,11 +5,10 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   Plus, CheckCircle, AlertCircle,
   User, ArrowRight, ArrowLeft, MapPin, UserPlus,
-  Trash2, ShieldAlert, Send, Edit, Calendar, Wrench, ArrowRightLeft, Box, List
+  Trash2, ShieldAlert, Send, Edit, Calendar, Wrench, ArrowRightLeft, Box
 } from "lucide-react";
 import "../styles/Ordenes.css";
 
-// Asegúrate de usar api.js correctamente, pero si prefieres la constante aquí:
 const API_BASE_URL = "http://127.0.0.1:5000";
 
 const OrdenesTrabajo = () => {
@@ -33,29 +32,15 @@ const OrdenesTrabajo = () => {
   const [nuevoMensaje, setNuevoMensaje] = useState("");
   const [step, setStep] = useState(1);
    
-  // --- Estado para Inventario (si es movimiento) ---
   const [inventario, setInventario] = useState([]);
 
   const [newOrden, setNewOrden] = useState({
-    titulo: "",
-    descripcion: "",
-    prioridad: "Media",
-    id_deposito: "",
-    id_empleado: "", 
-    fecha_limite: "",
-    // Campos Movimiento
-    tipo_orden: "General", 
-    id_lote: "",
-    cantidad: 0,
-    nueva_ubicacion: "",
-    id_solicitud_origen: null 
+    titulo: "", descripcion: "", prioridad: "Media", id_deposito: "", id_empleado: "", 
+    fecha_limite: "", tipo_orden: "General", id_lote: "", cantidad: 0, nueva_ubicacion: "", id_solicitud_origen: null 
   });
 
   const [editForm, setEditForm] = useState({
-    titulo: "",
-    descripcion: "",
-    prioridad: "Media",
-    fecha_limite: ""
+    titulo: "", descripcion: "", prioridad: "Media", fecha_limite: ""
   });
 
   useEffect(() => {
@@ -73,42 +58,35 @@ const OrdenesTrabajo = () => {
     loadEmpleados(); 
   }, []);
 
-  // --- DETECTAR REDIRECCIÓN DESDE SOLICITUDES (ACTUALIZADO) ---
+  useEffect(() => {
+    const query = new URLSearchParams(location.search);
+    const ordenIdParam = query.get("id");
+    if (ordenIdParam && ordenes.length > 0) {
+       const targetOrden = ordenes.find(o => o.id === parseInt(ordenIdParam));
+       if (targetOrden) openUpdateModal(targetOrden);
+    }
+  }, [location.search, ordenes]); 
+
   useEffect(() => {
     if (location.state?.crearDesdeSolicitud && location.state?.solicitud) {
         const sol = location.state.solicitud;
-        
-        // --- AQUÍ ESTÁ LA MAGIA: Formateo de items ---
         let descripcionGenerada = "";
-
         if (sol.items && Array.isArray(sol.items) && sol.items.length > 0) {
-            // Caso: Solicitud con múltiples items
-            const listaItems = sol.items.map(item => 
-                `- ${item.material} (${item.cantidad} ${item.unidad || 'u.'})`
-            ).join("\n");
-
+            const listaItems = sol.items.map(item => `- ${item.material} (${item.cantidad} ${item.unidad || 'u.'})`).join("\n");
             descripcionGenerada = `Solicitud #${sol.id_solicitud} de ${sol.deposito_solicitante}:\n\nMateriales requeridos:\n${listaItems}\n\nObs: ${sol.observacion || 'Ninguna'}`;
         } else {
-            // Caso: Solicitud antigua o simple (Fallback)
             const unidad = sol.unidad || "u.";
             descripcionGenerada = `Solicitud de ${sol.deposito_solicitante}: ${sol.cantidad} ${unidad} de ${sol.material}.\n\nObs: ${sol.observacion || 'Ninguna'}`;
         }
-
         setNewOrden(prev => ({
-            ...prev,
-            titulo: `Preparar Pedido #${sol.id_solicitud}`,
-            descripcion: descripcionGenerada,
-            prioridad: "Alta",
-            tipo_orden: "General", 
-            id_solicitud_origen: sol.id_solicitud,
-            id_deposito: sol.id_destino || "" // Intentamos pre-asignar si viene el dato
+            ...prev, titulo: `Preparar Pedido #${sol.id_solicitud}`, descripcion: descripcionGenerada,
+            prioridad: "Alta", tipo_orden: "General", id_solicitud_origen: sol.id_solicitud, id_deposito: sol.id_destino || "" 
         }));
         setShowModalNew(true);
         setStep(1); 
     }
   }, [location]);
 
-  // Cargar inventario si es tipo movimiento
   useEffect(() => {
     if (showModalNew && newOrden.tipo_orden === "Movimiento") {
         const fetchInventario = async () => {
@@ -122,150 +100,89 @@ const OrdenesTrabajo = () => {
   }, [newOrden.tipo_orden, showModalNew]);
 
   const loadOrdenes = async () => {
-    try {
-      const data = await apiFetch(`${API_BASE_URL}/api/ordenes`);
-      setOrdenes(data || []);
-    } catch (e) { console.error(e); }
+    try { const data = await apiFetch(`${API_BASE_URL}/api/ordenes`); setOrdenes(data || []); } catch (e) { console.error(e); }
   };
 
   const loadRecursos = async () => {
-    try {
-      const dep = await apiFetch(`${API_BASE_URL}/api/depositos`);
-      setDepositos(dep || []);
-    } catch (e) { console.error(e); }
+    try { const dep = await apiFetch(`${API_BASE_URL}/api/depositos`); setDepositos(dep || []); } catch (e) { console.error(e); }
   };
 
   const loadEmpleados = async () => {
-    try {
-      const data = await apiFetch(`${API_BASE_URL}/api/empleados`); 
-      setEmpleados(data || []);
-    } catch (e) { console.error(e); }
+    try { const data = await apiFetch(`${API_BASE_URL}/api/empleados`); setEmpleados(data || []); } catch (e) { console.error(e); }
   };
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault(); 
     if (step === 1) {
-        if (newOrden.titulo?.trim()) setStep(2); 
-        else alert("El título es obligatorio.");
+        if (newOrden.titulo?.trim()) setStep(2); else alert("El título es obligatorio.");
         return;
     }
-    
     try {
-      // Forzamos id_empleado a null al crear para no pedirlo en el wizard
       const ordenPayload = { ...newOrden, id_empleado: null };
-
       if (newOrden.id_solicitud_origen) {
-          const payloadSolicitud = {
-              id_solicitud: newOrden.id_solicitud_origen,
-              id_empleado: null // Explícitamente null
-          };
-          
           await apiFetch(`${API_BASE_URL}/api/ordenes/crear-desde-solicitud`, { 
-              method: "POST", 
-              body: JSON.stringify(payloadSolicitud) 
+              method: "POST", body: JSON.stringify({ id_solicitud: newOrden.id_solicitud_origen, id_empleado: null }) 
           });
-
       } else {
           if (rolUser !== "Master_Admin") delete ordenPayload.id_deposito;
           await apiFetch(`${API_BASE_URL}/api/ordenes`, { method: "POST", body: JSON.stringify(ordenPayload) });
       }
-
-      setShowModalNew(false);
-      setStep(1);
-      setNewOrden({ 
-          titulo: "", descripcion: "", prioridad: "Media", id_deposito: "", id_empleado: "", fecha_limite: "",
-          tipo_orden: "General", id_lote: "", cantidad: 0, nueva_ubicacion: "", id_solicitud_origen: null 
-      });
-      loadOrdenes();
-      alert("✅ Orden creada. Ahora puedes asignarla en la tarjeta correspondiente.");
-
+      setShowModalNew(false); setStep(1);
+      setNewOrden({ titulo: "", descripcion: "", prioridad: "Media", id_deposito: "", id_empleado: "", fecha_limite: "", tipo_orden: "General", id_lote: "", cantidad: 0, nueva_ubicacion: "", id_solicitud_origen: null });
+      loadOrdenes(); alert("✅ Orden creada.");
     } catch (err) { alert("Error: " + err.message); }
   };
 
-  // --- LÓGICA DE NAVEGACIÓN PARA ASIGNAR ---
-  const handleGoToAssign = (orden) => {
-    // Redirige a la página de empleados pasando la orden en el state
-    navigate("/empleados", { state: { assigningOrden: orden } });
-  };
+  const handleGoToAssign = (orden) => { navigate("/empleados", { state: { assigningOrden: orden } }); };
 
   const openEditModal = (orden) => {
     setSelectedOrden(orden);
-    setEditForm({
-      titulo: orden.titulo,
-      descripcion: orden.descripcion,
-      prioridad: orden.prioridad,
-      fecha_limite: orden.fecha_limite || "" 
-    });
+    setEditForm({ titulo: orden.titulo, descripcion: orden.descripcion, prioridad: orden.prioridad, fecha_limite: orden.fecha_limite || "" });
     setShowModalEdit(true);
   };
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
-      await apiFetch(`${API_BASE_URL}/api/ordenes/${selectedOrden.id}`, {
-        method: "PUT",
-        body: JSON.stringify({ accion: "editar_info", ...editForm })
-      });
-      setShowModalEdit(false);
-      loadOrdenes();
+      await apiFetch(`${API_BASE_URL}/api/ordenes/${selectedOrden.id}`, { method: "PUT", body: JSON.stringify({ accion: "editar_info", ...editForm }) });
+      setShowModalEdit(false); loadOrdenes();
     } catch (err) { alert("Error: " + err.message); }
   };
 
   const openUpdateModal = async (o) => {
-    setSelectedOrden(o);
-    setNuevoMensaje("");
-    setAvancesList([]);
-    try {
-        const data = await apiFetch(`${API_BASE_URL}/api/ordenes/${o.id}/avances`);
-        setAvancesList(data || []);
-    } catch (e) { console.error(e); }
+    setSelectedOrden(o); setNuevoMensaje(""); setAvancesList([]);
+    try { const data = await apiFetch(`${API_BASE_URL}/api/ordenes/${o.id}/avances`); setAvancesList(data || []); } catch (e) { console.error(e); }
     setShowModalUpdate(true);
   };
 
   const handlePostAvance = async () => {
     if (!nuevoMensaje.trim()) return;
     try {
-        const resp = await apiFetch(`${API_BASE_URL}/api/ordenes/${selectedOrden.id}/avances`, {
-            method: "POST", body: JSON.stringify({ mensaje: nuevoMensaje })
-        });
-        if (resp.success) {
-            setAvancesList([...avancesList, resp.avance]);
-            setNuevoMensaje("");
-        }
+        const resp = await apiFetch(`${API_BASE_URL}/api/ordenes/${selectedOrden.id}/avances`, { method: "POST", body: JSON.stringify({ mensaje: nuevoMensaje }) });
+        if (resp.success) { setAvancesList([...avancesList, resp.avance]); setNuevoMensaje(""); }
     } catch (e) { alert("Error: " + e.message); }
   };
 
   const handleFinalizarTarea = async () => {
-    if(!window.confirm("¿Confirmar que la tarea está terminada? Se registrará el movimiento si corresponde.")) return;
+    if(!window.confirm("¿Confirmar que la tarea está terminada?")) return;
     try {
-        await apiFetch(`${API_BASE_URL}/api/ordenes/${selectedOrden.id}`, {
-            method: "PUT", body: JSON.stringify({ nuevo_estado: "Completada" }) 
-        });
-        setShowModalUpdate(false);
-        loadOrdenes(); 
+        await apiFetch(`${API_BASE_URL}/api/ordenes/${selectedOrden.id}`, { method: "PUT", body: JSON.stringify({ nuevo_estado: "Completada" }) });
+        setShowModalUpdate(false); loadOrdenes(); 
     } catch (e) { console.error(e); }
   };
 
   const deleteSoft = async (id) => {
     if (!window.confirm("¿Papelera?")) return;
-    try {
-      await apiFetch(`${API_BASE_URL}/api/ordenes/${id}`, { method: "DELETE" });
-      setOrdenes(ordenes.filter(o => o.id !== id));
-    } catch (error) { alert(error.message); }
+    try { await apiFetch(`${API_BASE_URL}/api/ordenes/${id}`, { method: "DELETE" }); setOrdenes(ordenes.filter(o => o.id !== id)); } catch (error) { alert(error.message); }
   };
 
   const permaDelete = async (id) => {
     if (!window.confirm("⚠️ ¿Destruir permanentemente?")) return;
-    try {
-      await apiFetch(`${API_BASE_URL}/api/ordenes/${id}/perma`, { method: "DELETE" });
-      setOrdenes(ordenes.filter(o => o.id !== id));
-    } catch (error) { alert(error.message); }
+    try { await apiFetch(`${API_BASE_URL}/api/ordenes/${id}/perma`, { method: "DELETE" }); setOrdenes(ordenes.filter(o => o.id !== id)); } catch (error) { alert(error.message); }
   };
 
   return (
-    <div className="dashboard-layout">
-      <div className="content-dashboard">
-        
+    <div className="fade-in"> 
         <div className="page-header">
           <div>
             <h1>Órdenes de Trabajo</h1>
@@ -282,16 +199,9 @@ const OrdenesTrabajo = () => {
           {ordenes.map((orden) => {
             const isCompleted = ["Aprobada", "Completada", "Finalizada"].includes(orden.estado);
             const isExpired = orden.estado === "Fin de tiempo limite";
-            
             let estadoClase = orden.estado.toLowerCase().replace(/ /g, "-");
             let estadoTexto = orden.estado;
-
-            if (isCompleted) {
-                estadoClase = "completada"; 
-                estadoTexto = "Completada";
-            } else if (isExpired) {
-                estadoTexto = "TIEMPO AGOTADO";
-            }
+            if (isCompleted) { estadoClase = "completada"; estadoTexto = "Completada"; } else if (isExpired) { estadoTexto = "TIEMPO AGOTADO"; }
 
             return (
               <div key={orden.id} className={`orden-card priority-${orden.prioridad.toLowerCase()}`}>
@@ -307,14 +217,9 @@ const OrdenesTrabajo = () => {
 
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
                     <h3>{orden.titulo}</h3>
-                    {canManage && (
-                        <button className="btn-icon-simple" onClick={() => openEditModal(orden)} title="Editar información">
-                            <Edit size={16} />
-                        </button>
-                    )}
+                    {canManage && (<button className="btn-icon-simple" onClick={() => openEditModal(orden)} title="Editar"><Edit size={16} /></button>)}
                 </div>
 
-                {/* AQUÍ ESTÁ EL CAMBIO CLAVE: whiteSpace: 'pre-wrap' */}
                 <p className="orden-desc" style={{whiteSpace: 'pre-wrap'}}>{orden.descripcion}</p>
 
                 {orden.tipo_orden === "Movimiento" && (
@@ -364,7 +269,6 @@ const OrdenesTrabajo = () => {
                 </div>
 
                 <div className="orden-actions">
-                  {/* BOTÓN ASIGNAR: Redirige a /empleados */}
                   {(!orden.empleado_nombre || orden.empleado_nombre.toLowerCase().includes("sin asignar")) &&
                     canManage && (
                       <button className="btn-action primary" onClick={() => handleGoToAssign(orden)}>
@@ -397,10 +301,11 @@ const OrdenesTrabajo = () => {
           })}
         </div>
 
-        {/* --- MODAL NUEVA ORDEN (Sin campo de asignar empleado) --- */}
+        {/* --- MODAL NUEVA ORDEN (CON SCROLLBAR AQUÍ) --- */}
         {showModalNew && (
           <div className="modal-backdrop">
-            <div className="discord-card modal-wizard">
+            {/* AQUI SE AGREGÓ EL STYLE PARA EL SCROLL */}
+            <div className="discord-card modal-wizard" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
               <div className="roles-header">
                   <h2>{newOrden.id_solicitud_origen ? "Procesar Solicitud" : "Nueva Orden"}</h2>
                   <span className="wizard-step-indicator">Paso {step} de 2</span>
@@ -595,7 +500,6 @@ const OrdenesTrabajo = () => {
         )}
 
       </div>
-    </div>
   );
 };
 

@@ -1,61 +1,314 @@
-/* Mapa.css (ACTUALIZADO) */
+/* =========================================
+   RESET & LAYOUT BASE
+   ========================================= */
+* {
+  box-sizing: border-box;
+}
 
-/* Esta es la nueva área de contenido del mapa.
-  Ocupará el 100% del alto menos el navbar (70px).
-  Crece para llenar el espacio restante al lado del sidebar.
-*/
+.mapa-layout-container {
+  position: relative; /* Contenedor maestro */
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden; /* Evita scrolls dobles */
+  font-family: 'Inter', sans-serif;
+  background-color: #e2e8f0;
+}
+
+/* =========================================
+   CAPA DEL MAPA (FONDO)
+   ========================================= */
 .content-dashboard-map {
-  flex-grow: 1;
-  height: calc(100vh - 70px); /* Alto total menos Navbar */
-  position: relative;
-  background: #eee; /* Fondo mientras carga el mapa */
-}
-
-/* El contenedor de Leaflet debe llenar el 100%
-  de su padre (.content-dashboard-map)
-*/
-.leaflet-map-container {
-  width: 100%;
-  height: 100%;
-}
-
-/* Fix para el contenedor del mapa */
-.leaflet-container {
-  height: 100% !important;
-  width: 100% !important;
-  font-family: inherit;
-}
-
-/* Loading spinner (sin cambios) */
-.loading-map {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  height: 100%; /* Llenará el .content-dashboard-map */
-  width: 100%;
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 1000; /* Por encima del mapa vacío */
+  width: 100%;
+  height: 100%;
+  z-index: 1; /* El nivel más bajo */
 }
 
-.spinner {
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #3498db;
+.leaflet-map-container {
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+/* Ajustamos los controles de Leaflet para que no choquen con nuestro botón */
+.leaflet-top.leaflet-left {
+  top: 70px; /* Bajamos el zoom para dejar espacio al botón de menú */
+  left: 10px;
+}
+
+/* =========================================
+   BOTÓN FLOTANTE (ABRIR MENÚ)
+   ========================================= */
+.sidebar-toggle-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 999; /* Por encima del mapa, por debajo del sidebar */
+  
+  width: 44px;
+  height: 44px;
+  background-color: #ffffff;
+  border-radius: 8px; /* Cuadrado redondeado estilo Google */
+  border: 1px solid rgba(0,0,0,0.1);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #5f6368;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.sidebar-toggle-btn:hover {
+  background-color: #f1f3f4;
+  color: #1a73e8;
+}
+
+.sidebar-toggle-btn:active {
+  transform: scale(0.95);
+}
+
+/* =========================================
+   SIDEBAR (PANEL LATERAL)
+   ========================================= */
+.mapa-sidebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0; /* Ocupa toda la altura */
+  width: 360px; /* Ancho estándar de Google Maps */
+  background: #ffffff;
+  z-index: 1000; /* La capa más alta */
+  
+  display: flex;
+  flex-direction: column;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.12); /* Sombra suave */
+  
+  /* ANIMACIÓN DE DESPLAZAMIENTO */
+  transform: translateX(0); /* Estado Abierto */
+  transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Estado CERRADO: Se mueve fuera de la pantalla a la izquierda */
+.mapa-sidebar.closed {
+  transform: translateX(-100%);
+}
+
+/* --- Cabecera del Sidebar --- */
+.mapa-sidebar-header {
+  height: 64px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #f1f3f4;
+  flex-shrink: 0;
+}
+
+.mapa-sidebar-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  color: #202124;
+}
+
+/* Botón cerrar dentro del sidebar */
+.close-btn-sidebar {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
   border-radius: 50%;
-  width: 50px;
-  height: 50px;
-  animation: spin 2s linear infinite;
-  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #5f6368;
+  transition: background 0.2s;
+}
+.close-btn-sidebar:hover {
+  background-color: #f1f3f4;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+/* --- Secciones y Contenido --- */
+.sidebar-section {
+  padding: 16px 24px 0;
 }
 
-/* ELIMINAMOS .map-page Y LAS REGLAS DE html, body y #root
-  porque ahora la página se comporta como un layout normal
-  y depende de los estilos de Home.css.
-*/
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5f6368;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* SELECT MODERNO */
+.custom-select-wrapper {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.modern-select {
+  width: 100%;
+  padding: 12px 12px 12px 40px;
+  font-size: 14px;
+  color: #202124;
+  background: #fff;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  appearance: none;
+  cursor: pointer;
+}
+.modern-select:hover {
+  border-color: #202124;
+}
+.modern-select:focus {
+  outline: none;
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
+}
+
+.select-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #5f6368;
+  pointer-events: none;
+}
+.select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #5f6368;
+  pointer-events: none;
+}
+
+/* --- LISTA SCROLLEABLE --- */
+.list-section {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 20px;
+}
+
+.vehiculos-list-modern {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Tarjeta Vehículo */
+.vehiculo-card {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.vehiculo-card:hover {
+  background-color: #f8f9fa;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.vehiculo-card.selected {
+  background-color: #e8f0fe;
+  border-color: #d2e3fc;
+}
+
+.card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #f1f3f4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  color: #5f6368;
+}
+
+.card-info {
+  flex: 1;
+}
+
+.card-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #202124;
+}
+.card-subtitle {
+  font-size: 12px;
+  color: #70757a;
+}
+
+/* --- MENÚ INFERIOR --- */
+.mapa-menu-inferior {
+  border-top: 1px solid #f1f3f4;
+  padding: 8px;
+  display: flex;
+  justify-content: space-around;
+  background: #fff;
+}
+
+.menu-btn {
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 11px;
+  color: #5f6368;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.menu-btn:hover {
+  color: #1a73e8;
+  background: #f1f3f4;
+}
+
+/* =========================================
+   RESPONSIVE DESIGN (MÓVILES)
+   ========================================= */
+@media (max-width: 768px) {
+  
+  /* El sidebar ocupa todo el ancho en móvil, menos un pequeño margen */
+  .mapa-sidebar {
+    width: 100%; 
+    max-width: 100%; /* Opcional: poner 320px si quieres que se vea parte del mapa */
+  }
+
+  /* Ajuste de cabecera en móvil */
+  .mapa-sidebar-header {
+    height: 56px;
+    padding: 0 16px;
+  }
+  
+  /* Botón de toggle en móvil */
+  .sidebar-toggle-btn {
+    top: 16px;
+    left: 16px;
+    width: 40px;
+    height: 40px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  }
+  
+  /* Bajamos más los controles del mapa para que no estorben en pantallas táctiles */
+  .leaflet-top.leaflet-left {
+    top: 80px; 
+  }
+}

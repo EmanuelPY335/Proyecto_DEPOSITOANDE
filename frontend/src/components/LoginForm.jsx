@@ -66,7 +66,9 @@ const LoginForm = () => {
                 const nombreCompleto = `${perfilData.NOMBRE} ${perfilData.APELLIDO}`;
                 sessionStorage.setItem("user_nombre", nombreCompleto);
                 sessionStorage.setItem("user_rol", perfilData.rol);
-
+                sessionStorage.setItem("user_id", perfilData.ID_USUARIO);
+                // LoginForm.jsx
+ 
                 // 🔥 AGREGAR ESTA LÍNEA IMPORTANTE 🔥
                 sessionStorage.setItem("user_deposito_id", perfilData.ID_DEPOSITO);
                 

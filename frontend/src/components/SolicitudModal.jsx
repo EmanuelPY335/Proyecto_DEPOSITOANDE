@@ -244,18 +244,18 @@ const SolicitudModal = ({ materialInicial, onClose, onConfirm }) => {
 
             {/* 2. AGREGAR MATERIALES */}
             <div className={`add-item-section ${!selectedProveedorId ? 'disabled' : ''}`}>
-                <label className="section-title">2. Agregar Items</label>
+                <label className="input-group-label">2. Agregar Items</label>
                 
                 <div className="add-item-controls">
                     
                     {/* A. BUSCADOR MATERIAL */}
                     <div className="search-container">
                         <label className="field-label">Material</label>
-                        <div className="search-input-wrapper">
+                        <div className="search-input-wrapper solicitud-search-input-wrapper">
                             <Search size={16} color="#aaa"/>
                             <input 
                                 type="text" 
-                                className="search-input"
+                                className="solicitud-search-input"
                                 placeholder="Buscar..." 
                                 value={busqueda} 
                                 onChange={handleSearchChange}
@@ -302,7 +302,7 @@ const SolicitudModal = ({ materialInicial, onClose, onConfirm }) => {
                         <label className="field-label">Cant.</label>
                         <input 
                             type="number" 
-                            className="discord-input qty-input" 
+                            className="solicitud-cantidad-input" 
                             placeholder="0" 
                             value={cantidadTemp} 
                             onChange={e => setCantidadTemp(e.target.value)}

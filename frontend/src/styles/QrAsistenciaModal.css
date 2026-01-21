@@ -1,0 +1,176 @@
+/* --- FONDO (BACKDROP) --- */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.65); /* Fondo oscuro */
+    backdrop-filter: blur(8px); /* Efecto borroso moderno */
+    display: flex;
+    justify-content: center; /* Centrado Horizontal */
+    align-items: center;     /* Centrado Vertical */
+    z-index: 2000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* --- TARJETA DEL MODAL --- */
+.qr-modal-card {
+    background: #ffffff;
+    width: 90%;
+    max-width: 360px; /* Ancho ideal para celulares y PC */
+    border-radius: 24px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --- CABECERA --- */
+.qr-header {
+    width: 100%;
+    padding: 24px 0 15px;
+    text-align: center;
+}
+
+.qr-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #1f2937;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* --- CONTENEDOR DEL ESCÁNER (CÁMARA) --- */
+.qr-scanner-container {
+    width: 280px;
+    height: 280px;
+    background-color: #000;
+    border-radius: 20px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.5); /* Sombra interna */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* El video de la librería */
+#reader {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#reader video {
+    object-fit: cover;
+    border-radius: 20px;
+}
+
+/* --- ANIMACIÓN DE ESCANEO (Línea verde) --- */
+.scan-line {
+    position: absolute;
+    width: 100%;
+    height: 3px;
+    background: #00ff88;
+    box-shadow: 0 0 10px #00ff88;
+    top: 0;
+    left: 0;
+    z-index: 5;
+    animation: scanMove 2s infinite linear;
+    opacity: 0.8;
+}
+
+@keyframes scanMove {
+    0% { top: 0; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+}
+
+/* --- ESTADOS SUPERPUESTOS --- */
+.overlay-status {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    color: white;
+    text-align: center;
+}
+
+/* --- PIE DE TARJETA (Texto y Botones) --- */
+.qr-footer {
+    padding: 20px 24px 24px;
+    width: 100%;
+    text-align: center;
+}
+
+.qr-msg {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #4b5563;
+    line-height: 1.4;
+}
+
+.qr-msg.error { color: #ef4444; font-weight: 600; }
+.qr-msg.success { color: #10b981; font-weight: 600; }
+
+/* Botón de reintentar */
+.btn-retry {
+    margin-top: 15px;
+    background-color: #ef4444;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    transition: transform 0.2s;
+}
+
+.btn-retry:active { transform: scale(0.96); }
+
+/* --- BOTÓN DE CERRAR --- */
+.close-btn-qr {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: rgba(0, 0, 0, 0.05);
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #6b7280;
+    transition: all 0.2s;
+    z-index: 50;
+}
+
+.close-btn-qr:hover {
+    background: #f3f4f6;
+    color: #111827;
+    transform: rotate(90deg);
+}
+
+/* --- ANIMACIONES DE ENTRADA --- */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.fade-in { animation: fadeIn 0.3s ease; }

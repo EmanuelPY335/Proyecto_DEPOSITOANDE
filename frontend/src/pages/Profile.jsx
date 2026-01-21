@@ -1,28 +1,30 @@
-// src/pages/Profile.jsx
 import React, { useState, useEffect } from "react";
 import { apiFetch } from "../utils/api";
-import { Camera, User, Palette, Mail, Phone, CheckCircle, AlertTriangle, X } from "lucide-react";
+import { Camera, User, Palette, Mail, Phone, CheckCircle, AlertTriangle, X, Save } from "lucide-react";
 import "../styles/Profile.css";
-import "../styles/EmployeeModal.css"; 
 
 const API_URL = "http://127.0.0.1:5000";
 
 const Profile = () => {
-  // Estado del Perfil (Solo datos visuales)
+  // Estado del Perfil
   const [profile, setProfile] = useState({
-    NOMBRE: "", APELLIDO: "", TELEFONO: "", CORREO: "",
-    BANNER_COLOR: "#5865F2", AVATAR: null
+    NOMBRE: "", 
+    APELLIDO: "", 
+    TELEFONO: "", 
+    CORREO: "",
+    BANNER_COLOR: "#5865F2", 
+    AVATAR: null
   });
 
   const [avatarFile, setAvatarFile] = useState(null);
   const [previewAvatar, setPreviewAvatar] = useState(null);
   const [msg, setMsg] = useState({ type: "", text: "" });
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     loadProfile();
   }, []);
 
-  // Auto-cierre de alertas
   useEffect(() => {
     if (msg.text) {
       const timer = setTimeout(() => setMsg({ type: "", text: "" }), 4000);
@@ -35,14 +37,26 @@ const Profile = () => {
       const data = await apiFetch(`${API_URL}/api/profile`);
       setProfile(data);
       if (data.AVATAR) setPreviewAvatar(`${API_URL}${data.AVATAR}`);
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+      console.error("Error cargando perfil:", err); 
+    }
   };
 
-  const handleChange = (e) => setProfile({...profile, [e.target.name]: e.target.value});
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setProfile(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setMsg({ type: "error", text: "La imagen debe ser menor a 5MB" });
+        return;
+      }
       setAvatarFile(file);
       setPreviewAvatar(URL.createObjectURL(file)); 
     }
@@ -50,7 +64,10 @@ const Profile = () => {
 
   const handleSaveChanges = async (e) => {
     e.preventDefault();
+    if (isSaving) return;
+    
     setMsg({ type: "", text: "" });
+    setIsSaving(true);
 
     try {
       if (avatarFile) {
@@ -66,152 +83,304 @@ const Profile = () => {
 
       const resp = await apiFetch(`${API_URL}/api/profile`, {
         method: "PUT",
-        body: JSON.stringify(profile)
+        body: JSON.stringify({
+          NOMBRE: profile.NOMBRE,
+          APELLIDO: profile.APELLIDO,
+          TELEFONO: profile.TELEFONO,
+          CORREO: profile.CORREO,
+          BANNER_COLOR: profile.BANNER_COLOR
+        })
       });
 
       if (resp.success) {
-        setMsg({ type: "success", text: "¡Perfil actualizado con éxito!" });
+        setMsg({ 
+          type: "success", 
+          text: "¡Perfil actualizado con éxito!" 
+        });
         sessionStorage.setItem("user_nombre", profile.NOMBRE);
         window.dispatchEvent(new Event("storage"));
-        loadProfile(); 
+        loadProfile();
         setAvatarFile(null);
         window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        throw new Error(resp.message || "Error al actualizar");
       }
     } catch (err) {
-      setMsg({ type: "error", text: "Error al actualizar perfil." });
+      console.error("Error guardando perfil:", err);
+      setMsg({ 
+        type: "error", 
+        text: err.message || "Error al actualizar perfil. Intenta nuevamente." 
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
-      <div className="dashboard-layout">
-          <div className="content-dashboard">
+    <div className="profile-container">
+      <div className="profile-wrapper">
+        
+        {/* Header */}
+        <div className="profile-header">
+          <h1 className="profile-title">Mi Perfil</h1>
+          <p className="profile-subtitle">
+            Personaliza tu información y apariencia en SISDEPO
+          </p>
+        </div>
 
-            <div className="profile-header-section">
-                <h1>Mi Perfil</h1>
-                <p className="subtitle">Personaliza tu identidad dentro de SISDEPO.</p>
-                <br />
+        {/* Alertas */}
+        {msg.text && (
+          <div className={`message-alert ${msg.type}`}>
+            <div className="alert-icon">
+              {msg.type === "success" ? 
+                <CheckCircle size={20} /> : 
+                <AlertTriangle size={20} />
+              }
             </div>
+            <p className="alert-text">{msg.text}</p>
+            <button 
+              className="alert-close" 
+              onClick={() => setMsg({ type: "", text: "" })}
+              aria-label="Cerrar alerta"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        )}
 
-            <div className="profile-grid">
+        <div className="profile-content">
+          
+          {/* Columna Izquierda - Formulario */}
+          <div className="form-column">
+            
+            {/* Datos Personales */}
+            <div className="form-section">
+              <div className="section-header">
+                <div className="section-icon">
+                  <User size={20} />
+                </div>
+                <h2>Datos Personales</h2>
+              </div>
               
-              {/* 🟦 COLUMNA IZQUIERDA: FORMULARIOS */}
-              <div className="profile-edit-column">
-
-                {/* ALERTA VISUAL */}
-                {msg.text && (
-                  <div className={`alert-box ${msg.type}`}>
-                    <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                      {msg.type === "success" ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
-                      <span>{msg.text}</span>
-                    </div>
-                    <button className="alert-close-btn" onClick={() => setMsg({ type: "", text: "" })}>
-                      <X size={18} />
-                    </button>
-                  </div>
-                )}
-
-                {/* 1. DATOS PERSONALES */}
-                <div className="settings-card">
-                  <h3><User size={18}/> Datos Personales</h3>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Nombre</label>
-                      <input type="text" name="NOMBRE" value={profile.NOMBRE} onChange={handleChange} className="input-field"/>
-                    </div>
-                    <div className="form-group">
-                      <label>Apellido</label>
-                      <input type="text" name="APELLIDO" value={profile.APELLIDO} onChange={handleChange} className="input-field"/>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Correo</label>
-                    <input type="email" name="CORREO" value={profile.CORREO} onChange={handleChange} className="input-field"/>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Teléfono</label>
-                    <input type="text" name="TELEFONO" value={profile.TELEFONO} onChange={handleChange} className="input-field"/>
-                  </div>
+              <div className="form-grid">
+                <div className="input-group">
+                  <label htmlFor="nombre">Nombre</label>
+                  <input 
+                    type="text" 
+                    id="nombre"
+                    name="NOMBRE" 
+                    value={profile.NOMBRE} 
+                    onChange={handleChange} 
+                    className="text-input"
+                    placeholder="Ingresa tu nombre"
+                  />
                 </div>
-
-                {/* 2. APARIENCIA */}
-                <div className="settings-card">
-                  <h3><Palette size={18}/> Apariencia</h3>
-
-                  <div className="form-group">
-                    <label>Color del Banner</label>
-                    <div className="color-picker-wrapper">
-                      <input 
-                        type="color" 
-                        name="BANNER_COLOR" 
-                        value={profile.BANNER_COLOR || "#5865F2"} 
-                        onChange={handleChange}
-                        className="input-color"
-                      />
-                      <span className="color-code">{profile.BANNER_COLOR}</span>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Avatar</label>
-                    <label className="file-upload-btn">
-                      <Camera size={16} /> Cambiar Imagen
-                      <input type="file" accept="image/*" onChange={handleAvatarChange} hidden />
-                    </label>
-                  </div>
-                </div>
-                  
-                <button className="btn-save-profile" onClick={handleSaveChanges}>
-                  Guardar Cambios
-                </button>
-              </div> 
-
-              {/* 🟩 COLUMNA DERECHA: VISTA PREVIA */}
-              <div className="profile-preview-column">
-                <h3 className="preview-title">Vista Previa</h3>
-                <p className="preview-subtitle">Así te verán los administradores.</p>
                 
-                <div className="discord-card preview-card">
-                  <div className="card-banner" style={{background: profile.BANNER_COLOR}}></div>
-
-                  <div className="card-header-content">
-                    {previewAvatar ? (
-                      <img src={previewAvatar} alt="Avatar" className="avatar-circle img-avatar" />
-                    ) : (
-                      <div className="avatar-circle">
-                        {profile.NOMBRE?.charAt(0)}{profile.APELLIDO?.charAt(0)}
-                        <span className="status-dot online" />
-                      </div>
-                    )}
-
-                    <div className="header-text">
-                      <h2>{profile.NOMBRE} {profile.APELLIDO}</h2>
-                      <br />
-                    </div>
-                  </div>
-
-                  <div className="card-body" style={{overflow: "hidden"}}>
-                    <div className="section-title">CONTACTO</div>
-                    <div className="preview-info-row">
-                      <Mail size={14} style={{marginRight: 8}}/> {profile.CORREO}
-                    </div>
-                    <div className="preview-info-row">
-                      <Phone size={14} style={{marginRight: 8}}/> {profile.TELEFONO || "Sin teléfono"}
-                    </div>
-                    <div className="card-actions">
-                      <button className="btn-save" disabled style={{opacity: 0.7, cursor: 'default'}}>
-                        Ejemplo
-                      </button>
-                    </div>
-                  </div>
+                <div className="input-group">
+                  <label htmlFor="apellido">Apellido</label>
+                  <input 
+                    type="text" 
+                    id="apellido"
+                    name="APELLIDO" 
+                    value={profile.APELLIDO} 
+                    onChange={handleChange} 
+                    className="text-input"
+                    placeholder="Ingresa tu apellido"
+                  />
+                </div>
+                
+                <div className="input-group full-width">
+                  <label htmlFor="correo">Correo Electrónico</label>
+                  <input 
+                    type="email" 
+                    id="correo"
+                    name="CORREO" 
+                    value={profile.CORREO} 
+                    onChange={handleChange} 
+                    className="text-input"
+                    placeholder="ejemplo@empresa.com"
+                  />
+                </div>
+                
+                <div className="input-group full-width">
+                  <label htmlFor="telefono">Teléfono</label>
+                  <input 
+                    type="tel" 
+                    id="telefono"
+                    name="TELEFONO" 
+                    value={profile.TELEFONO} 
+                    onChange={handleChange} 
+                    className="text-input"
+                    placeholder="+56 9 1234 5678"
+                  />
                 </div>
               </div>
+            </div>
 
+            {/* Apariencia */}
+            <div className="form-section">
+              <div className="section-header">
+                <div className="section-icon">
+                  <Palette size={20} />
+                </div>
+                <h2>Apariencia</h2>
+              </div>
+              
+              <div className="appearance-grid">
+                <div className="color-section">
+                  <label htmlFor="banner-color">Color del Banner</label>
+                  <div className="color-selector">
+                    <input 
+                      type="color" 
+                      id="banner-color"
+                      name="BANNER_COLOR" 
+                      value={profile.BANNER_COLOR || "#5865F2"} 
+                      onChange={handleChange}
+                      className="color-input"
+                      aria-label="Seleccionar color del banner"
+                    />
+                    <div className="color-info">
+                      <span className="color-hex">
+                        {profile.BANNER_COLOR.toUpperCase()}
+                      </span>
+                      <p className="color-description">
+                        Aparecerá en tu tarjeta de perfil
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="avatar-section">
+                  <label>Avatar</label>
+                  <div className="avatar-upload">
+                    <input 
+                      type="file" 
+                      id="avatar-upload"
+                      accept="image/*" 
+                      onChange={handleAvatarChange} 
+                      className="file-input"
+                    />
+                    <label htmlFor="avatar-upload" className="upload-button">
+                      <Camera size={16} /> 
+                      <span>{avatarFile ? "Cambiar Imagen" : "Subir Imagen"}</span>
+                    </label>
+                    {avatarFile && (
+                      <div className="file-details">
+                        <p className="file-name">{avatarFile.name}</p>
+                        <p className="file-size">
+                          {(avatarFile.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <p className="upload-note">
+                    Formatos: JPG, PNG, WebP. Máximo 5MB
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Botón Guardar */}
+            <button 
+              className="save-button" 
+              onClick={handleSaveChanges}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <div className="loading-spinner"></div>
+                  <span>Guardando...</span>
+                </>
+              ) : (
+                <>
+                  <Save size={18} />
+                  <span>Guardar Cambios</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Columna Derecha - Vista Previa */}
+          <div className="preview-column">
+            <div className="preview-container">
+              <div className="preview-header">
+                <h3>Vista Previa</h3>
+                <p>Así aparecerás en el sistema</p>
+              </div>
+              
+              <div className="profile-card">
+                <div 
+                  className="card-banner" 
+                  style={{background: profile.BANNER_COLOR}}
+                  aria-label="Banner de perfil"
+                />
+                
+                <div className="card-content">
+                  <div className="avatar-container">
+                    {previewAvatar ? (
+                      <img 
+                        src={previewAvatar} 
+                        alt="Avatar del usuario" 
+                        className="profile-avatar"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.style.display = 'none';
+                          const fallback = e.target.parentElement.querySelector('.avatar-fallback');
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    
+                    <div className={`avatar-fallback ${previewAvatar ? 'hidden' : ''}`}>
+                      <span>{profile.NOMBRE?.charAt(0)}{profile.APELLIDO?.charAt(0)}</span>
+                      <div className="status-indicator online" />
+                    </div>
+                  </div>
+                  
+                  <div className="profile-info">
+                    <h2 className="profile-name">
+                      {profile.NOMBRE || "Nombre"} {profile.APELLIDO || "Apellido"}
+                    </h2>
+                    <p className="profile-role">Miembro de SISDEPO</p>
+                    
+                    <div className="contact-info">
+                      <div className="contact-item">
+                        <Mail size={16} className="contact-icon" />
+                        <span className="contact-text">
+                          {profile.CORREO || "correo@ejemplo.com"}
+                        </span>
+                      </div>
+                      
+                      <div className="contact-item">
+                        <Phone size={16} className="contact-icon" />
+                        <span className="contact-text">
+                          {profile.TELEFONO || "Sin teléfono registrado"}
+                        </span>
+                      </div>
+                    </div>
+                    
+    
+                  </div>
+                </div>
+                
+                <div className="card-footer">
+                  <button className="preview-button" disabled>
+                    Vista de Ejemplo
+                  </button>
+                </div>
+              </div>
+              
+              <div className="preview-note">
+                <div className="note-icon">ℹ️</div>
+                <p>
+                  Los cambios se aplicarán al presionar "Guardar Cambios"
+                </p>
+              </div>
             </div>
           </div>
+        </div>
       </div>
+    </div>
   );
 };
 

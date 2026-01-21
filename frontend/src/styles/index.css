@@ -1,11 +1,16 @@
 /* src/styles/index.css */
 
 :root {
-  /* --- MODO CLARO (Por defecto) --- */
+  /* --- PALETA DE COLORES (Variables Globales) --- */
+  
+  /* MODO CLARO (Por defecto) */
   --bg-body: #f4f6fc;
   --bg-card: #ffffff;
   --bg-sidebar: #ffffff;
+  --bg-navbar: #ffffff;
   --bg-input: #f9f9f9;
+  --bg-hover: #f0f2f5;
+  --bg-active: #e6f7ff;
   
   --text-primary: #333333;
   --text-secondary: #6c757d;
@@ -14,63 +19,57 @@
   --border-color: #e0e0e0;
   --shadow-color: rgba(0,0,0,0.05);
 
-  /* Colores de Marca (Se mantienen o se ajustan levemente) */
+  /* Colores de Marca */
   --color-primary: #007bff;
   --color-primary-dark: #0056b3;
   --color-success: #28a745;
   --color-danger: #dc3545;
   --color-warning: #ffc107;
+  --color-info: #17a2b8;
 }
 
-/* --- MODO OSCURO (Se activa con la clase .dark-mode en el body) --- */
+/* --- MODO OSCURO --- */
 body.dark-mode {
-  --bg-body: #121212;         /* Fondo casi negro */
-  --bg-card: #1e1e1e;         /* Tarjetas gris oscuro */
-  --bg-sidebar: #1e1e1e;      
+  --bg-body: #121212;
+  --bg-card: #1e1e1e;
+  --bg-sidebar: #1e1e1e;
+  --bg-navbar: #1e1e1e;
   --bg-input: #2c2c2c;
+  --bg-hover: #2a2a2a;
+  --bg-active: #253341; /* Azul muy oscuro */
   
-  --text-primary: #e0e0e0;    /* Blanco suave */
+  --text-primary: #e0e0e0;
   --text-secondary: #a0a0a0;
   --text-inverse: #121212;
 
   --border-color: #333333;
-  --shadow-color: rgba(0,0,0,0.3);
+  --shadow-color: rgba(0,0,0,0.5);
 
-  /* Ajuste de colores brillantes para que no lastimen la vista */
+  /* Ajuste de primario para contraste en oscuro */
   --color-primary: #3a8bfd;   
 }
 
-/* --- APLICACIÓN DE VARIABLES --- */
+/* --- RESET BÁSICO --- */
 body {
   background-color: var(--bg-body);
   color: var(--text-primary);
   font-family: 'Poppins', sans-serif;
-  transition: background-color 0.3s, color 0.3s; /* Transición suave */
+  margin: 0;
+  padding: 0;
+  /* Transición suave para el cambio de tema */
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Actualizamos clases comunes para que usen las variables */
-.card, .form-container, .sidebar-dashboard, .navbar-dashboard {
-  background-color: var(--bg-card) !important;
-  color: var(--text-primary) !important;
-  border-color: var(--border-color) !important;
+/* Scrollbar global más estilizada (opcional pero recomendada) */
+::-webkit-scrollbar {
+  width: 8px;
 }
-
-.input-field, select, .search-input-main {
-  background-color: var(--bg-input) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid var(--border-color) !important;
+::-webkit-scrollbar-track {
+  background: transparent; 
 }
-
-h1, h2, h3, h4 {
-  color: var(--text-primary) !important;
-}
-
-p, span, label {
-  color: var(--text-secondary);
-}
-
-.app-layout {
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  min-height: 100vh;
+::-webkit-scrollbar-thumb {
+  background-color: var(--text-secondary);
+  border-radius: 20px;
+  border: 3px solid transparent;
+  background-clip: content-box;
 }

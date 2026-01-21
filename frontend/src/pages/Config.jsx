@@ -1,31 +1,33 @@
 // src/pages/Config.jsx
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { apiFetch } from "../utils/api"; // Importar apiFetch
+import { apiFetch } from "../utils/api"; 
 import { 
   Bell, Map as MapIcon, Shield, ChevronRight, 
-  Globe, Volume2, Truck, X, Lock, CheckCircle, AlertTriangle 
+  Globe, Clock, X, Lock, CheckCircle, AlertTriangle, Save 
 } from "lucide-react";
 import "../styles/Config.css";
-import "../styles/EmployeeModal.css"; // Importar estilos para el Modal
+import "../styles/EmployeeModal.css"; 
 
 const API_URL = "http://127.0.0.1:5000";
 
 const Config = () => {
-  // Configuración General
   const [notifications, setNotifications] = useState({ email: true, browser: true, sound: false });
   const [mapSettings, setMapSettings] = useState({ refreshRate: "30", showTraffic: false });
+  const [notiHours, setNotiHours] = useState(localStorage.getItem("noti_retention") || "24");
 
-  // --- ESTADO PARA MODAL DE SEGURIDAD ---
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [passwords, setPasswords] = useState({ current_password: "", new_password: "", confirm_password: "" });
   const [msg, setMsg] = useState({ type: "", text: "" });
 
-  // Manejadores Generales
   const toggleNotif = (key) => setNotifications(prev => ({...prev, [key]: !prev[key]}));
   const handleMapChange = (e) => setMapSettings({...mapSettings, [e.target.name]: e.target.value});
 
-  // Manejadores Seguridad
+  const handleSaveConfig = () => {
+    localStorage.setItem("noti_retention", notiHours);
+      alert("✅ Preferencia de retención guardada.");
+  };
+
   const handlePassChange = (e) => setPasswords({...passwords, [e.target.name]: e.target.value});
 
   const handlePasswordSubmit = async (e) => {
@@ -49,8 +51,6 @@ const Config = () => {
         if (data.success) {
             setMsg({ type: "success", text: "¡Contraseña actualizada correctamente!" });
             setPasswords({ current_password: "", new_password: "", confirm_password: "" });
-            // Cerrar modal después de 2s si quieres
-            // setTimeout(() => setShowSecurityModal(false), 2000);
         } else {
             setMsg({ type: "error", text: data.message || "Error al cambiar contraseña." });
         }
@@ -66,9 +66,8 @@ const Config = () => {
   };
 
   return (
-    <div className="dashboard-layout">
-      <div className="content-dashboard">
-        
+    /* Eliminado el dashboard-layout/content-dashboard porque Layout ya lo provee */
+    <div className="fade-in"> 
         <div className="config-header">
             <h1>Configuración del Sistema</h1>
             <p className="subtitle">Ajusta las preferencias de alertas y rastreo de SISDEPO.</p>
@@ -85,7 +84,25 @@ const Config = () => {
                     <span className="label-text">Alertas por Correo</span>
                     <input type="checkbox" className="checkbox-ios" checked={notifications.email} onChange={() => toggleNotif('email')}/>
                 </div>
-                {/* ... (resto de notificaciones) ... */}
+                
+                <div style={{marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #eee'}}>
+                    <label style={{fontSize: '0.9rem', fontWeight: 'bold', display:'block', marginBottom:'5px'}}>Limpiar menú rápido después de (horas):</label>
+                    <div style={{display:'flex', gap:'10px', alignItems:'center'}}>
+                        <div className="discord-input-wrapper" style={{width: '80px', display:'flex', alignItems:'center', background:'#f3f4f6', borderRadius:'4px', padding:'0 5px'}}>
+                            <Clock size={16} color="#666"/>
+                            <input 
+                                type="number" 
+                                style={{border:'none', background:'transparent', width:'100%', outline:'none', padding:'5px'}}
+                                value={notiHours} 
+                                onChange={(e) => setNotiHours(e.target.value)} 
+                            />
+                        </div>
+                        <button className="btn-icon-simple success" onClick={handleSaveConfig} title="Guardar">
+                            <Save size={18}/>
+                        </button>
+                    </div>
+                    <small style={{color:'#aaa', display:'block', marginTop:'5px'}}>Las alertas antiguas se moverán al Buzón.</small>
+                </div>
             </div>
 
             {/* 2. MAPA */}
@@ -117,7 +134,6 @@ const Config = () => {
                     <ChevronRight size={18} color="#ccc" />
                 </Link>
 
-                {/* --- BOTÓN SEGURIDAD (ABRE MODAL) --- */}
                 <div className="config-link-item" onClick={() => setShowSecurityModal(true)} style={{cursor: 'pointer'}}>
                     <div className="row-center">
                         <div className="icon-bg sec"><Shield size={18}/></div>
@@ -137,15 +153,12 @@ const Config = () => {
             <div className="modal-backdrop" onClick={closeSecurityModal}>
                 <div className="discord-card" onClick={(e) => e.stopPropagation()} style={{width: '400px', maxHeight: '90vh'}}>
                     
-                    {/* Header Modal */}
                     <div style={{padding: '20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                         <h2 style={{margin:0, fontSize: '1.2rem'}}>Cambiar Contraseña</h2>
                         <button onClick={closeSecurityModal} style={{background:'none', border:'none', cursor:'pointer'}}><X size={20}/></button>
                     </div>
 
                     <div className="card-body">
-                        
-                        {/* Alerta dentro del modal */}
                         {msg.text && (
                             <div className={`alert-box ${msg.type}`} style={{marginBottom: '15px'}}>
                                 <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
@@ -178,8 +191,6 @@ const Config = () => {
                 </div>
             </div>
         )}
-
-      </div>
     </div>
   );
 };

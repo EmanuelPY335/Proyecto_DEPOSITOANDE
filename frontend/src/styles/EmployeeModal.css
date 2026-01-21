@@ -1,282 +1,242 @@
 /* src/styles/EmployeeModal.css */
 
-/* --- FONDO --- */
-.modal-backdrop {
+/* --- VARIABLES (Copiadas de ProfileNew para consistencia) --- */
+:root {
+  --primary: #5865F2;
+  --primary-dark: #4752C4;
+  --success: #10B981;
+  --gray-50: #F9FAFB;
+  --gray-100: #F3F4F6;
+  --gray-200: #E5E7EB;
+  --gray-300: #D1D5DB;
+  --gray-400: #9CA3AF;
+  --gray-500: #6B7280;
+  --gray-600: #4B5563;
+  --gray-700: #374151;
+  --gray-800: #1F2937;
+  --gray-900: #111827;
+  --white: #FFFFFF;
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --radius: 0.5rem;
+  --radius-xl: 1.5rem; /* Bordes más redondeados como la tarjeta de perfil */
+}
+
+/* --- FONDO (BACKDROP) --- */
+.employee-modal-overlay {
     position: fixed;
-    top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(0, 0, 0, 0.65); 
-    backdrop-filter: blur(5px); /* Efecto vidrio más intenso */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(17, 24, 39, 0.6); /* Un poco más oscuro para resaltar el modal */
+    backdrop-filter: blur(5px); /* Efecto cristal */
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 9999 !important;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease-out;
 }
 
-/* --- TARJETA PRINCIPAL --- */
-.discord-card {
-    background-color: #fff;
+/* --- CONTENEDOR PRINCIPAL (Estilo Tarjeta Perfil) --- */
+.employee-modal-content {
+    background: var(--white);
+    padding: 2.5rem; /* Más espacio interno */
+    border-radius: var(--radius-xl); /* Borde muy redondeado (24px) */
+    box-shadow: var(--shadow-lg), 0 20px 40px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--gray-200);
     width: 100%;
-    max-width: 450px; /* Por defecto para empleados. En Lotes se anula con style inline */
-    max-height: 90vh; /* CRUCIAL: Nunca será más alta que el 90% de la pantalla */
-    border-radius: 16px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    display: flex;
-    flex-direction: column; /* Para gestionar el scroll interno */
+    max-width: 550px; /* Un poco más ancho */
+    max-height: 90vh;
+    overflow-y: auto;
     position: relative;
-    overflow: hidden; /* Para recortar bordes */
-    animation: modalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: scale(1);
+    animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes modalPop {
-    from { opacity: 0; transform: scale(0.95) translateY(10px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
+/* --- ANIMACIONES --- */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
-/* --- HEADER (Parte Fija) --- */
-.card-banner {
-    height: 80px; 
-    width: 100%;
-    flex-shrink: 0;
-}
-.banner-active { background: linear-gradient(120deg, #5865F2, #99AAFF); }
-.banner-inactive { background: linear-gradient(120deg, #ED4245, #FF9AA2); }
-
-.close-btn {
-    position: absolute; top: 15px; right: 15px;
-    background: rgba(0,0,0,0.25); border: none; color: white;
-    border-radius: 50%; width: 28px; height: 28px; 
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: all 0.2s; z-index: 10;
-}
-.close-btn:hover { background: rgba(0,0,0,0.5); transform: rotate(90deg); }
-
-.modal-header {
-    padding: 15px 24px;
-    border-bottom: 1px solid #e0e0e0;
-    display: flex; justify-content: space-between; align-items: center;
-    background: #fff; flex-shrink: 0;
+@keyframes scaleUp {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
 }
 
-/* Info Usuario (Avatar y Nombre) - Estilo antiguo */
-.card-header-content {
-    padding: 0 24px;
-    margin-top: -45px;
+/* --- HEADER --- */
+.employee-modal-header {
     display: flex;
-    align-items: flex-end;
-    margin-bottom: 15px;
-    position: relative;
-    flex-shrink: 0;
-}
-
-.avatar-circle {
-    width: 84px; height: 84px;
-    background-color: #2c2f33; color: white;
-    border: 5px solid #fff;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.8rem; font-weight: 700;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    position: relative;
-}
-
-.status-dot {
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    position: absolute; bottom: 0; right: 0;
-    border: 4px solid #fff;
-}
-.status-dot.online { background-color: #23a559; }
-.status-dot.offline { background-color: #747f8d; }
-
-.header-text { margin-left: 15px; padding-bottom: 5px; }
-.header-text h2 { margin: 0; font-size: 1.3rem; color: #111; font-weight: 800; }
-.header-info h2 { margin: 0; font-size: 1.4rem; color: #1e293b; font-weight: 800; }
-.username-tag { font-size: 0.85rem; color: #5865F2; font-weight: 600; }
-
-/* --- TABS --- */
-.tabs-container {
-    display: flex; padding: 0 24px; border-bottom: 1px solid #e0e0e0;
-    gap: 25px; background: #fff; flex-shrink: 0;
-}
-.tab-btn {
-    background: none; border: none; padding: 12px 0;
-    font-size: 0.9rem; font-weight: 600; color: #72767d;
-    cursor: pointer; position: relative; display: flex; align-items: center; gap: 6px;
-    transition: color 0.2s;
-}
-.tab-btn:hover { color: #2c2f33; }
-.tab-btn.active { color: #5865F2; }
-.tab-btn.active::after {
-    content: ''; position: absolute; bottom: -1px; left: 0;
-    width: 100%; height: 3px; background-color: #5865F2; border-radius: 3px 3px 0 0;
-}
-
-/* --- CUERPO GENERAL (Modal Body) --- */
-.card-body, .modal-body {
-    padding: 24px;
-    overflow-y: auto; 
-    flex-grow: 1; 
-    scrollbar-width: thin; scrollbar-color: #ccc transparent;
-}
-.card-body::-webkit-scrollbar, .modal-body::-webkit-scrollbar { width: 6px; }
-.card-body::-webkit-scrollbar-track, .modal-body::-webkit-scrollbar-track { background: transparent; }
-.card-body::-webkit-scrollbar-thumb, .modal-body::-webkit-scrollbar-thumb { background-color: #dcdcdc; border-radius: 20px; }
-.card-body::-webkit-scrollbar-thumb:hover, .modal-body::-webkit-scrollbar-thumb:hover { background-color: #b3b3b3; }
-
-/* --- FORMULARIOS --- */
-.input-group { margin-bottom: 16px; }
-.input-group label {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 0.75rem; font-weight: 700; color: #4F5660; margin-bottom: 6px;
-    text-transform: uppercase;
-}
-
-.input-group input, .discord-select, .discord-input {
-    width: 100%; padding: 10px 12px;
-    background-color: #F2F3F5;
-    border: 1px solid transparent; border-radius: 8px;
-    font-size: 0.95rem; color: #2E3338;
-    box-sizing: border-box; transition: all 0.2s ease;
-}
-
-.input-group input:focus, .discord-select:focus, .discord-input:focus {
-    outline: none; background-color: #fff; 
-    box-shadow: 0 0 0 2px #5865F2;
-}
-
-/* --- BOTONES --- */
-.card-actions {
-    margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0;
-    display: flex; justify-content: flex-end; gap: 10px;
-}
-.btn-save, .btn-status {
-    padding: 10px 18px; border: none; border-radius: 6px;
-    font-weight: 600; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; gap: 6px;
-    font-size: 0.85rem; transition: transform 0.1s, filter 0.2s;
-}
-.btn-save:hover, .btn-status:hover { filter: brightness(0.95); transform: translateY(-1px); }
-.btn-save:active, .btn-status:active { transform: translateY(0); }
-
-.btn-save { background-color: #5865F2; color: white; flex-grow: 1; }
-.btn-status { background-color: #f1f5f9; color: #475569; }
-
-.btn-icon {
-    border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
-    transition: opacity 0.2s; border-radius: 4px;
-}
-.btn-icon:hover { opacity: 0.8; }
-
-/* ========================================= */
-/* NUEVOS ESTILOS PARA LOTES / STOCK    */
-/* ========================================= */
-
-/* 1. BARRA DE HERRAMIENTAS MODERNA */
-.toolbar-container {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
+    justify-content: space-between;
     align-items: center;
-    background-color: #f8fafc; /* Fondo suave */
-    padding: 12px;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
+    margin-bottom: 2rem;
+    padding-bottom: 0; /* Quitamos la línea divisoria para hacerlo más limpio */
 }
 
-/* Buscador Compacto */
-.search-wrapper-pro {
-    position: relative;
-    width: 240px; /* Ancho fijo para que no sea muy largo */
-    flex-shrink: 0;
+.employee-modal-header h2 {
+    margin: 0;
+    font-size: 1.75rem; /* Título más grande como en el perfil */
+    color: var(--gray-900);
+    font-weight: 700;
+    letter-spacing: -0.025em;
 }
 
-.search-icon-pro {
-    position: absolute; left: 12px; top: 50%;
-    transform: translateY(-50%); color: #94a3b8; pointer-events: none;
-}
-
-.input-pro {
-    width: 100%;
-    padding: 9px 12px 9px 38px; /* Espacio para icono a la izq */
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    font-size: 0.9rem; color: #334155;
-    background-color: white; transition: all 0.2s ease;
-}
-
-.select-pro {
-    width: 100%;
-    padding: 9px 12px;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    font-size: 0.9rem; color: #334155;
-    background-color: white; cursor: pointer;
-}
-
-.input-pro:focus, .select-pro:focus {
-    outline: none; border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-}
-
-/* 2. BOTÓN TRANSFERIR "PREMIUM" */
-.btn-transfer-pro {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    color: white; border: none;
-    padding: 6px 12px; border-radius: 6px;
-    font-size: 0.8rem; font-weight: 600;
-    display: inline-flex; align-items: center; gap: 6px;
+.btn-close-modal {
+    background: transparent;
+    border: none;
     cursor: pointer;
-    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    color: var(--gray-400);
+    padding: 0.5rem;
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
 }
-.btn-transfer-pro:hover {
+
+.btn-close-modal:hover {
+    background-color: var(--gray-100);
+    color: var(--primary); /* Azul al pasar el mouse */
+    transform: rotate(90deg); /* Pequeña animación chula */
+}
+
+/* --- FORMULARIO Y GRIDS --- */
+.employee-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+}
+
+.full-width {
+    grid-column: span 2;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.form-group label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--gray-700);
+}
+
+/* --- INPUTS (Estilo idéntico a ProfileNew) --- */
+.form-input, .form-select {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 0.9375rem;
+    transition: all 0.2s ease;
+    background-color: var(--white);
+    color: var(--gray-800);
+    width: 100%;
+    box-sizing: border-box;
+    outline: none;
+}
+
+.form-input:focus, .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.1); /* Anillo de enfoque azul */
+}
+
+.form-input:hover, .form-select:hover {
+    border-color: var(--gray-400);
+}
+
+/* --- FOOTER Y BOTONES --- */
+.employee-modal-footer {
+    margin-top: 2.5rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding-top: 0;
+}
+
+.btn-cancel {
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--gray-200); /* Borde sutil */
+    background: var(--white);
+    color: var(--gray-700);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-cancel:hover {
+    background: var(--gray-50);
+    color: var(--gray-900);
+    border-color: var(--gray-300);
+}
+
+/* Botón Guardar (Estilo Gradiente Verde del Perfil) */
+.btn-save {
+    padding: 0.75rem 2rem;
+    border-radius: var(--radius);
+    border: none;
+    /* Mismo gradiente que el botón guardar del perfil */
+    background: linear-gradient(135deg, var(--success) 0%, #0D9488 100%);
+    color: var(--white);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
+}
+
+.btn-save:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
-    filter: brightness(1.1);
-}
-.btn-transfer-pro:active { transform: translateY(0); }
-.btn-transfer-pro:disabled {
-    background: #e2e8f0; color: #94a3b8;
-    cursor: not-allowed; box-shadow: none; transform: none;
+    box-shadow: 0 6px 12px -2px rgba(16, 185, 129, 0.3);
 }
 
-/* 3. TABLA CON SCROLL INDEPENDIENTE */
-.table-scroll-container {
-    max-height: 350px; /* Altura máxima fija */
-    overflow-y: auto;  /* Scroll interno */
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
+.btn-save:active {
+    transform: translateY(0);
+}
+
+/* --- Estado Toggle (Switch Moderno) --- */
+.status-toggle-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 5px;
+    padding: 10px;
+    background: var(--gray-50);
+    border-radius: var(--radius);
+    border: 1px solid var(--gray-200);
+}
+
+/* Si tienes un input type checkbox para el toggle, aquí hay un estilo base */
+.status-toggle-wrapper input[type="checkbox"] {
+    appearance: none;
+    width: 2.75rem;
+    height: 1.5rem;
+    background: var(--gray-300);
+    border-radius: 2rem;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.status-toggle-wrapper input[type="checkbox"]::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 1.25rem;
+    height: 1.25rem;
     background: white;
-    
-    /* Scrollbar fino */
-    scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent;
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    transition: transform 0.3s;
 }
 
-.table-scroll-container::-webkit-scrollbar { width: 8px; }
-.table-scroll-container::-webkit-scrollbar-track { background: transparent; }
-.table-scroll-container::-webkit-scrollbar-thumb { 
-    background-color: #cbd5e1; border-radius: 4px; border: 2px solid transparent; background-clip: content-box; 
-}
-.table-scroll-container::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
-
-/* Estilos básicos de tabla */
-.styled-table { width: 100%; border-collapse: collapse; }
-.styled-table th { 
-    text-align: left; padding: 12px 15px; 
-    background-color: #f8fafc; color: #64748b; 
-    font-size: 0.75rem; text-transform: uppercase; font-weight: 700;
-    border-bottom: 1px solid #e2e8f0;
-}
-.styled-table td { 
-    padding: 12px 15px; font-size: 0.9rem; color: #334155; 
-    border-bottom: 1px solid #f1f5f9; 
+.status-toggle-wrapper input[type="checkbox"]:checked {
+    background: var(--success); /* Verde éxito al activar */
 }
 
-/* 4. BADGES DE CATEGORÍA */
-.category-badge { border-radius: 4px; font-weight: 600; letter-spacing: 0.3px; }
-.badge-blue { background-color: #eff6ff; color: #3b82f6; border: 1px solid #dbeafe; }
-.badge-purple { background-color: #f5f3ff; color: #8b5cf6; border: 1px solid #ede9fe; }
-.badge-orange { background-color: #fff7ed; color: #f97316; border: 1px solid #ffedd5; }
-.badge-gray { background-color: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
-.badge-default { background-color: #f3f4f6; color: #4b5563; }
+.status-toggle-wrapper input[type="checkbox"]:checked::after {
+    transform: translateX(1.25rem);
+}

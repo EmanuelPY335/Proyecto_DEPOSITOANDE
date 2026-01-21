@@ -2,14 +2,14 @@
 import React, { useState, useEffect } from "react";
 import { apiFetch } from "../utils/api";
 import { 
-    X, Plus, AlertTriangle, CheckCircle, Search, Barcode
+    X, Plus, AlertTriangle, CheckCircle, Search, Barcode, Calendar, Box, FileText
 } from "lucide-react";
 import "../styles/LotesModal.css"; 
 
 const LotesModal = ({ material, onClose, depositos }) => {
   const [lotes, setLotes] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+  const [obsOpen, setObsOpen] = useState(false);
   // Filtros
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEstado, setFilterEstado] = useState("Todos");
@@ -83,102 +83,165 @@ const LotesModal = ({ material, onClose, depositos }) => {
   };
 
   const renderBadge = (cat) => {
-    const map = { 'Conductores': 'badge-blue', 'Aisladores': 'badge-purple', 'Protección': 'badge-orange', 'Ferretería': 'badge-gray' };
-    return <span className={`category-badge ${map[cat] || 'badge-default'}`} style={{fontSize: '0.8rem', padding: '4px 10px'}}>{cat}</span>;
+    const map = { 'Conductores': '#3b82f6', 'Aisladores': '#8b5cf6', 'Protección': '#f97316', 'Ferretería': '#64748b' };
+    const color = map[cat] || '#64748b';
+    return (
+        <span style={{
+            backgroundColor: `${color}20`, 
+            color: color,
+            border: `1px solid ${color}40`,
+            fontSize: '0.75rem', 
+            padding: '4px 10px', 
+            borderRadius: '12px',
+            fontWeight: 700
+        }}>
+            {cat}
+        </span>
+    );
   };
 
   return (
-    <div className="modal-backdrop" style={{zIndex: 1000}}>
-      <div className="discord-card modal-content" style={{ maxWidth: '950px' }}>
+    <div className="lotes-modal-overlay" onClick={onClose}>
+      <div className="lotes-modal-content" onClick={e => e.stopPropagation()}>
         
         {/* HEADER */}
-        <div className="modal-header" style={{borderBottom: '1px solid #3f3f46', paddingBottom: '15px'}}>
-          <div className="header-info">
-             <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'5px'}}>
-                <h2 style={{margin:0}}>{material.NOMBRE}</h2>
+        <div className="lotes-modal-header">
+          <div className="lotes-header-info">
+             <div style={{display:'flex', alignItems:'center', gap:'12px', marginBottom:'4px'}}>
+                <h2 className="lotes-header-title">{material.NOMBRE}</h2>
                 {renderBadge(material.CATEGORIA || material.categoria)}
              </div>
-             <span style={{color:'#9ca3af'}}>Código Material: <strong style={{color:'#e5e7eb'}}>#{material.CODIGO_UNICO}</strong></span>
+             <div style={{fontSize: '0.9rem', opacity: 0.8}}>
+                Código Material: <strong style={{color:'#fff', fontFamily:'monospace'}}>#{material.CODIGO_UNICO}</strong>
+             </div>
           </div>
-          <button className="close-btn" onClick={onClose}><X size={24} /></button>
+          <button className="lotes-close-btn" onClick={onClose}><X size={20} /></button>
         </div>
 
-        <div className="modal-body">
+        <div className="lotes-modal-body">
             
-            {/* FORMULARIO DE INGRESO (Recepción de Mercadería) */}
-            <div style={{ background: '#2b2d31', padding: '15px', borderRadius: '8px', marginBottom: '25px', border: '1px solid #1e1f22' }}>
-                <h4 style={{marginBottom: '15px', color: '#e5e7eb', display:'flex', alignItems:'center', gap:'8px'}}>
-                    <Plus size={18} className="text-green"/> Recepción Manual (Ingreso)
+            {/* SECCIÓN DE INGRESO (FORMULARIO) */}
+            <div className="ingreso-section">
+                <h4 className="ingreso-title">
+                    <Plus size={20} color="#4ade80"/> Recepción Manual (Ingreso)
                 </h4>
-                <form onSubmit={handleAlta} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.8fr 0.8fr 1fr auto', gap: '10px', alignItems: 'end' }}>
-                    
-                    <div className="input-group">
-                        <label style={{color:'#fbbf24', fontSize:'0.8rem', fontWeight:'bold'}}><Barcode size={12}/> Cód. Lote</label>
-                        <input type="text" value={newIngreso.codigo} onChange={e => setNewIngreso({...newIngreso, codigo: e.target.value})} 
-                            className="discord-input" style={{fontFamily: 'monospace', color: '#fbbf24', textAlign: 'center', fontWeight:'bold'}} />
-                    </div>
+                
 
-                    <div className="input-group">
-                        <label style={{color:'#9ca3af', fontSize:'0.8rem'}}>Depósito</label>
-                        <select value={newIngreso.id_deposito} onChange={e => setNewIngreso({...newIngreso, id_deposito: e.target.value})} className="discord-select" style={{padding:'8px'}}>
-                            {depositos.map(d => <option key={d.ID_DEPOSITO} value={d.ID_DEPOSITO}>{d.NOMBRE}</option>)}
-                        </select>
-                    </div>
-                    <div className="input-group">
-                        <label style={{color:'#9ca3af', fontSize:'0.8rem'}}>Fecha</label>
-                        <input type="date" required value={newIngreso.fecha_ingreso} onChange={e => setNewIngreso({...newIngreso, fecha_ingreso: e.target.value})} className="discord-input" />
-                    </div>
-                    <div className="input-group">
-                        <label style={{color:'#9ca3af', fontSize:'0.8rem'}}>Cantidad</label>
-                        <div style={{position: 'relative'}}>
-                            <input 
-                                type="number" 
-                                required 
-                                value={newIngreso.cantidad} 
-                                onChange={e => setNewIngreso({...newIngreso, cantidad: e.target.value})} 
-                                placeholder="0.00" 
-                                className="discord-input"
-                                style={{paddingRight: '60px'}} // Espacio para el texto de unidad
-                            />
-                            <span style={{
-                                position: 'absolute', 
-                                right: '10px', 
-                                top: '50%', 
-                                transform: 'translateY(-50%)', 
-                                color: '#9ca3af', 
-                                fontSize: '0.8rem',
-                                pointerEvents: 'none'
-                            }}>
-                                {material.UNIDAD || material.UNIDAD_MEDIDA}
-                            </span>
-                        </div>
-                    </div>
-                    <div className="input-group">
-                        <label style={{color:'#9ca3af', fontSize:'0.8rem'}}>Observación</label>
-                        <input type="text" value={newIngreso.observaciones} onChange={e => setNewIngreso({...newIngreso, observaciones: e.target.value})} className="discord-input"/>
-                    </div>
-                    <button type="submit" className="btn-save" style={{height: '40px'}}>Recepcionar</button>
-                </form>
+            {/* FORMULARIO COMPACTO */}
+            <form onSubmit={handleAlta} className="ingreso-form">
+                {/* CÓDIGO */}
+                <div className="lotes-input-group">
+                <label className="lotes-label" style={{color:'#fbbf24'}}><Barcode size={14}/> Cód. Lote</label>
+                <input 
+                    type="text" 
+                    value={newIngreso.codigo} 
+                    onChange={e => setNewIngreso({...newIngreso, codigo: e.target.value})} 
+                    className="input-dark codigo-input" 
+                    style={{fontFamily: 'monospace', color: '#fbbf24', textAlign: 'center', fontWeight:'bold', letterSpacing:'1px'}} 
+                />
+                </div>
+
+                {/* DEPÓSITO */}
+                <div className="lotes-input-group">
+                <label className="lotes-label" style={{color:'#9ca3af'}}><Box size={14}/> Depósito</label>
+                <select 
+                    value={newIngreso.id_deposito} 
+                    onChange={e => setNewIngreso({...newIngreso, id_deposito: e.target.value})} 
+                    className="input-dark"
+                >
+                    {depositos.map(d => <option key={d.ID_DEPOSITO} value={d.ID_DEPOSITO}>{d.NOMBRE}</option>)}
+                </select>
+                </div>
+
+                {/* FECHA */}
+                <div className="lotes-input-group">
+                <label className="lotes-label" style={{color:'#9ca3af'}}><Calendar size={14}/> Fecha</label>
+                <input 
+                    type="date" 
+                    required 
+                    value={newIngreso.fecha_ingreso} 
+                    onChange={e => setNewIngreso({...newIngreso, fecha_ingreso: e.target.value})} 
+                    className="input-dark" 
+                />
+                </div>
+
+                {/* CANTIDAD */}
+                <div className="lotes-input-group">
+                <label className="lotes-label" style={{color:'#9ca3af'}}>Cantidad</label>
+                <div style={{position: 'relative'}}>
+                    <input 
+                    type="number" 
+                    required 
+                    value={newIngreso.cantidad} 
+                    onChange={e => setNewIngreso({...newIngreso, cantidad: e.target.value})} 
+                    placeholder="0.00" 
+                    className="cantidad-input"
+                    style={{paddingRight: '60px'}} 
+                    />
+                    <span className="qty-unit-modal">
+                    {material.UNIDAD || material.UNIDAD_MEDIDA}
+                    </span>
+                </div>
+                </div>
+
+
+            </form>
+
+            {/* OBSERVACIÓN AISLADA */}
+            <div className="obs-standalone-wrapper">
+                <label className="lotes-label" style={{color:'#9ca3af'}}>
+                <FileText size={14}/> Observación
+                </label>
+                <div className={`obs-input-container ${obsOpen ? 'open' : ''}`}>
+                <textarea
+                    value={newIngreso.observaciones}
+                    onChange={e => setNewIngreso({...newIngreso, observaciones: e.target.value})}
+                    className="input-dark obs-input"
+                    placeholder="Haz clic para escribir tu observación..."
+                    onFocus={() => setObsOpen(true)}
+                    onBlur={() => setObsOpen(false)}
+                    
+                />
+                    {/* BOTÓN */}
+                        <div className="lotes-input-group" style={{gridColumn: '1 / -1'}}>
+                             <button type="submit" className="btn-ingreso">Recepcionar</button>
+                         </div>
+                
+
+            </div>
+        </div>
+
             </div>
 
             {/* BARRA DE FILTROS */}
-            <div className="toolbar-container">
-                <div className="search-wrapper-pro">
-                    <Search size={18} className="search-icon-pro"/>
-                    <input type="text" placeholder="Buscar código..." className="input-pro" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
+            <div className="lotes-toolbar">
+                <div style={{position: 'relative', width: '300px'}}>
+                    <Search size={16} style={{position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8'}}/>
+                    <input 
+                        type="text" 
+                        placeholder="Buscar por código, obs..." 
+                        value={searchTerm} 
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="input-pro"
+                        style={{paddingLeft: '36px', width: '100%', height:'40px', border: '1px solid #e2e8f0', borderRadius: '8px'}}
+                    />
                 </div>
                 <div style={{flex: 1}}></div>
-                <select className="select-pro" value={filterDeposito} onChange={(e) => setFilterDeposito(e.target.value)} style={{width: '200px'}}>
+                <select 
+                    value={filterDeposito} 
+                    onChange={(e) => setFilterDeposito(e.target.value)} 
+                    style={{padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', height:'40px'}}
+                >
                     <option value="Todos">🏭 Todos los Depósitos</option>
                     {depositos.map(d => <option key={d.ID_DEPOSITO} value={d.ID_DEPOSITO}>{d.NOMBRE}</option>)}
                 </select>
             </div>
 
             {/* TABLA DE LOTES */}
-            {loading ? <p>Cargando...</p> : (
-                <div className="table-scroll-container">
-                    <table className="styled-table" style={{width: '100%', borderCollapse: 'collapse'}}>
-                        <thead style={{position: 'sticky', top: 0, zIndex: 5, backgroundColor: '#f8fafc'}}>
+            <div className="lotes-table-container">
+                <div style={{maxHeight: '350px', overflowY: 'auto'}}>
+                    <table className="lotes-table">
+                        <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
                             <tr>
                                 <th>Código Lote</th>
                                 <th>Fecha</th>
@@ -190,29 +253,36 @@ const LotesModal = ({ material, onClose, depositos }) => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredLotes.length === 0 ? (
-                                <tr><td colSpan="7" style={{textAlign:'center', padding:'20px'}}>No hay datos.</td></tr>
+                            {loading ? (
+                                <tr><td colSpan="7" style={{textAlign:'center', padding:'30px'}}>Cargando lotes...</td></tr>
+                            ) : filteredLotes.length === 0 ? (
+                                <tr><td colSpan="7" style={{textAlign:'center', padding:'30px', color: '#94a3b8'}}>No hay lotes registrados para este filtro.</td></tr>
                             ) : (
                                 filteredLotes.map((lote, idx) => (
-                                    <tr key={idx} style={{backgroundColor: lote.estado === 'Dañado' ? 'rgba(239, 68, 68, 0.05)' : 'transparent', borderBottom: '1px solid #f1f5f9'}}>
-                                        <td style={{fontFamily: 'monospace', fontWeight: 'bold', color: '#6366f1'}}>
+                                    <tr key={idx} style={{backgroundColor: lote.estado === 'Dañado' ? '#fef2f2' : 'transparent'}}>
+                                        <td style={{fontFamily: 'monospace', fontWeight: '700', color: '#6366f1'}}>
                                             {lote.codigo || "S/C"}
                                         </td>
                                         <td>{lote.fecha_ingreso}</td>
-                                        <td style={{fontWeight:'bold'}}>{lote.deposito}</td>
-                                        <td style={{fontWeight: 'bold', color: lote.estado === 'Dañado' ? '#ef4444' : '#16a34a'}}>
+                                        <td style={{fontWeight:'600'}}>{lote.deposito}</td>
+                                        <td style={{fontWeight: '700', color: lote.estado === 'Dañado' ? '#ef4444' : '#10b981'}}>
                                             {lote.cantidad} {material.UNIDAD || material.UNIDAD_MEDIDA}
                                         </td>
                                         <td>
                                             <span style={{
                                                 backgroundColor: lote.estado === 'Dañado' ? '#fee2e2' : '#dcfce7',
-                                                color: lote.estado === 'Dañado' ? '#ef4444' : '#166534',
-                                                padding: '4px 10px', borderRadius: '6px', fontWeight: '700', fontSize: '0.75rem'
+                                                color: lote.estado === 'Dañado' ? '#991b1b' : '#166534',
+                                                padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.75rem'
                                             }}>{lote.estado}</span>
                                         </td>
-                                        <td style={{fontSize: '0.85rem', maxWidth: '150px'}}>{lote.observaciones}</td>
+                                        <td style={{fontSize: '0.85rem', color: '#64748b', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                                            {lote.observaciones || "-"}
+                                        </td>
                                         <td style={{textAlign:'right'}}>
-                                            <button className="btn-icon" style={{backgroundColor: lote.estado === 'Dañado' ? '#22c55e' : '#ef4444', color: 'white', marginLeft: 'auto'}}
+                                            <button style={{
+                                                backgroundColor: lote.estado === 'Dañado' ? '#22c55e' : '#ef4444', 
+                                                color: 'white', border: 'none', borderRadius: '6px', padding: '6px', cursor: 'pointer', display: 'inline-flex'
+                                            }}
                                                 onClick={() => handleToggleEstado(lote)}
                                                 title={lote.estado === 'Dañado' ? 'Marcar como Disponible' : 'Marcar como Dañado'}
                                             >
@@ -225,7 +295,8 @@ const LotesModal = ({ material, onClose, depositos }) => {
                         </tbody>
                     </table>
                 </div>
-            )}
+            </div>
+
         </div>
       </div>
     </div>

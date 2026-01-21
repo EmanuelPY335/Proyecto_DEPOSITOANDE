@@ -1,4 +1,4 @@
-/* Home.css - REVISADO */
+/* src/styles/Home.css */
 
 /* ============================
    General & Layout
@@ -7,27 +7,22 @@ body {
   font-family: 'Poppins', sans-serif;
   margin: 0;
   padding: 0;
-  background: #f4f6fc; /* Fondo general gris claro */
+  background: #f4f6fc;
   color: #333;
+  /* Evitamos scroll en el body para delegarlo a los contenedores internos */
+  overflow: hidden; 
 }
 
-/* Contenedor principal: ocupa toda la vista */
+/* Contenedor principal: ocupa toda la vista fija */
 .dashboard-layout {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
 }
 
-/* Área principal (Debajo del Navbar): Sidebar + Contenido */
-.main-area {
-  display: flex;
-  flex-grow: 1;
-  padding-top: 70px; /* Espacio para el Navbar fijo */
-}
-
-/* ============================
-   Navbar (Superior)
-============================ */
+/* Navbar (Superior) - Fija visualmente pero el layout la compensa */
 .navbar-dashboard {
   position: fixed;
   top: 0;
@@ -38,133 +33,33 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0 30px;
-  background: #ffffff; /* Fondo blanco (como en la imagen) */
+  background: #ffffff;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   z-index: 100;
   box-sizing: border-box;
-  
 }
 
-.navbar-left {
+/* Área principal: Sidebar + Contenido */
+.main-area {
   display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.navbar-logo-icon {
-  color: #007bff; /* Color del ícono de engranaje */
-}
-
-.navbar-brand-title {
-  font-size: 1.3em;
-  font-weight: 700;
-  color: #333;
-}
-
-.navbar-right {
-  display: flex;
-  align-items: center;
-  gap: 30px;
-}
-
-/* Estilos de Búsqueda */
-.navbar-search-wrapper {
-  display: flex;
-  align-items: center;
-  padding: 5px 10px;
-  border: 1px solid #e0e0e0;
-  border-radius: 20px;
-  background: #f8f9fa;
-}
-
-.search-icon {
-  color: #6c757d;
-  margin-right: 5px;
-}
-
-.search-input {
-  border: none;
-  background: transparent;
-  outline: none;
-  font-size: 0.9em;
-  width: 120px;
-}
-
-/* Estilos de Notificaciones */
-.notification-icon-wrapper {
+  flex: 1;
+  padding-top: 70px; /* Espacio exacto para el Navbar */
+  height: 100vh; /* Altura total */
+  box-sizing: border-box; /* El padding se incluye en la altura */
+  overflow: hidden; /* Sin scroll aquí */
   position: relative;
-  color: #6c757d;
-  cursor: pointer;
-}
-
-.notification-badge {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  background-color: #dc3545;
-  color: white;
-  border-radius: 50%;
-  padding: 2px 6px;
-  font-size: 0.7em;
-  line-height: 1;
-}
-
-/* Estilos de Perfil */
-.navbar-profile-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-  color: #333;
-  font-weight: 500;
-}
-
-.profile-icon {
-  color: #007bff; /* Color de ícono de perfil */
 }
 
 /* ============================
    Sidebar (Izquierda)
 ============================ */
 .sidebar-dashboard {
-  width: 180px; /* Ancho fijo */
-  padding: 20px 0;
-  background: #ffffff; /* Fondo blanco */
+  width: 180px;
+  background: #ffffff;
   box-shadow: 2px 0 4px rgba(0,0,0,0.02);
   flex-shrink: 0;
-  height: calc(100vh - 70px); /* Ocupa el espacio restante bajo el navbar */
-  position: sticky; /* Fijo en la posición */
-  top: 70px;
-}
-
-.sidebar-nav ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-  text-decoration: none;
-  color: #555;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  border-left: 4px solid transparent;
-}
-
-.sidebar-link:hover {
-  background-color: #f0f2f5;
-  color: #007bff;
-}
-
-.sidebar-link.active {
-  background-color: #e6f7ff; /* Fondo para activo */
-  color: #007bff; /* Color de texto para activo */
-  border-left-color: #007bff; /* Indicador azul para el activo */
-  font-weight: 600;
+  height: 100%; /* Ocupa todo el alto de main-area */
+  overflow-y: auto; /* Scroll si el menú es muy largo */
 }
 
 /* ============================
@@ -172,147 +67,83 @@ body {
 ============================ */
 .content-dashboard {
   flex-grow: 1;
-  padding: 30px;
-  background: #f4f6fc; /* Fondo de la zona de contenido */
+  height: 100%;
+  overflow-y: auto; /* Scroll vertical suave */
+  overflow-x: hidden; /* Evita scroll horizontal accidental */
+  padding: 20px; /* Un poco menos de padding para ganar espacio en móvil */
+  box-sizing: border-box;
+  background: #f4f6fc;
 }
 
-/* ============================
-   Tarjetas (Cards) - Estructura 2x3
-============================ */
+/* Estilos de Navbar internos (Logo, Search, etc.) - Igual que tenías */
+.navbar-left { display: flex; align-items: center; gap: 10px; }
+.navbar-logo-icon { color: #007bff; }
+.navbar-brand-title { font-size: 1.3em; font-weight: 700; color: #333; }
+.navbar-right { display: flex; align-items: center; gap: 30px; }
+.navbar-profile-link { display: flex; align-items: center; gap: 10px; text-decoration: none; color: #333; font-weight: 500; }
+.profile-icon { color: #007bff; }
+
+/* Estilos de Sidebar links - Igual que tenías */
+.sidebar-nav ul { list-style: none; padding: 0; margin: 0; }
+.sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 20px; text-decoration: none; color: #555; font-weight: 500; transition: all 0.2s ease; border-left: 4px solid transparent; }
+.sidebar-link:hover { background-color: #f0f2f5; color: #007bff; }
+.sidebar-link.active { background-color: #e6f7ff; color: #007bff; border-left-color: #007bff; font-weight: 600; }
+.logout-btn { width: 100%; background: none; border: none; cursor: pointer; color: #ef4444 !important; display: flex; align-items: center; padding: 10px 15px; }
+.logout-btn:hover { background-color: #fee2e2; }
+
+
+/* Ajuste específico para tarjetas en móvil */
+@media (max-width: 480px) {
+  .dashboard-content-grid {
+    grid-template-columns: 1fr; /* Una sola columna en celulares pequeños */
+  }
+  
+  .content-dashboard {
+    padding: 15px; /* Menos margen en celular */
+  }
+}
+/* Cards Grid - Igual que tenías */
 .dashboard-content-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr); /* 3 columnas */
+  /* MAGIA: Esto crea tantas columnas como quepan. 
+     Si la pantalla es chica, pone 1. Si es grande, pone 3 o 4. 
+     'minmax(280px, 1fr)' significa: mínimo 280px de ancho, si sobra espacio, estírate. */
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 20px;
+  padding-bottom: 40px; /* Espacio al final para que no se pegue al borde */
 }
-
-.card {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 25px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 15px rgba(0,0,0,0.1);
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.card-header h3 {
-  font-size: 1.1em;
-  margin: 0;
-  color: #333;
-}
-
-.card-main-icon {
-  /* Estilo general del icono, se redefine en colores abajo */
-}
-
-.card-pag1 .card-main-icon { color: #007bff; }
-.card-pag2 .card-main-icon { color: #28a745; }
-.card-materiales .card-main-icon { color: #ffc107; }
-.card-movimientos .card-main-icon { color: #fd7e14; }
-.card-empleados .card-main-icon { color: #6f42c1; }
-.card-proveedores .card-main-icon { color: #dc3545; }
-
-.card p {
-  font-size: 0.9em;
-  color: #6c757d;
-  margin-bottom: 15px;
-}
-
-.card-button {
-  display: inline-block;
-  padding: 8px 15px;
-  border-radius: 6px;
-  text-decoration: none;
-  font-size: 0.9em;
-  font-weight: 600;
-  text-align: center;
-  transition: background-color 0.2s ease;
-}
-
-/* Colores de los botones de las tarjetas */
+.card { background: #ffffff; border-radius: 12px; padding: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: transform 0.3s ease, box-shadow 0.3s ease; }
+.card:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
+.card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.card-header h3 { font-size: 1.1em; margin: 0; color: #333; }
+.card p { font-size: 0.9em; color: #6c757d; margin-bottom: 15px; }
+.card-button { display: inline-block; padding: 8px 15px; border-radius: 6px; text-decoration: none; font-size: 0.9em; font-weight: 600; text-align: center; transition: background-color 0.2s ease; }
+/* Colores de botones */
 .card-button.primary { background-color: #007bff; color: white; }
 .card-button.secondary { background-color: #28a745; color: white; }
 .card-button.tertiary { background-color: #ffc107; color: #333; }
 .card-button.quaternary { background-color: #fd7e14; color: white; }
 .card-button.quinary { background-color: #6f42c1; color: white; }
 .card-button.senary { background-color: #dc3545; color: white; }
+/* Colores Iconos */
+.card-pag1 .card-main-icon { color: #007bff; }
+.card-pag2 .card-main-icon { color: #28a745; }
+.card-materiales .card-main-icon { color: #ffc107; }
+.card-movimientos .card-main-icon { color: #fd7e14; }
+.card-empleados .card-main-icon { color: #6f42c1; }
 
-
-/* ============================
-   Responsividad
-============================ */
+/* Responsive */
 @media (max-width: 1024px) {
-  .dashboard-content-grid {
-    grid-template-columns: repeat(2, 1fr); /* 2 columnas en tablets */
-  }
+  .dashboard-content-grid { grid-template-columns: repeat(2, 1fr); }
 }
-
 @media (max-width: 768px) {
-  /* Diseño adaptado a móvil: Sidebar se convierte en horizontal */
-  .main-area {
-    flex-direction: column;
-    padding-top: 60px;
-  }
-
-  .navbar-dashboard {
-    height: 60px;
-  }
-  
-  .sidebar-dashboard {
-    width: 100%;
-    height: auto;
-    position: relative;
-    top: auto;
-    padding: 10px 0;
-  }
-  
-  .sidebar-nav ul {
-    display: flex;
-    justify-content: space-around;
-  }
-
-  .sidebar-link {
-    border-left: none;
-    border-bottom: 3px solid transparent;
-    padding: 10px 5px;
-  }
-  
-  .sidebar-link.active {
-    border-left-color: transparent;
-    border-bottom-color: #007bff;
-  }
-  
-  .sidebar-label {
-    display: none; /* Ocultar el texto en el sidebar móvil */
-  }
-
-  .content-dashboard {
-    padding: 20px;
-  }
-
-  .dashboard-content-grid {
-    grid-template-columns: 1fr; /* 1 columna en móviles */
-  }
-}
-/* ==== FIX ESPACIO DERECHO (SEGURO) ==== */
-.dashboard-layout,
-.main-area {
-  width: 100%;
-  max-width: 100%;
-}
-
-.content-dashboard {
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
+  .main-area { flex-direction: column; padding-top: 60px; }
+  .navbar-dashboard { height: 60px; }
+  .sidebar-dashboard { width: 100%; height: auto; padding: 10px 0; }
+  .sidebar-nav ul { display: flex; justify-content: space-around; }
+  .sidebar-link { border-left: none; border-bottom: 3px solid transparent; padding: 10px 5px; }
+  .sidebar-link.active { border-left-color: transparent; border-bottom-color: #007bff; }
+  .sidebar-label { display: none; }
+  .content-dashboard { padding: 20px; }
+  .dashboard-content-grid { grid-template-columns: 1fr; }
 }

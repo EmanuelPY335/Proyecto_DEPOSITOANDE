@@ -3,7 +3,8 @@
 /* Contenedor principal */
 .config-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); /* Tarjetas responsive */
+    /* AJUSTE RESPONSIVE: Cambiado de 340px a 280px para que entre en celulares */
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
     gap: 30px;
     padding-bottom: 40px;
 }
@@ -24,7 +25,6 @@
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
 }
-
 /* Títulos e Iconos */
 .card-title {
     display: flex;
@@ -190,3 +190,26 @@
     font-size: 0.8rem;
     color: #888;
 }
+/* ... (El resto del archivo se mantiene igual) ... */
+.card-title { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; color: #333; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0; }
+.card-title h3 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #2c3e50; }
+.card-desc { font-size: 0.9rem; margin-bottom: 25px; color: #7f8c8d; line-height: 1.4; }
+.config-item-row { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #f5f5f5; }
+.config-item-row:last-child { border-bottom: none; }
+.label-text { font-size: 0.95rem; font-weight: 500; color: #34495e; }
+.row-center { display: flex; align-items: center; }
+.checkbox-ios { appearance: none; width: 46px; height: 26px; background: #e0e0e0; border-radius: 50px; position: relative; cursor: pointer; transition: background 0.3s; outline: none; }
+.checkbox-ios::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; background: #fff; border-radius: 50%; transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+.checkbox-ios:checked { background: #28a745; }
+.checkbox-ios:checked::after { transform: translateX(20px); }
+.config-input-group { margin-bottom: 20px; }
+.config-input-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+.config-select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #ccc; background-color: #f9f9f9; color: #333; font-size: 0.95rem; outline: none; transition: border-color 0.2s; }
+.config-select:focus { border-color: #007bff; background-color: #fff; }
+.config-link-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-radius: 10px; text-decoration: none; transition: background 0.2s; margin-bottom: 8px; border: 1px solid transparent; }
+.config-link-item:hover { background-color: #f8f9fa; border-color: #eee; }
+.icon-bg { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background-color: #e3f2fd; color: #1976d2; margin-right: 15px; }
+.icon-bg.sec { background-color: #e8f5e9; color: #2e7d32; }
+.link-text-group { display: flex; flex-direction: column; }
+.link-title { font-weight: 600; color: #333; font-size: 0.95rem; }
+.link-subtitle { font-size: 0.8rem; color: #888; }

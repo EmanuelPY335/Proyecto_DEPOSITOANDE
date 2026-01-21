@@ -3,8 +3,8 @@ import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { apiFetch } from "../utils/api"; 
 import { 
-  X, Save, Power, Mail, Phone, Calendar, Shield, MapPin, FileText, 
-  Briefcase, Clock, User, AlertCircle 
+  X, Save, Mail, Phone, Calendar, Shield, MapPin, FileText, 
+  Briefcase, Clock, Loader2, CheckCircle, AlertCircle
 } from "lucide-react";
 import "../styles/EmployeeModal.css";
 
@@ -13,19 +13,19 @@ const API_URL = "http://127.0.0.1:5000";
 const EmployeeModal = ({ employee, depositos, roles, onClose, onSave, onToggleStatus }) => {
   const [formData, setFormData] = useState({ ...employee });
   const [activeTab, setActiveTab] = useState("perfil");
-  
-  // Estados para las órdenes
+  const [imgError, setImgError] = useState(false);
+    
   const [employeeOrdenes, setEmployeeOrdenes] = useState([]);
   const [loadingOrdenes, setLoadingOrdenes] = useState(false);
+  const [stats] = useState({ asistencias: 0, faltas: 0 });
 
-  // Sincronizar datos del empleado al abrir
   useEffect(() => {
     if (employee) {
-      setFormData({ ...employee });
+        setFormData({ ...employee });
+        setImgError(false);
     }
   }, [employee]);
 
-  // Sincronizar Carga de Órdenes
   useEffect(() => {
     const fetchOrdenes = async () => {
       if (activeTab === 'ordenes' && employee?.id) {
@@ -41,7 +41,6 @@ const EmployeeModal = ({ employee, depositos, roles, onClose, onSave, onToggleSt
         }
       }
     };
-
     fetchOrdenes();
   }, [activeTab, employee]);
 
@@ -57,270 +56,271 @@ const EmployeeModal = ({ employee, depositos, roles, onClose, onSave, onToggleSt
 
   if (!employee) return null;
 
-  // Lógica del Avatar
-  const avatarUrl = formData.AVATAR ? `${API_URL}${formData.AVATAR}` : null;
+  // --- LÓGICA DE URL DE IMAGEN ---
+  // Detecta si la propiedad se llama 'avatar', 'AVATAR' o 'foto'
+  const getAvatarPath = () => {
+      return formData.avatar || formData.AVATAR || formData.foto || null;
+  };
+
+  const getImageUrl = () => {
+      const path = getAvatarPath();
+      if (!path) return null;
+
+      // 1. Si es previsualización de subida (objeto File)
+      if (path instanceof File) return URL.createObjectURL(path);
+
+      // 2. Si ya es una URL completa (http...)
+      if (typeof path === 'string' && (path.startsWith('http') || path.startsWith('blob:'))) {
+          return path;
+      }
+
+      // 3. Limpieza de ruta (Backend guarda /api/uploads/...)
+      // Tu backend guarda: "/api/uploads/avatars/nombre.jpg"
+      // Si API_URL es http://localhost:5000, la suma debe ser correcta.
+      
+      // Eliminar 'http://localhost:5000' si el backend ya lo guardó por error en la BD
+      let cleanPath = path.toString().replace(API_URL, ''); 
+      
+      // Asegurar que empiece con /
+      if (!cleanPath.startsWith('/')) {
+          cleanPath = `/${cleanPath}`;
+      }
+
+      return `${API_URL}${cleanPath}`;
+  };
+
+  const currentImageUrl = getImageUrl();
   
-  const initials = (
-    (formData.nombre?.charAt(0) || "") + 
-    (formData.apellido?.charAt(0) || "")
-  ).toUpperCase();
+  // Depuración: Mira la consola para ver qué URL intenta cargar
+  if (getAvatarPath() && !imgError) {
+      // console.log("URL Avatar generada:", currentImageUrl);
+  }
+
+  const renderOrdenCard = (orden) => {
+    const isCompleted = ["Aprobada", "Completada", "Finalizada"].includes(orden.estado);
+    
+    return (
+        <div key={orden.id} style={{
+            borderLeft: `4px solid ${isCompleted ? 'var(--success)' : 'var(--warning)'}`, 
+            background: 'var(--gray-50)', 
+            padding: '1rem', 
+            marginBottom: '0.75rem', 
+            borderRadius: 'var(--radius)',
+            border: '1px solid var(--gray-200)',
+            borderLeftWidth: '4px'
+        }}>
+            <div style={{display:'flex', justifyContent:'space-between', fontSize:'0.8rem', color:'var(--gray-500)', marginBottom:'0.25rem'}}>
+                <span>#{orden.id}</span>
+                <span>{orden.fecha_inicio}</span>
+            </div>
+            <h4 style={{margin:'0 0 0.5rem 0', fontSize:'0.95rem', color: 'var(--gray-900)', fontWeight: 600}}>{orden.titulo}</h4>
+            <span style={{
+                fontSize:'0.75rem', 
+                background: isCompleted ? '#DCFCE7' : '#FEF3C7', 
+                color: isCompleted ? '#166534' : '#92400E', 
+                padding: '0.25rem 0.5rem', 
+                borderRadius:'var(--radius-sm)',
+                fontWeight: 500
+            }}>
+                {orden.estado}
+            </span>
+        </div>
+    );
+  };
 
   const modalContent = (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="discord-card" onClick={(e) => e.stopPropagation()}>
+    <div className="employee-modal-overlay" onClick={onClose}>
+      <div className="employee-modal-content" onClick={(e) => e.stopPropagation()}>
         
-        {/* ----------------- BANNER ----------------- */}
-        <div
-          className="card-banner"
-          style={{ background: formData.BANNER_COLOR || "#5865F2" }}
-        >
-          <button className="close-btn" onClick={onClose}>
-            <X size={20} />
+        {/* HEADER */}
+        <div className="employee-modal-header">
+          <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
+             
+             {/* --- AVATAR CORREGIDO --- */}
+             <div style={{
+                 width:'4rem', height:'4rem', 
+                 borderRadius:'50%', 
+                 background: 'var(--gray-100)', 
+                 display:'flex', alignItems:'center', justifyContent:'center', 
+                 boxShadow: 'var(--shadow)',
+                 border: '2px solid var(--white)',
+                 overflow: 'hidden',
+                 position: 'relative',
+                 flexShrink: 0 
+             }}>
+                {getAvatarPath() && !imgError ? (
+                    <img 
+                        src={currentImageUrl} 
+                        alt="Perfil" 
+                        onError={(e) => {
+                            console.error("Error cargando imagen (404):", e.target.src);
+                            setImgError(true);
+                        }} 
+                        style={{width: '100%', height: '100%', objectFit: 'cover'}}
+                    />
+                ) : (
+                    // Fallback: Iniciales
+                    <div style={{
+                        width: '100%', height: '100%',
+                        background: 'linear-gradient(135deg, var(--primary) 0%, #8B5CF6 100%)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'white', fontWeight: 'bold', fontSize: '1.5rem',
+                        textTransform: 'uppercase'
+                    }}>
+                        {formData.nombre ? formData.nombre.charAt(0) : 'U'}
+                        {formData.apellido ? formData.apellido.charAt(0) : ''}
+                    </div>
+                )}
+             </div>
+
+             <div>
+                <h2>{formData.nombre} {formData.apellido}</h2>
+                <span style={{fontSize:'0.9rem', color:'var(--gray-500)'}}>{formData.rol || 'Sin Rol Asignado'}</span>
+             </div>
+          </div>
+          <button className="btn-close-modal" onClick={onClose}>
+            <X size={24} />
           </button>
         </div>
 
-        {/* ----------------- HEADER ----------------- */}
-        <div className="card-header-content">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="avatar" className="avatar-circle img-avatar" />
-          ) : (
-            <div className="avatar-circle" style={{fontSize: '1.5rem'}}>
-              {initials}
-            </div>
-          )}
-
-          <div className="header-text">
-            <h2>{formData.nombre} {formData.apellido}</h2>
-            <br />
-          </div>
+        {/* NAVEGACIÓN TABS */}
+        <div style={{
+            display:'flex', gap:'2rem', 
+            borderBottom:'1px solid var(--gray-200)', 
+            marginBottom:'1.5rem',
+            paddingBottom: '1px'
+        }}>
+            {['perfil', 'ordenes', 'asistencia'].map(tab => (
+                <button 
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    style={{
+                        background:'none', border:'none', 
+                        borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent',
+                        color: activeTab === tab ? 'var(--primary)' : 'var(--gray-500)',
+                        fontWeight: activeTab === tab ? 600 : 500,
+                        padding:'0.5rem 0', cursor:'pointer', textTransform:'capitalize',
+                        fontSize: '0.95rem',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    {tab}
+                </button>
+            ))}
         </div>
 
-        {/* ----------------- TABS ----------------- */}
-        <div className="tabs-container">
-            <button 
-                className={`tab-btn ${activeTab === "perfil" ? "active" : ""}`} 
-                onClick={() => setActiveTab("perfil")}
-            >
-                <User size={14} /> Perfil
-            </button>
-
-            <button 
-                className={`tab-btn ${activeTab === "ordenes" ? "active" : ""}`} 
-                onClick={() => setActiveTab("ordenes")}
-            >
-                <Briefcase size={14} /> Actividades
-            </button>
-
-            <button 
-                className={`tab-btn ${activeTab === "asistencia" ? "active" : ""}`} 
-                onClick={() => setActiveTab("asistencia")}
-            >
-                <Clock size={14} /> Asistencia
-            </button>
-        </div>
-
-        {/* ----------------- CUERPO (SCROLL) ----------------- */}
-        <div className="card-body">
+        {/* --- CONTENIDO --- */}
+        <div className="modal-body">
           
-          {/* --- TAB: PERFIL --- */}
+          {/* TAB: PERFIL */}
           {activeTab === "perfil" && (
             <form onSubmit={handleSubmit} className="fade-in">
-              <div className="section-title">INFORMACIÓN PERSONAL</div>
-
-              <div className="input-group">
-                <label><Mail size={14}/> Correo</label>
-                <input 
-                  type="email" 
-                  name="correo" 
-                  value={formData.correo || ""} 
-                  onChange={handleChange} 
-                />
-              </div>
-
-              <div className="row-2">
-                  <div className="input-group">
-                      <label><Phone size={14}/> Teléfono</label>
-                      <input 
-                        type="text" 
-                        name="telefono" 
-                        value={formData.telefono || ""} 
-                        onChange={handleChange} 
-                      />
+              <div className="employee-form-grid">
+                  <div className="full-width form-group">
+                    <label><Mail size={14} style={{marginRight:5}}/> Correo Electrónico</label>
+                    <input className="form-input" type="email" name="correo" value={formData.correo || ""} onChange={handleChange} />
                   </div>
-                  <div className="input-group">
-                      <label><FileText size={14}/> Cédula</label>
-                      <input 
-                        type="text" 
-                        name="NUMERO_DOCUMENTO" 
-                        value={formData.NUMERO_DOCUMENTO || ""} 
-                        onChange={handleChange} 
-                      />
+
+                  <div className="form-group">
+                      <label><Phone size={14} style={{marginRight:5}}/> Teléfono</label>
+                      <input className="form-input" type="text" name="telefono" value={formData.telefono || ""} onChange={handleChange} />
                   </div>
-              </div>
+                  <div className="form-group">
+                      <label><FileText size={14} style={{marginRight:5}}/> Cédula / DNI</label>
+                      <input className="form-input" type="text" name="NUMERO_DOCUMENTO" value={formData.NUMERO_DOCUMENTO || ""} onChange={handleChange} />
+                  </div>
                 
-              <div className="input-group">
-                  <label><Calendar size={14}/> Fecha Nacimiento</label>
-                  <input 
-                    type="date" 
-                    name="FECHA_NACIMIENTO" 
-                    value={formData.FECHA_NACIMIENTO || ""} 
-                    onChange={handleChange} 
-                  />
-              </div>
+                  <div className="full-width form-group">
+                      <label><Calendar size={14} style={{marginRight:5}}/> Fecha de Nacimiento</label>
+                      <input className="form-input" type="date" name="FECHA_NACIMIENTO" value={formData.FECHA_NACIMIENTO || ""} onChange={handleChange} />
+                  </div>
 
-              <div className="section-title" style={{marginTop: '15px'}}>ROLES Y UBICACIÓN</div>
-
-              <div className="row-2">
-                  <div className="input-group">
-                      <label><Shield size={14}/> Rol</label>
-                      <select 
-                        name="rol_id" 
-                        value={formData.rol_id || ""} 
-                        onChange={handleChange} 
-                        className="discord-select"
-                      >
+                  <div className="form-group">
+                      <label><Shield size={14} style={{marginRight:5}}/> Rol / Cargo</label>
+                      <select name="rol_id" value={formData.rol_id || ""} onChange={handleChange} className="form-select">
                           <option value="">Seleccionar Rol</option>
-                          {roles.map(r => (
-                              <option key={r.id} value={r.id}>{r.nombre}</option>
-                          ))}
+                          {roles.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
                       </select>
                   </div>
 
-                  <div className="input-group">
-                      <label><MapPin size={14}/> Depósito</label>
-                      <select 
-                        name="ID_DEPOSITO" 
-                        value={formData.ID_DEPOSITO || ""} 
-                        onChange={handleChange} 
-                        className="discord-select"
-                      >
+                  <div className="form-group">
+                      <label><MapPin size={14} style={{marginRight:5}}/> Depósito Base</label>
+                      <select name="ID_DEPOSITO" value={formData.ID_DEPOSITO || ""} onChange={handleChange} className="form-select">
                           <option value="">Seleccionar Depósito</option>
-                          {depositos.map(d => (
-                              <option key={d.ID_DEPOSITO} value={d.ID_DEPOSITO}>{d.NOMBRE}</option>
-                          ))}
+                          {depositos.map(d => <option key={d.ID_DEPOSITO} value={d.ID_DEPOSITO}>{d.NOMBRE}</option>)}
                       </select>
                   </div>
               </div>
 
-              <div className="card-actions">
-                  <button type="button" 
-                          className={`btn-status ${formData.estado ? "btn-danger" : "btn-success"}`}
-                          onClick={() => onToggleStatus(employee.id)}
-                  >
-                      <Power size={16} style={{marginRight: 5}}/>
-                      {formData.estado ? "Desactivar Cuenta" : "Reactivar Cuenta"}
-                  </button>
+              {/* Toggle de Estado */}
+              <div className="status-toggle-wrapper">
+                 <div style={{flex: 1}}>
+                    <label style={{fontSize:'0.9rem', fontWeight:600, color: 'var(--gray-800)', display:'block'}}>Estado de la cuenta</label>
+                    <span style={{fontSize:'0.8rem', color:'var(--gray-500)'}}>Habilitar o deshabilitar acceso</span>
+                 </div>
+                 
+                 <button type="button" 
+                        onClick={() => onToggleStatus(employee.id)}
+                        style={{
+                            background: formData.estado ? '#DCFCE7' : '#FEE2E2',
+                            color: formData.estado ? '#166534' : '#991B1B',
+                            border: `1px solid ${formData.estado ? '#86EFAC' : '#FECACA'}`,
+                            padding: '0.5rem 1rem', 
+                            borderRadius:'var(--radius)', 
+                            fontSize:'0.85rem', fontWeight:'600', cursor:'pointer',
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            transition: 'all 0.2s'
+                        }}
+                 >
+                    {formData.estado ? <CheckCircle size={16}/> : <AlertCircle size={16}/>}
+                    {formData.estado ? "ACTIVO" : "INACTIVO"}
+                 </button>
+              </div>
 
-                  <button type="submit" className="btn-save">
-                      <Save size={16} style={{marginRight: 5}}/> Guardar Cambios
-                  </button>
+              <div className="employee-modal-footer">
+                  <button type="button" className="btn-cancel" onClick={onClose}>Cancelar</button>
+                  <button type="submit" className="btn-save"><Save size={18} style={{marginRight: 6}}/> Guardar Ficha</button>
               </div>
             </form>
           )}
 
-          {/* --- TAB: ACTIVIDADES (CORREGIDO VISUALMENTE) --- */}
+          {/* TAB: ACTIVIDADES */}
           {activeTab === "ordenes" && (
-            <div className="tab-content fade-in">
+            <div className="fade-in" style={{minHeight:'200px'}}>
                 {loadingOrdenes ? (
-                    <div style={{textAlign: 'center', padding: '30px', color: '#888'}}>
-                        Cargando actividades...
+                    <div style={{textAlign:'center', padding:'40px', color:'var(--gray-500)', display:'flex', flexDirection:'column', alignItems:'center', gap:'10px'}}>
+                        <Loader2 className="animate-spin" size={30} color="var(--primary)"/> 
+                        <span>Cargando historial...</span>
                     </div>
                 ) : employeeOrdenes.length > 0 ? (
-                    <div className="lista-actividades-perfil">
-                        {employeeOrdenes.map((orden) => {
-                            // --- LÓGICA VISUAL AÑADIDA ---
-                            const isExpired = orden.estado === "Fin de tiempo limite";
-                            const isCompleted = ["Aprobada", "Completada", "Finalizada"].includes(orden.estado);
-
-                            let estadoTexto = orden.estado;
-                            let estiloExtra = {};
-
-                            if (isExpired) {
-                                estadoTexto = "TIEMPO AGOTADO";
-                                estiloExtra = {
-                                    backgroundColor: '#fee2e2',
-                                    color: '#991b1b',
-                                    border: '1px solid #fca5a5'
-                                };
-                            } else if (isCompleted) {
-                                estadoTexto = "Completada";
-                                // La clase CSS ya maneja el verde, pero por seguridad:
-                                estiloExtra = {
-                                    backgroundColor: '#e6f4ea',
-                                    color: '#1e7e34',
-                                    border: '1px solid #a7f3d0'
-                                };
-                            }
-
-                            // Reemplazo seguro de espacios para la clase CSS
-                            const claseEstado = orden.estado.toLowerCase().replace(/ /g, "-");
-
-                            return (
-                                <div key={orden.id} className="actividad-card-mini" style={{
-                                    background: '#f8f9fa',
-                                    border: '1px solid #e9ecef',
-                                    borderRadius: '8px',
-                                    padding: '12px',
-                                    marginBottom: '10px'
-                                }}>
-                                    <div className="actividad-header" style={{display: 'flex', justifyContent: 'space-between', marginBottom: '6px'}}>
-                                        <span 
-                                            className={`badge-estado ${claseEstado}`} 
-                                            style={{
-                                                fontSize: '10px', 
-                                                padding: '2px 8px', 
-                                                borderRadius: '4px', 
-                                                textTransform: 'uppercase', 
-                                                fontWeight: 'bold',
-                                                border: '1px solid transparent', // Default invisible border
-                                                ...estiloExtra // Aplica los colores especiales
-                                            }}
-                                        >
-                                            {estadoTexto}
-                                        </span>
-                                        <span style={{fontSize: '11px', color: '#888'}}>{orden.fecha_inicio}</span>
-                                    </div>
-                                    <h4 style={{margin: '0 0 4px 0', fontSize: '14px', color: '#2d3748', fontWeight: '600'}}>
-                                        {orden.titulo}
-                                    </h4>
-                                    <p style={{fontSize: '12px', color: '#718096', margin: 0, lineHeight: '1.4'}}>
-                                        {orden.descripcion}
-                                    </p>
-                                    <div style={{marginTop: '8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '5px', color: '#4a5568'}}>
-                                    <AlertCircle size={12}/> Prioridad {orden.prioridad}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                    <div style={{maxHeight:'350px', overflowY:'auto', paddingRight:'5px'}}>
+                        {employeeOrdenes.map(renderOrdenCard)}
                     </div>
                 ) : (
-                    <div className="empty-state">
-                        <Briefcase size={40} color="#ccc" style={{marginBottom: 10}} />
-                        <p style={{fontWeight: 500, color: '#4F5660'}}>Sin órdenes recientes</p>
-                        <span style={{fontSize: '0.8rem'}}>Este empleado no tiene tareas pendientes.</span>
+                    <div style={{textAlign:'center', padding:'3rem', color:'var(--gray-400)', border:'2px dashed var(--gray-200)', borderRadius:'var(--radius)'}}>
+                        <Briefcase size={48} style={{opacity:0.2, marginBottom:15, margin: '0 auto'}} />
+                        <p style={{fontWeight:500}}>Sin órdenes asignadas</p>
                     </div>
                 )}
             </div>
           )}
 
-          {/* --- TAB: ASISTENCIA --- */}
+          {/* TAB: ASISTENCIA */}
           {activeTab === "asistencia" && (
-            <div className="tab-content fade-in">
-                <div className="attendance-stats">
-                    <div className="stat-box">
-                        <span className="stat-label" style={{color: '#23a559'}}>Asistencias</span>
-                        <span className="stat-value">0</span>
+            <div className="fade-in">
+                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem', marginBottom:'1.5rem'}}>
+                    <div style={{background:'#F0FDF4', padding:'1.5rem', borderRadius:'var(--radius)', textAlign:'center', border: '1px solid #BBF7D0'}}>
+                        <div style={{fontSize:'2rem', fontWeight:'bold', color:'var(--success)'}}>{stats.asistencias}</div>
+                        <div style={{fontSize:'0.85rem', fontWeight: 600, color:'#166534'}}>Asistencias</div>
                     </div>
-                    <div className="stat-box">
-                        <span className="stat-label" style={{color: '#ED4245'}}>Faltas</span>
-                        <span className="stat-value">0</span>
+                    <div style={{background:'#FEF2F2', padding:'1.5rem', borderRadius:'var(--radius)', textAlign:'center', border: '1px solid #FECACA'}}>
+                        <div style={{fontSize:'2rem', fontWeight:'bold', color:'var(--error)'}}>{stats.faltas}</div>
+                        <div style={{fontSize:'0.85rem', fontWeight: 600, color:'#991B1B'}}>Faltas / Retardos</div>
                     </div>
                 </div>
-
-                <div className="empty-state" style={{marginTop: 20}}>
-                  <Clock size={40} color="#ccc" style={{marginBottom: 10}} />
-                  <p style={{fontWeight: 500, color: '#4F5660'}}>Historial vacío</p>
-                  <span style={{fontSize: '0.8rem'}}>No se encontraron registros de fichaje.</span>
+                <div style={{textAlign:'center', color:'var(--gray-500)', padding:'2rem', background:'var(--gray-50)', borderRadius:'var(--radius)'}}>
+                    <Clock size={24} style={{marginBottom: '0.5rem', opacity: 0.5}}/> 
+                    <p style={{margin:0}}>No hay registros recientes de actividad</p>
                 </div>
             </div>
           )}
