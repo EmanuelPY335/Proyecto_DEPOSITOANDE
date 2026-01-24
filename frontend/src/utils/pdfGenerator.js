@@ -1,63 +1,160 @@
-// src/utils/pdfGenerator.js
+
+/// src/utils/pdfGenerator.js
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 
-// ... (MANTENER LA FUNCIÓN generarValePDF IGUAL QUE ANTES) ...
+// ✅ Vale Externo + Movimiento Interno (MISMO GENERADOR)
 export const generarValePDF = (vale, isPreview = false) => {
-  // ... (código existente del vale) ...
   const doc = new jsPDF();
+
+  // ---------------------------------------------------------
+  // Detectar tipo: interno vs externo
+  // ---------------------------------------------------------
+  const esInterno =
+    vale?.tipo === "interno" ||
+    vale?.es_local === true ||
+    String(vale?.tipo_movimiento || "").toLowerCase().includes("interno");
+
+  // Helpers
+  const safe = (v, fallback = "N/D") => (v === null || v === undefined || v === "" ? fallback : v);
+  const fechaDoc = safe(vale.fecha, new Date().toLocaleDateString());
+  const estadoDoc = safe(vale.estado, esInterno ? "Registrado" : "Pendiente");
+
+  // ---------------------------------------------------------
+  // Encabezado
+  // ---------------------------------------------------------
   doc.setFontSize(18);
-  doc.text("SISDEPO - Vale de Traslado", 14, 20);
+  doc.setTextColor(0);
+
+  if (esInterno) {
+    doc.text("SISDEPO - Comprobante de Movimiento Interno", 14, 20);
+  } else {
+    doc.text("SISDEPO - Vale de Traslado", 14, 20);
+  }
+
   doc.setFontSize(12);
-  doc.text(`Vale N°: ${vale.id_vale || vale.id}`, 14, 30);
-  doc.text(`Fecha: ${vale.fecha || new Date().toLocaleDateString()}`, 14, 36);
-  doc.text(`Estado: ${vale.estado || 'Pendiente'}`, 150, 30);
-  doc.setFillColor(240, 240, 240); 
-  doc.rect(14, 42, 182, 25, "F"); 
+
+  const numero = safe(vale.id_vale || vale.id, "-");
+  doc.text(`${esInterno ? "Movimiento" : "Vale"} N°: ${numero}`, 14, 30);
+  doc.text(`Fecha: ${fechaDoc}`, 14, 36);
+
+  // Estado (a la derecha)
+  doc.text(`Estado: ${estadoDoc}`, 150, 30);
+
+  // ---------------------------------------------------------
+  // Bloque gris con datos principales
+  // ---------------------------------------------------------
+  doc.setFillColor(240, 240, 240);
+  doc.rect(14, 42, 182, esInterno ? 33 : 25, "F");
   doc.setFontSize(10);
-  doc.setTextColor(50); 
-  doc.text(`Origen: ${vale.origen || "Depósito Central"}`, 20, 50);
-  doc.text(`Destino: ${vale.destino || "Sin definir"}`, 100, 50);
-  doc.text(`Chofer: ${vale.chofer || "Sin asignar"}`, 20, 60);
-  doc.text(`Vehículo: ${vale.vehiculo || "Sin asignar"}`, 100, 60);
-  doc.setTextColor(0); 
-  const items = vale.detalles || vale.items || []; 
-  const tableColumn = ["Código", "Material", "Lote", "Cantidad"];
-  const tableRows = items.map(item => [
-    item.codigo || "-",
-    item.material,
-    item.lote || "N/A",
-   `${item.cantidad} ${item.unidad || 'u.'}`
-  ]);
+  doc.setTextColor(50);
+
+  // ---------------------------------------------------------
+  // Datos por tipo
+  // ---------------------------------------------------------
+  if (esInterno) {
+    // Interno
+    const deposito = safe(vale.deposito, "Depósito");
+    const responsable = safe(vale.responsable, safe(vale.chofer, "Sin asignar")); // fallback por compatibilidad
+    const sectorOrigen = safe(vale.sector_origen, safe(vale.ubicacion_anterior, "N/D"));
+    const sectorDestino = safe(vale.sector_destino, safe(vale.nueva_ubicacion, "N/D"));
+
+    doc.text(`Depósito: ${deposito}`, 20, 50);
+    doc.text(`Responsable: ${responsable}`, 20, 60);
+
+    doc.text(`Sector Origen: ${sectorOrigen}`, 100, 50);
+    doc.text(`Sector Destino: ${sectorDestino}`, 100, 60);
+
+    // Observaciones (opcional) – línea extra
+    const obs = (vale.observaciones || vale.obs || "").trim();
+    if (obs) doc.text(`Obs: ${obs}`, 20, 70);
+  } else {
+    // Externo / Ruta
+    doc.text(`Origen: ${safe(vale.origen, "Depósito Central")}`, 20, 50);
+    doc.text(`Destino: ${safe(vale.destino, "Sin definir")}`, 100, 50);
+    doc.text(`Chofer: ${safe(vale.chofer, "Sin asignar")}`, 20, 60);
+    doc.text(`Vehículo: ${safe(vale.vehiculo, "Sin asignar")}`, 100, 60);
+  }
+
+  doc.setTextColor(0);
+
+  // ---------------------------------------------------------
+  // Tabla de items
+  // ---------------------------------------------------------
+  const items = vale.detalles || vale.items || [];
+
+  // Columnas: Interno no siempre tiene "Código"
+  const tableColumn = esInterno
+    ? ["Material", "Lote", "Cantidad", "Sector Destino"]
+    : ["Código", "Material", "Lote", "Cantidad"];
+
+  const tableRows = items.map((item) => {
+    const material = safe(item.material, "N/D");
+    const lote = safe(item.lote || item.id_lote, "N/A");
+    const cantidad = `${safe(item.cantidad, 0)} ${safe(item.unidad, "u.")}`;
+
+    if (esInterno) {
+      const sectorDst = safe(item.nueva_ubicacion || item.sector_destino || vale.nueva_ubicacion, "N/D");
+      return [material, lote, cantidad, sectorDst];
+    }
+
+    const codigo = safe(item.codigo, "-");
+    return [codigo, material, lote, cantidad];
+  });
+
+  // StartY: si interno y hay obs, movemos tabla un poco
+  const startY = esInterno ? 80 : 75;
+
   doc.autoTable({
-    startY: 75,
+    startY,
     head: [tableColumn],
     body: tableRows,
-    theme: 'grid',
-    headStyles: { fillColor: [59, 130, 246] }, 
+    theme: "grid",
+    headStyles: { fillColor: [59, 130, 246] },
     styles: { fontSize: 10, cellPadding: 4 },
-    columnStyles: { 3: { halign: 'right', fontStyle: 'bold' } }
+    columnStyles: {
+      2: { halign: "right", fontStyle: "bold" }, // cantidad
+    },
   });
+
+  // ---------------------------------------------------------
+  // Firmas
+  // ---------------------------------------------------------
   const finalY = doc.lastAutoTable.finalY + 40;
+
+  const firma1 = "Firma Responsable Almacén";
+  const firma2 = esInterno ? "Firma Responsable del Movimiento" : "Firma Chofer";
+
+  const drawFirmas = (y) => {
+    doc.line(20, y, 80, y);
+    doc.text(firma1, 25, y + 5);
+
+    doc.line(120, y, 180, y);
+    doc.text(firma2, 125, y + 5);
+  };
+
   if (finalY > 270) {
-      doc.addPage();
-      doc.line(20, 40, 80, 40);
-      doc.text("Firma Responsable Almacén", 25, 45);
-      doc.line(120, 40, 180, 40);
-      doc.text("Firma Chofer", 135, 45);
+    doc.addPage();
+    drawFirmas(40);
   } else {
-      doc.line(20, finalY, 80, finalY);
-      doc.text("Firma Responsable Almacén", 25, finalY + 5);
-      doc.line(120, finalY, 180, finalY);
-      doc.text("Firma Chofer", 135, finalY + 5);
+    drawFirmas(finalY);
   }
+
+  // ---------------------------------------------------------
+  // Guardar / Preview
+  // ---------------------------------------------------------
+  const filename = esInterno
+    ? `Movimiento_Interno_${numero}.pdf`
+    : `Vale_Traslado_${numero}.pdf`;
+
   if (isPreview) {
     const blob = doc.output("bloburl");
     window.open(blob, "_blank");
   } else {
-    doc.save(`Vale_Traslado_${vale.id_vale || vale.id}.pdf`);
+    doc.save(filename);
   }
 };
+
 
 // --- REPORTE DE GASTOS CON DEPÓSITO ---
 export const generarReporteGastosPDF = (gastos, nombreUsuario = "Usuario", periodo = "General", nombreDeposito = "General") => {

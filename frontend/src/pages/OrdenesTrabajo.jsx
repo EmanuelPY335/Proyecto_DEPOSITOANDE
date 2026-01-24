@@ -38,25 +38,52 @@ const OrdenesTrabajo = () => {
     titulo: "", descripcion: "", prioridad: "Media", id_deposito: "", id_empleado: "", 
     fecha_limite: "", tipo_orden: "General", id_lote: "", cantidad: 0, nueva_ubicacion: "", id_solicitud_origen: null 
   });
+  const [depositoFiltro, setDepositoFiltro] = useState("TODOS");
 
   const [editForm, setEditForm] = useState({
     titulo: "", descripcion: "", prioridad: "Media", fecha_limite: ""
   });
+useEffect(() => {
+  // =========================================================
+  // 1) CONTEXTO DE USUARIO (ROL / DEPÓSITO / PERMISOS)
+  // =========================================================
+  const rol = (sessionStorage.getItem("user_rol") || sessionStorage.getItem("rol_nombre") || "").trim();
+  const depId = sessionStorage.getItem("user_deposito_id") || "";
 
-  useEffect(() => {
-    const rol = sessionStorage.getItem("user_rol") || "";
-    const depId = sessionStorage.getItem("user_deposito_id") || "";
-    const permisosStr = sessionStorage.getItem("user_permissions");
-    const permisos = permisosStr ? JSON.parse(permisosStr) : [];
-    
-    setRolUser(rol);
-    setUserDepositoId(depId);
-    setCanManage(rol === "Master_Admin" || rol === "Admin" || permisos.includes("gestion_ordenes"));
-    
-    loadOrdenes();
-    loadRecursos();
-    loadEmpleados(); 
-  }, []);
+  const permisosStr = sessionStorage.getItem("user_permissions");
+  const permisos = permisosStr ? JSON.parse(permisosStr) : [];
+
+  const roleLower = rol.toLowerCase();
+
+  // Admin global
+  const esAdminGlobal = roleLower === "master_admin" || roleLower === "admin";
+
+  // Puede gestionar órdenes (crear/editar/borrar/asignar)
+  const puedeGestionarOrdenes = esAdminGlobal || permisos.includes("gestion_ordenes");
+
+  // (Opcional) Permiso específico para ver personal
+  // Si no existe en tu sistema, no pasa nada.
+  const puedeVerPersonal = esAdminGlobal || permisos.includes("ver_personal") || permisos.includes("gestion_personal");
+
+  setRolUser(rol);
+  setUserDepositoId(depId);
+  setCanManage(puedeGestionarOrdenes);
+
+  // =========================================================
+  // 2) CARGAS INICIALES
+  // - Órdenes y depósitos: siempre
+  // - Empleados: SOLO si realmente hace falta (admins)
+  // =========================================================
+  loadOrdenes();
+  loadRecursos();
+
+  // 👇 CLAVE: Evitar 403 en Chofer
+  if (puedeGestionarOrdenes || puedeVerPersonal) {
+    loadEmpleados();
+  }
+
+}, []);
+
 
   useEffect(() => {
     const query = new URLSearchParams(location.search);
@@ -100,8 +127,25 @@ const OrdenesTrabajo = () => {
   }, [newOrden.tipo_orden, showModalNew]);
 
   const loadOrdenes = async () => {
-    try { const data = await apiFetch(`${API_BASE_URL}/api/ordenes`); setOrdenes(data || []); } catch (e) { console.error(e); }
-  };
+  try {
+    const rol = (sessionStorage.getItem("user_rol") || sessionStorage.getItem("rol_nombre") || "").trim();
+    let url = `${API_BASE_URL}/api/ordenes`;
+
+    if (rol === "Master_Admin" && depositoFiltro !== "TODOS") {
+      url += `?deposito_id=${depositoFiltro}`;
+    }
+
+    const data = await apiFetch(url);
+    setOrdenes(data || []);
+  } catch (e) {
+    console.error(e);
+  }
+};
+useEffect(() => {
+  if ((rolUser || "") === "Master_Admin") loadOrdenes();
+  // eslint-disable-next-line
+}, [depositoFiltro]);
+
 
   const loadRecursos = async () => {
     try { const dep = await apiFetch(`${API_BASE_URL}/api/depositos`); setDepositos(dep || []); } catch (e) { console.error(e); }
@@ -194,6 +238,24 @@ const OrdenesTrabajo = () => {
             </button>
           )}
         </div>
+        {rolUser === "Master_Admin" && (
+          <div className="discord-card" style={{ padding: 12, marginBottom: 12 }}>
+            <b>Filtrar por depósito:</b>
+            <select
+              className="discord-select"
+              value={depositoFiltro}
+              onChange={(e) => setDepositoFiltro(e.target.value)}
+              style={{ marginLeft: 10, minWidth: 260 }}
+            >
+              <option value="TODOS">TODOS</option>
+              {depositos.map(d => (
+                <option key={d.ID_DEPOSITO} value={d.ID_DEPOSITO}>
+                  {d.NOMBRE}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="ordenes-grid">
           {ordenes.map((orden) => {

@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@yudiel/react-qr-scanner": "^2.5.0",
     "bootstrap": "^5.3.3",
     "leaflet": "^1.9.4",
     "react-leaflet": "^5.0.0",

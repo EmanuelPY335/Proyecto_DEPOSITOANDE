@@ -42,7 +42,7 @@
    BOTÓN FLOTANTE (ABRIR MENÚ)
    ========================================= */
 .sidebar-toggle-btn {
-  position: absolute;
+  position: inabsolute;
   top: 20px;
   left: 20px;
   z-index: 999; /* Por encima del mapa, por debajo del sidebar */
@@ -312,3 +312,102 @@
     top: 80px; 
   }
 }
+/* Oculta el panel de Leaflet Routing Machine si llegara a renderizar */
+.leaflet-routing-container,
+.leaflet-routing-alt,
+.leaflet-routing-geocoders {
+  display: none !important;
+}
+
+/* Si LRM está creando tooltips de instrucciones, las ocultamos */
+.leaflet-tooltip.leaflet-tooltip-permanent {
+  display: none !important;
+}
+/* ================================
+   LIMPIEZA Leaflet Routing Machine
+   (evita instrucciones feas)
+   ================================ */
+.leaflet-routing-container,
+.leaflet-routing-alt,
+.leaflet-routing-geocoders,
+.leaflet-routing-error,
+.leaflet-routing-icon {
+  display: none !important;
+}
+
+/* A veces LRM genera tooltips “permanentes” con instrucciones */
+.leaflet-tooltip,
+.leaflet-tooltip-pane {
+  pointer-events: none;
+}
+
+/* Si aparecieran tooltips permanentes, los escondemos */
+.leaflet-tooltip.leaflet-tooltip-permanent {
+  display: none !important;
+}
+/* =========================================
+   CONTROLES FLOTANTES (MENÚ + FABs)
+   - MISMA CAPA
+   ========================================= */
+.floating-controls {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 999; /* misma capa del botón menú */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* El botón menú ya lo tenías, lo dejamos igual,
+   pero ahora vive dentro de floating-controls */
+
+/* FABs debajo del botón menú */
+.fab-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Botones 1 y 2 */
+.fab-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.10);
+  background: #ffffff;
+  color: #111827;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.fab-btn:hover {
+  background-color: #f1f3f4;
+  transform: translateY(-1px);
+}
+
+.fab-btn:active {
+  transform: scale(0.96);
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .floating-controls {
+    top: 16px;
+    left: 16px;
+    gap: 10px;
+  }
+
+  .fab-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+  }
+}
+

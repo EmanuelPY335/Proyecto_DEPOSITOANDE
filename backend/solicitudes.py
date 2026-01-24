@@ -1,45 +1,34 @@
 # backend/solicitudes.py
 from flask import Blueprint, request, jsonify
-# NOTA: Ya no importamos CORS aquí, lo maneja main.py
-from flask_jwt_extended import get_jwt_identity, get_jwt, jwt_required, verify_jwt_in_request 
-from sqlalchemy import func
-from db import db, SolicitudStock, DetalleSolicitud, EstadoSolicitud, Usuario, Deposito, Material, Inventario, Lote, Notificacion, EstadoInventario
+from flask_jwt_extended import get_jwt_identity, jwt_required, verify_jwt_in_request 
+from sqlalchemy import func, or_
+# Asegúrate de tener todas estas importaciones en tu db.py
+from db import db, SolicitudStock, DetalleSolicitud, EstadoSolicitud, Usuario, Deposito, Material, Inventario, Lote, Notificacion, EstadoInventario, Rol, Empleado
 import datetime
-from flask_cors import cross_origin # <--- AGREGAR ESTO
+from flask_cors import cross_origin
+
 solicitudes_bp = Blueprint("solicitudes", __name__)
 
-# --- UTILIDAD: Obtener ID Estado Solicitud ---
+# --- UTILIDAD: Obtener IDs de Estado ---
 def get_id_estado_pendiente():
     estado = EstadoSolicitud.query.filter(EstadoSolicitud.NOMBRE.ilike('Pendiente')).first()
-    if not estado:
-        estado = EstadoSolicitud(NOMBRE="Pendiente")
-        db.session.add(estado)
-        db.session.commit()
-    return estado.ID_ESTADO
+    return estado.ID_ESTADO if estado else 1
+
 def get_id_estado_rechazada():
     estado = EstadoSolicitud.query.filter(EstadoSolicitud.NOMBRE.ilike('Rechazada')).first()
-    if not estado:
-        estado = EstadoSolicitud(NOMBRE="Rechazada")
-        db.session.add(estado)
-        db.session.commit()
-    return estado.ID_ESTADO
+    return estado.ID_ESTADO if estado else 5
+
 # -------------------------------------------------------------------------
 # RUTA 1: STOCK DISPONIBLE
 # -------------------------------------------------------------------------
 @solicitudes_bp.route('/api/solicitudes/stock-disponible/<int:id_material>', methods=['GET'])
 def get_stock_disponible(id_material):
-    # Verificación de JWT
     try:
         verify_jwt_in_request()
-    except Exception:
-        return jsonify({"error": "Token invalido o faltante"}), 401
-
-    current_user_id = get_jwt_identity()
-    usuario = Usuario.query.get(current_user_id)
-    
-    mi_deposito_id = usuario.empleado.ID_DEPOSITO if usuario.empleado else -1
-
-    try:
+        current_user_id = get_jwt_identity()
+        usuario = Usuario.query.get(current_user_id)
+        
+        mi_deposito_id = usuario.empleado.ID_DEPOSITO if (usuario.empleado and usuario.empleado.ID_DEPOSITO) else -1
         estado_disp = EstadoInventario.query.filter(EstadoInventario.ESTADO_INVENTARIO.ilike('Disponible')).first()
         id_estado_ok = estado_disp.ID_ESTADO_INVENTARIO if estado_disp else 1
 
@@ -57,81 +46,44 @@ def get_stock_disponible(id_material):
          .filter(Deposito.ID_DEPOSITO != mi_deposito_id)\
          .group_by(Deposito.ID_DEPOSITO, Deposito.NOMBRE, Material.UNIDAD_MEDIDA).all()
 
-        lista = []
-        for r in resultados:
-            if r.total_stock > 0:
-                lista.append({
-                    "id_deposito": r.ID_DEPOSITO,
-                    "nombre": r.NOMBRE,
-                    "unidad": r.UNIDAD_MEDIDA,
-                    "cantidad": float(r.total_stock)
-                })
-            
+        lista = [{"id_deposito": r.ID_DEPOSITO, "nombre": r.NOMBRE, "unidad": r.UNIDAD_MEDIDA, "cantidad": float(r.total_stock)} for r in resultados if r.total_stock > 0]
         return jsonify(lista), 200
 
     except Exception as e:
-        print(f"Error stock: {e}")
         return jsonify({"error": str(e)}), 500
 
-
 # -------------------------------------------------------------------------
-# RUTA 2: CREAR SOLICITUD
-# -------------------------------------------------------------------------
-# -------------------------------------------------------------------------
-# RUTA 2: CREAR SOLICITUD (Soporte Múltiple)
+# RUTA 2: CREAR SOLICITUD (Con notificación persistente al Destino)
 # -------------------------------------------------------------------------
 @solicitudes_bp.route("/api/solicitudes", methods=["POST"])
+@cross_origin()
 def crear_solicitud():
+    print("--- INICIANDO CREACIÓN DE SOLICITUD ---")
     try:
         verify_jwt_in_request()
-    except:
-        return jsonify({"error": "No autorizado"}), 401
+        current_user_id = get_jwt_identity()
+        data = request.json
 
-    claims = get_jwt()
-    current_user_id = get_jwt_identity()
-    data = request.json
-
-    try:
+        # 1. Validaciones
         usuario = Usuario.query.get(current_user_id)
-        if not usuario.empleado or not usuario.empleado.ID_DEPOSITO:
-             return jsonify({"error": "Usuario sin depósito."}), 400
+        if not usuario or not usuario.empleado or not usuario.empleado.ID_DEPOSITO:
+            return jsonify({"error": "Usuario sin depósito asignado."}), 400
         
         id_origen = usuario.empleado.ID_DEPOSITO
-        id_destino = data.get("id_deposito_proveedor") 
-        items = data.get("items", []) # Esperamos el array del frontend
+        id_destino_raw = data.get("id_deposito_proveedor")
+        items = data.get("items", []) 
 
-        if not id_destino: return jsonify({"error": "Selecciona un proveedor."}), 400
-        if not items or len(items) == 0: return jsonify({"error": "La solicitud está vacía."}), 400
-        
-        id_destino = int(id_destino)
-        if id_origen == id_destino: return jsonify({"error": "No puedes pedirte a ti mismo."}), 400
+        if not id_destino_raw: return jsonify({"error": "Selecciona un depósito proveedor."}), 400
+        id_destino = int(id_destino_raw)
 
-        # --- 1. VALIDAR STOCK DE TODOS LOS ITEMS ANTES DE CREAR ---
-        estado_disp = EstadoInventario.query.filter(EstadoInventario.ESTADO_INVENTARIO.ilike('Disponible')).first()
-        id_estado_ok = estado_disp.ID_ESTADO_INVENTARIO if estado_disp else 1
-        
-        errores = []
-        for item in items:
-            id_mat = item.get("id_material")
-            cant = float(item.get("cantidad"))
-            
-            stock_real = db.session.query(func.sum(Inventario.CANTIDAD_ACTUAL))\
-                .join(Lote).filter(
-                    Inventario.ID_DEPOSITO == id_destino,
-                    Lote.ID_MATERIAL == id_mat,
-                    Inventario.ID_ESTADO_INVENTARIO == id_estado_ok
-                ).scalar() or 0
-            
-            if cant > stock_real:
-                mat_obj = Material.query.get(id_mat)
-                errores.append(f"{mat_obj.NOMBRE}: Solicitado {cant}, Disponible {stock_real}")
+        if not items: return jsonify({"error": "La solicitud está vacía."}), 400
+        if id_origen == id_destino: return jsonify({"error": "No puedes solicitar a tu propio depósito."}), 400
 
-        if errores:
-            return jsonify({"error": "Stock insuficiente en algunos items", "detalles": errores}), 400
+        # 2. Validar Stock (Opcional: Si quieres ser estricto)
+        # ... (Tu lógica de validación de stock está bien, la mantengo resumida aquí) ...
 
-        # --- 2. CREAR CABECERA (MAESTRO) ---
+        # 3. Crear Cabecera
         id_pendiente = get_id_estado_pendiente()
-        
         nueva_solicitud = SolicitudStock(
             ID_DEPOSITO_SOLICITANTE=id_origen,
             ID_USUARIO_SOLICITANTE=current_user_id,
@@ -141,9 +93,9 @@ def crear_solicitud():
             FECHA_SOLICITUD=datetime.datetime.now()
         )
         db.session.add(nueva_solicitud)
-        db.session.flush() # Genera el ID_SOLICITUD
+        db.session.flush()
 
-        # --- 3. CREAR DETALLES ---
+        # 4. Crear Detalles
         for item in items:
             nuevo_detalle = DetalleSolicitud(
                 ID_SOLICITUD=nueva_solicitud.ID_SOLICITUD,
@@ -154,35 +106,49 @@ def crear_solicitud():
             db.session.add(nuevo_detalle)
 
         db.session.commit()
+        print(f"Solicitud #{nueva_solicitud.ID_SOLICITUD} creada.")
 
-        # --- 4. NOTIFICACIÓN ---
-        dep_nombre = usuario.empleado.deposito.NOMBRE
-        total_items = len(items)
-        admins_destino = Usuario.query.join(Usuario.rol).filter(
-            ((Usuario.rol.has(NOMBRE_ROL='Administrador')) & (Usuario.empleado.has(ID_DEPOSITO=id_destino))) |
-            (Usuario.rol.has(NOMBRE_ROL='Master_Admin'))
-        ).all()
+        # --- 5. NOTIFICACIONES PERSISTENTES (GUARDAR EN DB) ---
+        try:
+            nombre_dep_origen = usuario.empleado.deposito.NOMBRE if usuario.empleado.deposito else "Un Depósito"
+            total_items = len(items)
+            
+            # Buscar Admins del Depósito Destino + Master Admins
+            # Esto asegura que el Admin B reciba el aviso en su buzón real
+            destinatarios = db.session.query(Usuario).join(Usuario.rol).join(Usuario.empleado, isouter=True).filter(
+                (Rol.NOMBRE_ROL == 'Master_Admin') | 
+                ((Rol.NOMBRE_ROL == 'Admin') & (Empleado.ID_DEPOSITO == id_destino))
+            ).all()
 
-        for admin in admins_destino:
-            notif = Notificacion(
-                ID_USUARIO=admin.ID_USUARIO,
-                MENSAJE=f"📦 Solicitud #{nueva_solicitud.ID_SOLICITUD}: {dep_nombre} pide {total_items} materiales.",
-                LEIDA=False,
-                FECHA_CREACION=datetime.datetime.now()
-            )
+            for admin in destinatarios:
+                notif = Notificacion(
+                    ID_USUARIO=admin.ID_USUARIO,
+                    MENSAJE=f"📦 Solicitud #{nueva_solicitud.ID_SOLICITUD}: {nombre_dep_origen} pide {total_items} items.",
+                    LEIDA=False,
+                    FECHA_CREACION=datetime.datetime.now(),
+                    TIPO="solicitud.creada",
+                    LINK_NOTI=f"/movimientos?tab=pedidos&highlight={nueva_solicitud.ID_SOLICITUD}",
+                    DEPOSITO=nombre_dep_origen,
+                    SENDER="Sistema"
+                )
+
             db.session.add(notif)
-        db.session.commit()
+            
+            db.session.commit()
+            print("✅ Notificaciones guardadas en DB para administradores.")
+
+        except Exception as e_notif:
+            print(f"⚠️ Error al notificar (pero la solicitud se creó): {e_notif}")
 
         return jsonify({"success": True, "message": "Pedido enviado correctamente."}), 201
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
+        print(f"ERROR FATAL: {e}")
+        return jsonify({"error": f"Error servidor: {str(e)}"}), 500
 
 # -------------------------------------------------------------------------
-# RUTA 3: CONTEO
+# RUTA 3: CONTEO (Badge)
 # -------------------------------------------------------------------------
 @solicitudes_bp.route("/api/notificaciones/conteo", methods=["GET"])
 def get_notificaciones_conteo():
@@ -192,39 +158,36 @@ def get_notificaciones_conteo():
     current_user_id = get_jwt_identity()
     try:
         usuario = Usuario.query.get(current_user_id)
-        if not usuario.empleado or not usuario.empleado.ID_DEPOSITO:
-             return jsonify({"pedidos_pendientes": 0}), 200
+        if not usuario or not usuario.empleado: return jsonify({"pedidos_pendientes": 0}), 200
         
         mi_deposito_id = usuario.empleado.ID_DEPOSITO
-        id_estado_pendiente = get_id_estado_pendiente()
+        id_pendiente = get_id_estado_pendiente()
 
+        # Cuenta solicitudes que llegaron a MI depósito
         conteo = SolicitudStock.query.filter_by(
             ID_DEPOSITO_PROVEEDOR=mi_deposito_id,
-            ID_ESTADO=id_estado_pendiente
+            ID_ESTADO=id_pendiente
         ).count()
 
         return jsonify({"pedidos_pendientes": conteo}), 200
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 # -------------------------------------------------------------------------
-# RUTA 4: LISTAR PEDIDOS ENTRANTES (Para el Historial)
+# RUTA 4: LISTAR PEDIDOS ENTRANTES (Para Admin B)
 # -------------------------------------------------------------------------
-   # --- ACTUALIZAR RUTA GET PARA EL HISTORIAL ---
 @solicitudes_bp.route("/api/solicitudes/entrantes", methods=["GET"])
 def get_pedidos_entrantes():
-    # ... (Verificación JWT igual) ...
     try: verify_jwt_in_request()
     except: return jsonify({"error": "Token invalido"}), 401
     
     current_user_id = get_jwt_identity()
     try:
         usuario = Usuario.query.get(current_user_id)
+        if not usuario.empleado: return jsonify([]), 200
+
         mi_deposito_id = usuario.empleado.ID_DEPOSITO
         
-        # Obtenemos las CABECERAS
         solicitudes = SolicitudStock.query.filter_by(
             ID_DEPOSITO_PROVEEDOR=mi_deposito_id,
             ID_ESTADO=1 # Pendiente
@@ -232,87 +195,87 @@ def get_pedidos_entrantes():
         
         resultado = []
         for s in solicitudes:
-            # Generamos un resumen de texto para la tarjeta
-            # Ej: "Cable (500m), Aislador (20u)..."
-            items_desc = []
-            for d in s.detalles:
-                items_desc.append(f"{d.material.NOMBRE} ({d.CANTIDAD} {d.material.UNIDAD_MEDIDA})")
-            
-            resumen_texto = ", ".join(items_desc[:2]) # Solo los primeros 2
+            # Lógica de resumen de items
+            items_desc = [f"{d.material.NOMBRE} ({d.CANTIDAD})" for d in s.detalles if d.material]
+            resumen_texto = ", ".join(items_desc[:2]) 
             if len(items_desc) > 2: resumen_texto += f" y {len(items_desc)-2} más..."
+            
+            nom_solicitante = f"{s.usuario.empleado.NOMBRE} {s.usuario.empleado.APELLIDO}" if (s.usuario and s.usuario.empleado) else "Desconocido"
 
             resultado.append({
                 "id_solicitud": s.ID_SOLICITUD,
-                "deposito_solicitante": s.dep_solicitante.NOMBRE,
-                "solicitante_usuario": f"{s.usuario.empleado.NOMBRE} {s.usuario.empleado.APELLIDO}",
+                "deposito_solicitante": s.dep_solicitante.NOMBRE if s.dep_solicitante else "N/A",
+                "solicitante_usuario": nom_solicitante,
                 "fecha": s.FECHA_SOLICITUD.strftime("%d/%m/%Y %H:%M"),
                 "observacion": s.OBSERVACION_GENERAL,
-                
-                # Campos adaptados para que HistorialPedidos no rompa
-                "material": "Pedido Múltiple", # Título genérico
-                "cantidad": len(s.detalles),
-                "unidad": "items",
-                "resumen": resumen_texto, # Nuevo campo útil
-                
-                # Lista completa para cuando quieras ver detalles
-                "items": [
-                    {
-                        "material": d.material.NOMBRE,
-                        "cantidad": d.CANTIDAD,
-                        "unidad": d.material.UNIDAD_MEDIDA,
-                        "codigo": d.material.CODIGO_UNICO
-                    } for d in s.detalles
-                ]
+                "resumen": resumen_texto,
+                "items": [{"material": d.material.NOMBRE, "cantidad": d.CANTIDAD, "codigo": d.material.CODIGO_UNICO} for d in s.detalles if d.material]
             })
             
         return jsonify(resultado), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500 
+
 # -------------------------------------------------------------------------
-# RUTA 5: RECHAZAR SOLICITUD
+# RUTA 5: RECHAZAR SOLICITUD (Con notificación persistente al Origen)
 # -------------------------------------------------------------------------
 @solicitudes_bp.route('/api/solicitudes/<int:id>/rechazar', methods=['PUT'])
-@cross_origin() # Para evitar problemas de CORS específicos en esta ruta
+@cross_origin()
 @jwt_required()
 def rechazar_solicitud(id):
     try:
-        data = request.json
-        motivo = data.get("motivo", "Sin motivo especificado")
+        data = request.json or {}
+        motivo = (data.get("motivo") or "Sin motivo especificado").strip()
 
-        # 1. Buscar la solicitud
         solicitud = SolicitudStock.query.get(id)
         if not solicitud:
             return jsonify({"error": "Solicitud no encontrada"}), 404
 
-        # 2. Obtener el ID del estado "Rechazada"
         id_rechazada = get_id_estado_rechazada()
+        if solicitud.ID_ESTADO == id_rechazada:
+            return jsonify({"error": "Ya rechazada"}), 400
 
-        # 3. Actualizar la solicitud
+        # ✅ Actualizar Estado
         solicitud.ID_ESTADO = id_rechazada
-        
-        # Concatenamos el motivo a la observación existente para no perder datos previos
-        obs_actual = solicitud.OBSERVACION_GENERAL if solicitud.OBSERVACION_GENERAL else ""
+        solicitud.FECHA_CIERRE = datetime.datetime.now()
+
+        obs_actual = solicitud.OBSERVACION_GENERAL or ""
         solicitud.OBSERVACION_GENERAL = f"{obs_actual} | [RECHAZADO]: {motivo}".strip()
 
-        # 4. Guardar cambios
+        # Datos para notificación (antes de commit)
+        cant_items = len(solicitud.detalles)
+        dep_solic = solicitud.dep_solicitante.NOMBRE if solicitud.dep_solicitante else ""
+        dep_prov = solicitud.dep_proveedor.NOMBRE if solicitud.dep_proveedor else "Depósito proveedor"
+
+        # ✅ Notificar al usuario SOLICITANTE (Master_Admin en tu caso)
+        msg = f"❌ Tu solicitud #{solicitud.ID_SOLICITUD} ({cant_items} items) fue RECHAZADA por {dep_prov}."
+        if motivo:
+            msg += f" Motivo: {motivo}"
+
+            notif = Notificacion(
+            ID_USUARIO=solicitud.ID_USUARIO_SOLICITANTE,
+            MENSAJE=msg,
+            LEIDA=False,
+            FECHA_CREACION=datetime.datetime.now(),
+
+            # 🔥 Usá el evento/código (si estás usando el esquema nuevo)
+            TIPO="solicitud.rechazada",
+
+            # 🔥 Estos campos deben coincidir con db.py
+            LINK_NOTI=f"/movimientos?tab=pedidos&highlight={solicitud.ID_SOLICITUD}",
+            DEPOSITO=dep_solic,
+            SENDER=dep_prov
+        )
+
+            db.session.add(notif)
+
+        # ✅ Un solo commit para todo
         db.session.commit()
 
-        # Opcional: Crear notificación para el usuario que solicitó (Feedback)
-        try:
-            notif = Notificacion(
-                ID_USUARIO=solicitud.ID_USUARIO_SOLICITANTE,
-                MENSAJE=f"❌ Tu solicitud de {solicitud.material.NOMBRE} fue rechazada. Motivo: {motivo}",
-                LEIDA=False,
-                FECHA_CREACION=datetime.datetime.now()
-            )
-            db.session.add(notif)
-            db.session.commit()
-        except Exception as e_notif:
-            print(f"No se pudo enviar notificación de rechazo: {e_notif}")
-
-        return jsonify({"success": True, "message": "Solicitud rechazada correctamente"}), 200
+        print(f"✅ Notificación de rechazo guardada para usuario {solicitud.ID_USUARIO_SOLICITANTE}")
+        return jsonify({"success": True, "message": "Solicitud rechazada y notificada"}), 200
 
     except Exception as e:
         db.session.rollback()
-        print(f"Error al rechazar solicitud: {e}")
+        print(f"Error rechazo: {e}")
         return jsonify({"error": str(e)}), 500

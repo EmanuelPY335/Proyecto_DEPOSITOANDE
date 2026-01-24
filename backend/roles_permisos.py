@@ -16,13 +16,17 @@ def role_required(*roles_permitidos):
         def decorator(*args, **kwargs):
             verify_jwt_in_request()
             claims = get_jwt()
-            rol_usuario = claims.get("rol_nombre")
-            if rol_usuario in roles_permitidos:
+
+            rol_usuario = (claims.get("rol_nombre") or "").strip().lower()
+            roles_ok = [r.strip().lower() for r in roles_permitidos]
+
+            if rol_usuario in roles_ok:
                 return fn(*args, **kwargs)
-            else:
-                return jsonify({"error": f"Acceso denegado. Se requiere rol: {roles_permitidos}"}), 403
+
+            return jsonify({"error": f"Acceso denegado. Se requiere rol: {roles_permitidos}", "rol_actual": rol_usuario}), 403
         return decorator
     return wrapper
+
 
 # ==============================================================================
 # 🛡️ DECORADOR 2: PERMISSION_REQUIRED (Nivel Granular - Para Funcionalidades)
@@ -38,10 +42,13 @@ def permission_required(nombre_permiso_requerido):
             verify_jwt_in_request()
             current_user_id = get_jwt_identity()
             
-            # Master Admin siempre pasa (God Mode)
+                # Master Admin / Admin siempre pasa (God Mode)
             claims = get_jwt()
-            if claims.get("rol_nombre") == "Master_Admin":
-                return fn(*args, **kwargs)
+            rol = (claims.get("rol_nombre") or "").strip()
+
+            if rol in ["Master_Admin", "Admin"]:
+                    return fn(*args, **kwargs)
+
 
             # Consulta SQL optimizada para verificar permiso
             sql = text("""
@@ -74,10 +81,11 @@ def permission_required(nombre_permiso_requerido):
 
 def check_admin_access():
     claims = get_jwt()
-    rol_actual = claims.get("rol_nombre")
-    if rol_actual not in ["Master_Admin", "Admin"]:
+    rol_actual = (claims.get("rol_nombre") or "").strip().lower()
+    if rol_actual not in ["master_admin", "admin"]:
         return False, rol_actual
     return True, rol_actual
+
 
 # ---------------------------------------------------------
 # 1. LISTAR ROLES
@@ -238,7 +246,7 @@ def delete_rol(id_rol):
         return jsonify({"error": "Rol no encontrado"}), 404
 
     # 2. PROTEGER ROLES DEL SISTEMA
-    if rol.NOMBRE_ROL in ["Master_Admin", "Admin", "Chofer", "Encargado"]:
+    if rol.NOMBRE_ROL in ["Master_Admin", "Admin", "Chofer", "Empleado"]:
         return jsonify({"error": f"No se puede eliminar el rol base '{rol.NOMBRE_ROL}' por seguridad."}), 403
 
     # 3. VERIFICAR QUE NO TENGA USUARIOS ASIGNADOS

@@ -15,9 +15,12 @@ from ordenes import ordenes_bp
 from mapa import mapa_bp, socketio
 from asistencia import asistencia_bp
 from perfil import perfil_bp
+from buzon_routes import buzon_bp
+
+
 # main.py
 from depositos import depositos_bp # O donde lo hayas guardado
-
+from vehiculos import vehiculos_bp
 from personal import personal_bp
 from roles_permisos import role_required, crear_rol, roles_bp
 from solicitudes import solicitudes_bp # <--- Tu nuevo archivo
@@ -51,6 +54,8 @@ app.register_blueprint(notificaciones_bp, url_prefix='/api')
 app.register_blueprint(vales_bp, url_prefix="/api")
 app.register_blueprint(gastos_bp, url_prefix="/api")
 app.register_blueprint(depositos_bp)
+app.register_blueprint(buzon_bp)
+app.register_blueprint(vehiculos_bp, url_prefix="/api")
 # --- CORS (Con soporte para React y Raspberry Pi) ---
 CORS(
     app,
@@ -269,21 +274,38 @@ def reset_password():
         print(f"Error en reset_password: {e}")
         return jsonify({"success": False, "message": "Error al actualizar la contraseña."}), 500
 
-# -----------------------------------------------------------------
-# 📦 DEPÓSITOS (Materiales ahora se maneja en materiales.py)
-# -----------------------------------------------------------------
-@app.route("/api/depositos", methods=["GET"])
-def get_depositos():
-    try:
-        depositos = Deposito.query.order_by(Deposito.NOMBRE).all()
-        return jsonify([d.to_dict() for d in depositos]), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+
 
 # -----------------------------------------------------------------
 # 🚀 EJECUCIÓN PRINCIPAL
 # -----------------------------------------------------------------
 ROLES_BASE = ["Empleado", "Chofer", "Personal_Inventario", "Admin", "Master_Admin"]
+# --- AGREGA ESTO EN MAIN.PY PARA PROBAR ---
+# En backend/main.py
+
+@app.route("/api/depositos_publico", methods=["GET"])
+def depositos_publico():
+    print("📢 ACCESO A RUTA PÚBLICA DE EMERGENCIA")
+    try:
+        # CORRECCIÓN: Quitamos .filter_by(ESTADO_ACTIVO=True)
+        # Simplemente pedimos todos los depósitos ordenados por nombre
+        depositos = Deposito.query.order_by(Deposito.NOMBRE).all()
+        
+        return jsonify([d.to_dict() for d in depositos]), 200
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return jsonify({"error": str(e)}), 500
+@app.route("/api/_routes", methods=["GET"])
+def list_routes():
+        salida = []
+        for r in app.url_map.iter_rules():
+            salida.append({
+                "rule": str(r),
+                "methods": sorted([m for m in r.methods if m not in ("HEAD", "OPTIONS")]),
+                "endpoint": r.endpoint
+            })
+        salida.sort(key=lambda x: x["rule"])
+        return jsonify(salida), 200
 
 if __name__ == "__main__":
     with app.app_context():
@@ -295,6 +317,7 @@ if __name__ == "__main__":
                 crear_rol(nombre)  
             except Exception:
                 pass
+    
 
     # ⚙️ Ejecución
     socketio.run(

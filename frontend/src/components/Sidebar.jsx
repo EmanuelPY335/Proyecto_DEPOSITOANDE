@@ -10,9 +10,21 @@ const Sidebar = () => {
   const navigate = useNavigate();
 
   const handleLogout = () => {
+    // 🔥 limpiar wizard persistido
+    localStorage.removeItem("wiz_step");
+    localStorage.removeItem("wiz_config");
+    localStorage.removeItem("wiz_stops");
+    localStorage.removeItem("wiz_user");
+
+    // (opcional) si tenés otros flags en localStorage, los podés borrar también
+
+    // limpiar sesión
     sessionStorage.clear();
-    navigate("/"); 
+
+    // navegar
+    navigate("/", { replace: true });
   };
+
 
   const sidebarLinks = [];
 

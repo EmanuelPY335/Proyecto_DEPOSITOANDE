@@ -2,7 +2,7 @@
 import datetime
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-
+from sqlalchemy.dialects.postgresql import JSONB
 # 1. Inicializar SQLAlchemy
 db = SQLAlchemy()
 
@@ -147,7 +147,7 @@ class Material(db.Model):
     UNIDAD_MEDIDA = db.Column(db.String(20)) 
     CATEGORIA = db.Column(db.String(50)) 
     STOCK_MINIMO = db.Column(db.Float, default=5.0)
-
+    FACTOR_PUNTOS = db.Column(db.Integer, default=1)
     # Relación con Lotes
     lotes = db.relationship('Lote', backref='material', lazy=True)
 
@@ -228,7 +228,10 @@ class MovimientoMaterial(db.Model):
     FECHA_MOVIMIENTO = db.Column(db.Date, default=datetime.date.today)
     CANTIDAD = db.Column(db.Float)
     OBSERVACIONES = db.Column(db.String(254))
-
+    
+    ELIMINADO = db.Column(db.Boolean, default=False)
+    FECHA_ELIMINADO = db.Column(db.DateTime, nullable=True)
+    ID_USUARIO_ELIMINO = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=True)
     # Relaciones
     tipo = db.relationship('TipoMovimiento')
     empleado = db.relationship('Empleado')
@@ -253,7 +256,7 @@ class Vehiculo(db.Model):
     LONGITUD = db.Column(db.Float, nullable=True)
     # --- [NUEVO] RELACIÓN CON ESTADO DE VEHÍCULO ---
     ID_ESTADO = db.Column(db.Integer, db.ForeignKey('estado_vehiculo.ID_ESTADO'), nullable=False, default=1)
-    
+    CAPACIDAD_PUNTOS = db.Column(db.Integer, nullable=True)
     # Opcional: Campo de texto antiguo por compatibilidad (si quieres borrarlo, hazlo después)
     chofer = db.relationship('Empleado', backref='vehiculos')
     # -----------------------------------------------
@@ -427,79 +430,85 @@ class DetalleSolicitud(db.Model):
     # Relaciones
     material = db.relationship('Material')
 
+# --- NOTIFICACIONES (ACTUALIZADO) ---
+
 class Notificacion(db.Model):
     __tablename__ = 'notificaciones'
     ID_NOTIFICACION = db.Column(db.Integer, primary_key=True)
-    
-    # CORRECCIÓN 1: Cambiamos 'usuarios' por 'usuario' (singular)
+
     ID_USUARIO = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=False)
-    
+
     MENSAJE = db.Column(db.String(255), nullable=False)
+
+    # NUEVOS CAMPOS PARA SOPORTAR BUZÓN/MENÚ
+    TIPO = db.Column(db.String(60), default="info")            # ej: pedido, orden, ruta, alerta, check, vale, info
+    SENDER = db.Column(db.String(80), default="Sistema")       # ej: Sistema / Admin / Depósito X
+    DEPOSITO = db.Column(db.String(80), nullable=True)         # texto simple para filtros (nombre)
+    LINK_NOTI = db.Column(db.String(255), nullable=True)       # link del frontend (/ordenes/10 etc)
+
     LEIDA = db.Column(db.Boolean, default=False)
-    
-    # CORRECCIÓN 2: Ya funcionará porque arreglamos el import arriba
-    FECHA_CREACION = db.Column(db.DateTime, default=datetime.datetime.now)
     STARRED = db.Column(db.Boolean, default=False)
-    # CORRECCIÓN 3: Aseguramos que busque la tabla 'orden_trabajo' (singular/snake_case)
+    FECHA_CREACION = db.Column(db.DateTime, default=datetime.datetime.now)
+
     ID_ORDEN = db.Column(db.Integer, db.ForeignKey('orden_trabajo.ID_ORDEN'), nullable=True)
 
+    META = db.Column(JSONB, nullable=True)
+
     def to_dict(self):
+        dt = self.FECHA_CREACION or datetime.datetime.now()
         return {
             "id": self.ID_NOTIFICACION,
+            "usuario_id": self.ID_USUARIO,
+
             "mensaje": self.MENSAJE,
-            "leida": self.LEIDA,
-            "starred": self.STARRED,
-            "fecha": self.FECHA_CREACION.strftime('%Y-%m-%d %H:%M'),
-            "id_orden": self.ID_ORDEN
+            "tipo": (self.TIPO or "info"),
+            "sender": (self.SENDER or "Sistema"),
+            "deposito": self.DEPOSITO or "",
+            "link": self.LINK_NOTI,
+
+            "leida": bool(self.LEIDA),
+            "starred": bool(self.STARRED),
+
+            "fecha": dt.strftime('%Y-%m-%d %H:%M:%S'),
+            "fecha_iso": dt.strftime('%Y-%m-%dT%H:%M:%S'),
+            "fecha_display": dt.strftime('%d/%m/%Y %H:%M'),
+
+            "id_orden": self.ID_ORDEN,
+            "origen": "db",
+            "meta": self.META or {},
+
         }
-    
-# ---------------------------------------------------------
-# MODELOS PARA GESTIÓN DE TRASLADOS (VALES / REMISIONES)
-# ---------------------------------------------------------
-# ---------------------------------------------------------
-# [NUEVO] MODELOS PARA GESTIÓN DE TRASLADOS (VALES / REMISIONES)
-# ---------------------------------------------------------
-# En backend/db.py
+
+
+# --- VALES (ACTUALIZADO) ---
 
 class EstadoVale(db.Model):
     __tablename__ = 'estado_vale'
-    
-    # Asegúrate de que los nombres de las variables (izquierda) sean exactos:
     ID_ESTADO_VALE = db.Column(db.Integer, primary_key=True)
-    
-    # AQUÍ ESTÁ EL ERROR: Antes seguro decía "NOMBRE = ...", cámbialo a:
     estado_vale = db.Column(db.String(50), nullable=False)
 
+
 class Vale(db.Model):
-    """
-    Documento maestro del traslado.
-    Vincula: Origen, Destino, Camión, Chofer y los responsables de cada etapa.
-    """
     __tablename__ = 'vale'
     ID_VALE = db.Column(db.Integer, primary_key=True)
-    
-    # LOGÍSTICA
+
     ID_DEPOSITO_ORIGEN = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
     ID_DEPOSITO_DESTINO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
-    
-    # RESPONSABLES
-    ID_USUARIO_CREADOR = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO')) # Inventario que armó el paquete
-    ID_USUARIO_APROBADOR_SALIDA = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=True) # Admin Origen
-    ID_USUARIO_RECEPTOR = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=True) # Admin Destino
-    
-    # TRANSPORTE
+
+    ID_USUARIO_CREADOR = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'))
+    ID_USUARIO_APROBADOR_SALIDA = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=True)
+    ID_USUARIO_RECEPTOR = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=True)
+
     ID_CHOFER = db.Column(db.Integer, db.ForeignKey('empleado.ID_EMPLEADO'), nullable=False)
     ID_VEHICULO = db.Column(db.Integer, db.ForeignKey('vehiculo.ID_VEHICULO'), nullable=False)
-    
-    # ESTADO Y TIEMPOS
+
     ID_ESTADO_VALE = db.Column(db.Integer, db.ForeignKey('estado_vale.ID_ESTADO_VALE'), default=1)
     FECHA_CREACION = db.Column(db.DateTime, default=datetime.datetime.now)
-    FECHA_SALIDA = db.Column(db.DateTime, nullable=True) # Momento exacto que sale a ruta
-    FECHA_LLEGADA = db.Column(db.DateTime, nullable=True) # Momento exacto que llega a destino
-    GRUPO_RUTA = db.Column(db.String(50), nullable=True) # Ej: "RUTA-20231027-X99"
+    FECHA_SALIDA = db.Column(db.DateTime, nullable=True)
+    FECHA_LLEGADA = db.Column(db.DateTime, nullable=True)
+    GRUPO_RUTA = db.Column(db.String(50), nullable=True)
     OBSERVACIONES = db.Column(db.String(255))
-    
-    # Relaciones SQLAlchemy
+
     origen = db.relationship('Deposito', foreign_keys=[ID_DEPOSITO_ORIGEN])
     destino = db.relationship('Deposito', foreign_keys=[ID_DEPOSITO_DESTINO])
     chofer = db.relationship('Empleado', foreign_keys=[ID_CHOFER])
@@ -510,18 +519,20 @@ class Vale(db.Model):
     def to_dict(self):
         return {
             "id": self.ID_VALE,
-            "origen": self.origen.NOMBRE,
-            "destino": self.destino.NOMBRE,
-            "chofer": f"{self.chofer.NOMBRE} {self.chofer.APELLIDO}",
-            "vehiculo": f"{self.vehiculo.MARCA} - {self.vehiculo.MATRICULA}",
-            "estado": self.estado.NOMBRE if self.estado else "Desconocido",
-            "fecha_creacion": self.FECHA_CREACION.strftime('%Y-%m-%d %H:%M'),
+            "origen": self.origen.NOMBRE if self.origen else "",
+            "destino": self.destino.NOMBRE if self.destino else "",
+            "chofer": f"{self.chofer.NOMBRE} {self.chofer.APELLIDO}" if self.chofer else "",
+            "vehiculo": f"{self.vehiculo.MARCA} - {self.vehiculo.MATRICULA}" if self.vehiculo else "",
+            # FIX ACÁ:
+            "estado": self.estado.estado_vale if self.estado else "Desconocido",
+            "fecha_creacion": self.FECHA_CREACION.strftime('%Y-%m-%d %H:%M') if self.FECHA_CREACION else "",
             "fecha_salida": self.FECHA_SALIDA.strftime('%Y-%m-%d %H:%M') if self.FECHA_SALIDA else None,
-            "latitud_origen": self.origen.LATITUD,  # Útil para el mapa
-            "longitud_origen": self.origen.LONGITUD,
-            "latitud_destino": self.destino.LATITUD,
-            "longitud_destino": self.destino.LONGITUD
+            "latitud_origen": self.origen.LATITUD if self.origen else None,
+            "longitud_origen": self.origen.LONGITUD if self.origen else None,
+            "latitud_destino": self.destino.LATITUD if self.destino else None,
+            "longitud_destino": self.destino.LONGITUD if self.destino else None
         }
+
 
 # backend/db.py (Solo la clase DetalleVale)
 

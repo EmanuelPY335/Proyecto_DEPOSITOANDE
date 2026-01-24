@@ -88,7 +88,8 @@ def create_material():
             CANTIDAD=data.get("cantidad", 0),
             UNIDAD_MEDIDA=data.get("unidad_medida"),
             CATEGORIA=data.get("categoria"),
-            STOCK_MINIMO=data.get("stock_minimo", 5)
+            STOCK_MINIMO=data.get("stock_minimo", 5),
+            FACTOR_PUNTOS=data.get("factor_puntos", 1)
         )
         db.session.add(nuevo)
         db.session.commit()

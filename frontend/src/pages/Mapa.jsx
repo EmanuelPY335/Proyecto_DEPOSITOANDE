@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "../styles/Mapa.css"; 
@@ -73,6 +73,15 @@ export default function Mapa() {
   const [deptoSeleccionado, setDeptoSeleccionado] = useState("TODOS");
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const roleLower = (userRole || "").toLowerCase();
+  const esAdminMapa = ["admin", "master_admin"].includes(roleLower);
+  const [setTraza] = useState(null);
+  const [historialRutas, setHistorialRutas] = useState([]);
+  const [rutaSeleccionada, setRutaSeleccionada] = useState(null);
+  const [trazaSeleccionada] = useState(null);
+
+
   // --- CARGA DE DATOS ---
   useEffect(() => {
     async function fetchData() {
@@ -114,7 +123,6 @@ export default function Mapa() {
           }));
           flotaCombinada = [...flotaCombinada, ...reales];
         }
-
         // 2. VEHÍCULOS DE RELLENO
         const ficticios = generarVehiculosFicticios(5); 
         flotaCombinada = [...flotaCombinada, ...ficticios];
@@ -138,6 +146,14 @@ export default function Mapa() {
             } catch (err) {
                 console.warn("No se pudieron cargar las rutas del chofer", err);
             }
+        if (esAdminMapa) {
+          try {
+            const h = await apiFetch(`${BACKEND_URL}/api/rutas/historial`);
+            setHistorialRutas(h || []);
+          } catch(e) {
+            console.warn("No se pudo cargar historial rutas", e);
+          }
+        }
         }
         setLoaded(true);
       } catch (error) {
@@ -147,6 +163,7 @@ export default function Mapa() {
       }
     }
     fetchData();
+
 
     // SOCKET IO
     const socket = io(BACKEND_URL, { auth: { token: sessionStorage.getItem("access_token") } });
@@ -173,6 +190,17 @@ export default function Mapa() {
   }, [depositos, deptoSeleccionado]);
 
   // --- HANDLERS ---
+  const seleccionarRutaHistorial = async (grupo) => {
+  setRutaSeleccionada(grupo);
+  try {
+    const data = await apiFetch(`${BACKEND_URL}/api/rutas/historial/${grupo}/traza`);
+    setTraza(data);
+  } catch (e) {
+    console.warn("No se pudo cargar traza", e);
+    setTraza(null);
+  }
+};
+
   const handleCambioDepartamento = (e) => {
       const depto = e.target.value;
       setDeptoSeleccionado(depto);
@@ -197,16 +225,42 @@ export default function Mapa() {
 return (
     <div className="mapa-layout-container">
       
-      {/* --- BOTÓN TOGGLE FLOTANTE (Solo visible cuando el sidebar está cerrado) --- */}
-      {!sidebarOpen && (
-        <button 
-            className="sidebar-toggle-btn" 
-            onClick={() => setSidebarOpen(true)}
-            title="Abrir Menú"
-        >
-            <Menu size={24} />
-        </button>
-      )}
+{/* =========================================
+    CONTROLES FLOTANTES (MISMA CAPA DEL BOTÓN MENÚ)
+    - Solo se muestran cuando el sidebar está CERRADO
+    - Cuando el sidebar se abre, quedan TAPADOS (no renderizan)
+   ========================================= */}
+{!sidebarOpen && (
+  <div className="floating-controls">
+    {/* Botón abrir menú */}
+    <button
+      className="sidebar-toggle-btn"
+      onClick={() => setSidebarOpen(true)}
+      title="Abrir Menú"
+    >
+      <Menu size={24} />
+    </button>
+
+    {/* Accesos rápidos (1 = Orden de trabajo, 2 = Gastos) */}
+    <div className="fab-stack">
+      <button
+        className="fab-btn"
+        title="Orden de Trabajo"
+        onClick={() => (window.location.href = "/ordenes-trabajo")}
+      >
+        Orden
+      </button>
+
+      <button
+        className="fab-btn"
+        title="Gastos / Viáticos"
+        onClick={() => (window.location.href = "/gastos")}
+      >
+        Gasto
+      </button>
+    </div>
+  </div>
+)}
 
       {/* --- SIDEBAR IZQUIERDA (CONTENEDOR ÚNICO) --- */}
       {/* Aquí aplicamos la lógica: si sidebarOpen es false, agregamos la clase 'closed' */}
@@ -281,6 +335,32 @@ return (
                                     {v.esRaspberry ? "Rastreo Satelital" : v.conductor}
                                 </div>
                             </div>
+              {esAdminMapa && (
+                <div className="sidebar-section list-section">
+                  <h4 className="section-title">Historial de Recorridos</h4>
+
+                  {historialRutas.length === 0 ? (
+                    <div className="no-data-card">No hay recorridos finalizados.</div>
+                  ) : (
+                    <div className="vehiculos-list-modern">
+                      {historialRutas.map(r => (
+                        <div
+                          key={r.grupo_ruta}
+                          className={`vehiculo-card ${rutaSeleccionada === r.grupo_ruta ? "selected" : ""}`}
+                          onClick={() => seleccionarRutaHistorial(r.grupo_ruta)}
+                        >
+                          <div className="card-info">
+                            <span className="card-title">{r.grupo_ruta}</span>
+                            <div className="card-subtitle">
+                              {r.inicio} → {r.fin}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
                             {/* ESTADO */}
                             <div className="card-status">
@@ -320,7 +400,8 @@ return (
           </button>
         </div>
       </div>
-      
+
+
       {/* --- MAPA DE FONDO --- */}
       <div className="content-dashboard-map">
         {!loaded ? (
@@ -342,7 +423,15 @@ return (
                ruta.puntos && ruta.puntos.length >= 2 ? 
                <RutaBolt key={ruta.id_grupo} origen={ruta.puntos[0]} destino={ruta.puntos[1]} /> : null
             ))}
-
+            {trazaSeleccionada && (
+              <Polyline
+                positions={(
+                  (trazaSeleccionada.gps_points && trazaSeleccionada.gps_points.length > 1)
+                    ? trazaSeleccionada.gps_points
+                    : trazaSeleccionada.planned_points
+                ).map(p => [p.lat, p.lng])}
+              />
+            )}
             {/* Marcadores Depósitos */}
             {depositosFiltrados.map((dep) => (
               <Marker key={`dep-${dep.ID_DEPOSITO}`} position={[dep.LATITUD, dep.LONGITUD]} icon={depositoIcon}>
@@ -369,6 +458,7 @@ return (
                     }
                 </Popup>
               </Marker>
+              
             ))}
           </MapContainer>
         )}

@@ -1,10 +1,19 @@
+from importlib.resources import simple
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from flask_cors import cross_origin 
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
+from flask_cors import cross_origin
 from datetime import datetime
 import uuid
+
+from sqlalchemy import func, distinct
+from sqlalchemy.orm import aliased
+
 # Importamos todos los modelos necesarios
-from db import db, Vale, DetalleVale, Notificacion, Usuario, Vehiculo, OrdenTrabajo, Empleado, SolicitudStock, Inventario, MovimientoMaterial, Lote, EstadoVale
+from db import (
+    db, Vale, DetalleVale, Notificacion, Usuario, Vehiculo, OrdenTrabajo, Empleado,
+    SolicitudStock, Inventario, MovimientoMaterial, Lote, EstadoVale, Deposito
+)
+
 
 vales_bp = Blueprint("vales", __name__)
 
@@ -101,7 +110,7 @@ def notificar_chofer(id_chofer_empleado, grupo_ruta):
 # RUTAS (ENDPOINTS)
 # ==========================================
 
-@vales_bp.route("/vehiculos", methods=["GET"])
+@vales_bp.route("/vehiculos/simple", methods=["GET"])
 @jwt_required()
 def get_vehiculos():
     try:
@@ -119,76 +128,115 @@ def get_vehiculos():
 @vales_bp.route("/vales", methods=["POST"])
 @jwt_required()
 def crear_vale():
-    data = request.json
+    data = request.json or {}
     current_user_id = get_jwt_identity()
-    
+
     usuario = Usuario.query.get(current_user_id)
     if not usuario:
         return jsonify({"error": "Usuario no identificado"}), 403
 
     try:
         route_group_id = f"R-{uuid.uuid4().hex[:8].upper()}"
-        
-        stops = data.get('stops', [])
+
+        stops = data.get("stops") or []
         if not stops:
             return jsonify({"error": "La ruta debe tener al menos una parada"}), 400
 
-        es_admin = usuario.rol.NOMBRE_ROL in ["Master_Admin", "Administrador"]
-        estado_inicial = 2 if es_admin else 1
+        # ✅ Validaciones fuertes (por tu modelo nullable=False)
+        id_origen = data.get("id_origen")
+        id_chofer = data.get("id_chofer")
+        id_vehiculo = data.get("id_vehiculo")
 
-        id_chofer = data.get('id_chofer')
-        id_vehiculo = data.get('id_vehiculo')
+        if not id_origen:
+            return jsonify({"error": "Falta id_origen"}), 400
+        if not id_chofer:
+            return jsonify({"error": "Falta id_chofer"}), 400
+        if not id_vehiculo:
+            return jsonify({"error": "Falta id_vehiculo"}), 400
+
+        # ✅ estado inicial
+        es_admin = usuario.rol and usuario.rol.NOMBRE_ROL in ["Master_Admin", "Admin"]
+        estado_inicial = 2 if es_admin else 1  # 2 = Aprobado salida directo, 1 = Pendiente
 
         created_vales = []
+        solicitudes_a_actualizar = set()  # opcional, si llega id_solicitud
 
         for stop in stops:
+            id_destino = stop.get("id_destino")
+            items = stop.get("items") or []
+
+            if not id_destino:
+                return jsonify({"error": "Una parada no tiene id_destino"}), 400
+            if not items:
+                return jsonify({"error": "Una parada no tiene items"}), 400
+
             nuevo_vale = Vale(
                 ID_USUARIO_CREADOR=current_user_id,
-                ID_DEPOSITO_ORIGEN=data.get('id_origen'),
-                ID_DEPOSITO_DESTINO=stop['id_destino'],
-                ID_CHOFER=id_chofer if id_chofer else None,
-                ID_VEHICULO=id_vehiculo if id_vehiculo else None,
+                ID_DEPOSITO_ORIGEN=int(id_origen),
+                ID_DEPOSITO_DESTINO=int(id_destino),
+
+                ID_CHOFER=int(id_chofer),
+                ID_VEHICULO=int(id_vehiculo),
+
                 FECHA_CREACION=datetime.now(),
-                ID_ESTADO_VALE=estado_inicial, 
-                OBSERVACIONES=data.get('observacion', ''),
-                GRUPO_RUTA=route_group_id 
+                FECHA_SALIDA=datetime.now() if estado_inicial == 2 else None,
+                ID_ESTADO_VALE=estado_inicial,
+                OBSERVACIONES=data.get("observacion", ""),
+                GRUPO_RUTA=route_group_id
             )
+
             if estado_inicial == 2:
                 nuevo_vale.ID_USUARIO_APROBADOR_SALIDA = current_user_id
 
             db.session.add(nuevo_vale)
-            db.session.flush()
+            db.session.flush()  # para obtener ID_VALE
 
-            for item in stop['items']:
+            for item in items:
+                # Validación item
+                if not item.get("id_lote") or not item.get("id_material") or item.get("cantidad") is None:
+                    return jsonify({"error": "Item incompleto (id_lote, id_material, cantidad)"}), 400
+
                 detalle = DetalleVale(
                     ID_VALE=nuevo_vale.ID_VALE,
-                    ID_LOTE=item['id_lote'],
-                    ID_MATERIAL=item['id_material'],
-                    CANTIDAD_SOLICITADA=float(item['cantidad'])
+                    ID_LOTE=int(item["id_lote"]),
+                    ID_MATERIAL=int(item["id_material"]),
+                    CANTIDAD_SOLICITADA=float(item["cantidad"])
                 )
                 db.session.add(detalle)
-                
+
+                # ✅ Opcional: si el frontend manda id_solicitud en el item
+                if item.get("id_solicitud"):
+                    solicitudes_a_actualizar.add(int(item["id_solicitud"]))
+
             created_vales.append(nuevo_vale)
 
+        # ✅ Si querés marcar solicitudes como “en proceso” (solo si llega id_solicitud)
+        # (Ajustá el estado según tu tabla: 2/3/etc.)
+        if solicitudes_a_actualizar:
+            for sid in solicitudes_a_actualizar:
+                solicitud = SolicitudStock.query.get(sid)
+                if solicitud:
+                    solicitud.ID_ESTADO = 3  # ejemplo: 3 = Completado/Atendido (ajusta a tu sistema)
+
+        # ✅ Si queda aprobado directo: descontar stock + notificar chofer
         if estado_inicial == 2:
             for vale in created_vales:
                 descontar_stock_salida(vale, current_user_id)
-            
-            if id_chofer:
-                notificar_chofer(id_chofer, route_group_id)
+            notificar_chofer(int(id_chofer), route_group_id)
 
         db.session.commit()
-        
+
         return jsonify({
-            "success": True, 
-            "message": "Ruta generada." + (" Aprobada." if estado_inicial==2 else " Pendiente de aprobación."),
+            "success": True,
+            "message": "Ruta generada." + (" Aprobada." if estado_inicial == 2 else " Pendiente de aprobación."),
             "grupo_ruta": route_group_id
         }), 201
 
     except Exception as e:
         db.session.rollback()
-        print(f"Error creando vale: {str(e)}") 
+        print(f"Error creando vale: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
 
 @vales_bp.route("/vales/<int:id_vale>/asignar", methods=["PUT"])
 @jwt_required()
@@ -231,7 +279,8 @@ def aprobar_salida(id_vale):
 
         vale.ID_ESTADO_VALE = 2 
         vale.ID_USUARIO_APROBADOR_SALIDA = current_user_id
-        
+        vale.FECHA_SALIDA = datetime.now()
+
         descontar_stock_salida(vale, current_user_id)
         notificar_chofer(vale.ID_CHOFER, vale.GRUPO_RUTA)
 
@@ -377,3 +426,168 @@ def get_vales_pendientes():
             ]
         })
     return jsonify(res), 200
+
+@vales_bp.route("/traslados/historial", methods=["GET"])
+@jwt_required()
+def get_historial_traslados():
+    """
+    Historial de traslados agrupado por GRUPO_RUTA.
+    Devuelve:
+      grupo_ruta, fecha_salida(min), fecha_llegada(max),
+      chofer, vehiculo, items_count(sum detalles),
+      id_vale_ref, origen/destino (resumen)
+    Query params opcionales:
+      - limit=100
+      - estado_min=2
+      - solo_finalizados=0|1  (si es 1 => estado_min=4 por defecto)
+    """
+    claims = get_jwt()
+    sub = claims.get("sub")
+    user_id = int(sub) if sub is not None else int(get_jwt_identity())
+
+    rol = (claims.get("rol_nombre") or "").strip()
+    rol_low = rol.lower()
+
+    limit = int(request.args.get("limit", 100))
+    solo_finalizados = str(request.args.get("solo_finalizados", "0")).lower() in ("1", "true", "yes", "si")
+    estado_min_default = 4 if solo_finalizados else 2
+    estado_min = int(request.args.get("estado_min", estado_min_default))
+
+    usuario = Usuario.query.get(user_id)
+    deposito_id_user = usuario.empleado.ID_DEPOSITO if (usuario and usuario.empleado) else None
+    chofer_id_user = usuario.empleado.ID_EMPLEADO if (usuario and usuario.empleado) else None
+
+    # --- Seguridad por rol (similar a movimientos.py) ---
+    # master/admin ven todo
+    es_admin = rol_low in ("master_admin", "admin", "administrador", "gerente", "it_support")
+
+    try:
+        # Subqueries para obtener ORIGEN del primer vale del grupo y DESTINO del último vale del grupo
+        sub_min_fc = (
+            db.session.query(
+                Vale.GRUPO_RUTA.label("grupo"),
+                func.min(Vale.FECHA_CREACION).label("min_fc")
+            )
+            .filter(Vale.GRUPO_RUTA != None)
+            .group_by(Vale.GRUPO_RUTA)
+            .subquery()
+        )
+
+        sub_max_fc = (
+            db.session.query(
+                Vale.GRUPO_RUTA.label("grupo"),
+                func.max(Vale.FECHA_CREACION).label("max_fc")
+            )
+            .filter(Vale.GRUPO_RUTA != None)
+            .group_by(Vale.GRUPO_RUTA)
+            .subquery()
+        )
+
+        v_first = aliased(Vale)
+        v_last = aliased(Vale)
+        dep_or = aliased(Deposito)
+        dep_de = aliased(Deposito)
+
+        q = (
+            db.session.query(
+                Vale.GRUPO_RUTA.label("grupo_ruta"),
+
+                func.min(Vale.FECHA_SALIDA).label("fecha_salida"),
+                func.max(Vale.FECHA_LLEGADA).label("fecha_llegada"),
+
+                func.min(Vale.ID_VALE).label("id_vale_ref"),
+                func.max(Vale.ID_VEHICULO).label("id_vehiculo"),
+                func.max(Vale.ID_CHOFER).label("id_chofer"),
+                func.max(Vale.ID_ESTADO_VALE).label("estado_id"),
+
+                func.count(distinct(Vale.ID_VALE)).label("vales_count"),
+                func.count(DetalleVale.ID_DETALLE_VALE).label("items_count"),
+
+                dep_or.NOMBRE.label("origen"),
+                dep_de.NOMBRE.label("destino"),
+            )
+            .outerjoin(DetalleVale, DetalleVale.ID_VALE == Vale.ID_VALE)
+            .join(sub_min_fc, sub_min_fc.c.grupo == Vale.GRUPO_RUTA)
+            .join(v_first, (v_first.GRUPO_RUTA == sub_min_fc.c.grupo) & (v_first.FECHA_CREACION == sub_min_fc.c.min_fc))
+            .outerjoin(dep_or, dep_or.ID_DEPOSITO == v_first.ID_DEPOSITO_ORIGEN)
+            .join(sub_max_fc, sub_max_fc.c.grupo == Vale.GRUPO_RUTA)
+            .join(v_last, (v_last.GRUPO_RUTA == sub_max_fc.c.grupo) & (v_last.FECHA_CREACION == sub_max_fc.c.max_fc))
+            .outerjoin(dep_de, dep_de.ID_DEPOSITO == v_last.ID_DEPOSITO_DESTINO)
+            .filter(Vale.GRUPO_RUTA != None)
+            .filter(Vale.ID_ESTADO_VALE >= estado_min)
+        )
+
+        # Filtros por rol
+        if rol_low == "chofer":
+            if not chofer_id_user:
+                return jsonify({"error": "Usuario no vinculado a empleado/chofer"}), 400
+            q = q.filter(Vale.ID_CHOFER == chofer_id_user)
+        elif not es_admin:
+            # usuarios normales ven solo lo que toca su depósito
+            if not deposito_id_user:
+                return jsonify({"error": "Usuario no vinculado a un depósito"}), 400
+            q = q.filter(
+                (Vale.ID_DEPOSITO_ORIGEN == deposito_id_user) |
+                (Vale.ID_DEPOSITO_DESTINO == deposito_id_user)
+            )
+
+        q = (
+            q.group_by(Vale.GRUPO_RUTA, dep_or.NOMBRE, dep_de.NOMBRE)
+             .order_by(func.max(Vale.FECHA_CREACION).desc())
+             .limit(limit)
+        )
+
+        rows = q.all()
+
+        # Cache para evitar N+1 pesado
+        chofer_cache = {}
+        vehiculo_cache = {}
+
+        res = []
+        for r in rows:
+            id_chofer = int(r.id_chofer) if r.id_chofer is not None else None
+            id_vehiculo = int(r.id_vehiculo) if r.id_vehiculo is not None else None
+
+            # Chofer
+            chofer_txt = "Sin Asignar"
+            if id_chofer:
+                if id_chofer not in chofer_cache:
+                    c = Empleado.query.get(id_chofer)
+                    chofer_cache[id_chofer] = f"{c.NOMBRE} {c.APELLIDO}" if c else "Sin Asignar"
+                chofer_txt = chofer_cache[id_chofer]
+
+            # Vehículo
+            vehiculo_txt = "N/A"
+            if id_vehiculo:
+                if id_vehiculo not in vehiculo_cache:
+                    v = Vehiculo.query.get(id_vehiculo)
+                    if v:
+                        marca = getattr(v, "MARCA", "") or ""
+                        matricula = getattr(v, "MATRICULA", "") or ""
+                        vehiculo_cache[id_vehiculo] = f"{marca} ({matricula})".strip()
+                    else:
+                        vehiculo_cache[id_vehiculo] = "N/A"
+                vehiculo_txt = vehiculo_cache[id_vehiculo]
+
+            fecha_salida = r.fecha_salida.strftime("%d/%m/%Y %H:%M") if r.fecha_salida else None
+            fecha_llegada = r.fecha_llegada.strftime("%d/%m/%Y %H:%M") if r.fecha_llegada else None
+
+            res.append({
+                "grupo_ruta": r.grupo_ruta,
+                "fecha_salida": fecha_salida,
+                "fecha_llegada": fecha_llegada,
+                "chofer": chofer_txt,
+                "vehiculo": vehiculo_txt,
+                "items_count": int(r.items_count or 0),
+                "vales_count": int(r.vales_count or 0),
+                "id_vale_ref": int(r.id_vale_ref) if r.id_vale_ref else None,
+                "origen": r.origen or "N/A",
+                "destino": r.destino or "N/A",
+                "estado_id": int(r.estado_id) if r.estado_id else None,
+            })
+
+        return jsonify(res), 200
+
+    except Exception as e:
+        print("❌ Error get_historial_traslados:", e)
+        return jsonify({"error": str(e)}), 500

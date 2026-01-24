@@ -1,50 +1,84 @@
-import { useEffect } from "react";
+// src/components/RutaBolt.jsx
+import { useEffect, useRef } from "react";
 import { useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet-routing-machine";
+import "leaflet-routing-machine/dist/leaflet-routing-machine.css";
 
-const RutaBolt = ({ origen, destino }) => {
+/**
+ * RutaBolt PRO
+ * - Dibuja SOLO la polyline (estilo Bolt)
+ * - NO muestra panel, NO muestra itinerario, NO muestra tooltips raros
+ * - Cleanup robusto en cada cambio
+ *
+ * Props:
+ *  - origen: { lat, lng }
+ *  - destino: { lat, lng }
+ */
+export default function RutaBolt({ origen, destino }) {
   const map = useMap();
+  const routingRef = useRef(null);
 
   useEffect(() => {
-    // Si el mapa no está listo o faltan puntos, no hacemos nada
     if (!map || !origen || !destino) return;
 
-    // Crear el control de enrutamiento
-    const routingControl = L.Routing.control({
-      waypoints: [
-        L.latLng(origen.lat, origen.lng),
-        L.latLng(destino.lat, destino.lng)
-      ],
-      
-      // --- TU TOKEN DE MAPBOX YA CONFIGURADO ---
-      router: L.Routing.mapbox('pk.eyJ1IjoiZW1hMzM1IiwiYSI6ImNta212dDUyajBrc3MzY3BzbWVhZjZ6Z3QifQ.cBlelICbwHkD0eWcd4PWdA'),
-      
-      // ESTILO BOLT: Línea azul (#005bea), gruesa (6px) y sólida
-      lineOptions: {
-        styles: [{ color: "#005bea", opacity: 0.8, weight: 6 }]
-      },
-      
-      // CONFIGURACIÓN "LIMPIA" (Para que parezca app nativa)
-      createMarker: function() { return null; }, // No crea marcadores automáticos (ya tienes los tuyos)
-      addWaypoints: false,       // El usuario no puede arrastrar la ruta
-      draggableWaypoints: false, 
-      fitSelectedRoutes: false,  // Evita que el mapa haga zoom loco automáticamente
-      showAlternatives: false,   // Solo muestra la ruta más rápida
-      containerClassName: 'routing-hidden' // Clase para ocultar la caja de texto
-    }).addTo(map);
+    // Limpieza previa (por si React re-renderiza)
+    if (routingRef.current) {
+      try { map.removeControl(routingRef.current); } catch {}
+      routingRef.current = null;
+    }
 
-    // Limpieza: Borrar la ruta si el componente se desmonta o cambian los puntos
+    // Contenedor "fake" fuera de la UI para que LRM no inserte panel dentro del mapa
+    const hiddenContainer = L.DomUtil.create("div");
+    hiddenContainer.style.display = "none";
+
+    const control = L.Routing.control({
+      waypoints: [L.latLng(origen.lat, origen.lng), L.latLng(destino.lat, destino.lng)],
+
+      router: L.Routing.mapbox(
+        "pk.eyJ1IjoiZW1hMzM1IiwiYSI6ImNta212dDUyajBrc3MzY3BzbWVhZjZ6Z3QifQ.cBlelICbwHkD0eWcd4PWdA"
+      ),
+
+      // Solo una ruta
+      showAlternatives: false,
+
+      // No tocar waypoints
+      addWaypoints: false,
+      draggableWaypoints: false,
+      routeWhileDragging: false,
+
+      // No markers
+      createMarker: () => null,
+
+      // No zoom automático
+      fitSelectedRoutes: false,
+
+      // Línea
+      lineOptions: {
+        styles: [{ color: "#005bea", opacity: 0.85, weight: 6 }],
+        addWaypoints: false,
+      },
+
+      // SUPER CLAVE: ocultar UI
+      show: false,
+      collapsible: true,
+      container: hiddenContainer,
+    });
+
+    // SUPER CLAVE: bloquear eventos para que no “ensucie” el mapa
+    // (evita overlays / tooltips en algunas versiones)
+    control.on("routeselected", () => {});
+
+    control.addTo(map);
+    routingRef.current = control;
+
     return () => {
-      try {
-        map.removeControl(routingControl);
-      } catch (e) {
-        console.warn("Limpiando ruta anterior...", e);
+      if (routingRef.current) {
+        try { map.removeControl(routingRef.current); } catch {}
+        routingRef.current = null;
       }
     };
-  }, [map, origen, destino]);
+  }, [map, origen?.lat, origen?.lng, destino?.lat, destino?.lng]);
 
   return null;
-};
-
-export default RutaBolt;
+}

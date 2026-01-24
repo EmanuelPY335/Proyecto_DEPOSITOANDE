@@ -491,3 +491,108 @@
   color: #fd0202;
  
   }
+ .filters-mov {
+  position: fixed;
+  top: 90px;                 /* ajustá si tenés header */
+  right: 16px;
+
+  width: min(320px, 92vw);
+  padding: 14px;
+
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 12px;
+
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+  z-index: 3000;
+
+  overflow: hidden;
+}
+
+/* Flechita (opcional) */
+.filters-mov::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 18px;
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border-left: 1px solid rgba(15, 23, 42, 0.15);
+  border-top: 1px solid rgba(15, 23, 42, 0.15);
+  transform: rotate(45deg);
+}
+
+.filters-mov label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 6px;
+}
+
+.filters-mov input,
+.filters-mov select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  outline: none;
+}
+
+.filters-mov input:focus,
+.filters-mov select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* Móvil: estilo sheet */
+@media (max-width: 768px) {
+  .filters-mov {
+    top: auto;
+    bottom: 14px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(420px, 94vw);
+  }
+  .filters-mov::before { display: none; }
+}
+.filters-mov {
+  position: fixed; /* o absolute si usás la opción B */
+  /* ...tu resto de estilos... */
+}
+
+/* Mini X */
+.filters-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+
+  width: 26px;
+  height: 26px;
+
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+
+  display: grid;
+  place-items: center;
+
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: #334155;
+
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.filters-close:hover {
+  background: #f1f5f9;
+  border-color: rgba(15, 23, 42, 0.25);
+  transform: scale(1.04);
+}
+
+.filters-close:active {
+  transform: scale(0.96);
+}

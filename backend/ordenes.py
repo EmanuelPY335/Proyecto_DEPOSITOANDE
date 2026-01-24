@@ -59,66 +59,113 @@ def get_inventario_local():
     return jsonify(lista), 200
 
 # --- 1. LISTAR ÓRDENES ---
+# --- 1. LISTAR ÓRDENES ---
 @ordenes_bp.route("/ordenes", methods=["GET"])
 @jwt_required()
 def get_ordenes():
     claims = get_jwt()
     user_id = int(claims.get("sub"))
+    rol = (claims.get("rol_nombre") or "").strip()  # "Master_Admin", "Admin", etc.
+
     usuario_actual = Usuario.query.get(user_id)
+    if not usuario_actual:
+        return jsonify([]), 200
+
     empleado_id_actual = usuario_actual.empleado.ID_EMPLEADO if usuario_actual.empleado else None
+    deposito_id_user = usuario_actual.empleado.ID_DEPOSITO if usuario_actual.empleado else None
+
+    # Gestor = Master/Admin o tiene permiso gestion_ordenes
     es_gestor = tiene_permiso_ordenes()
 
     try:
-        # Lazy check de vencimientos
-        estado_vencido = EstadoOrden.query.filter(EstadoOrden.ESTADO_ORDEN.ilike("Fin de tiempo limite")).first()
+        # ---------------------------------------------------------
+        # 0) Lazy check de vencimientos (dejo tu lógica igual)
+        # ---------------------------------------------------------
+        estado_vencido = EstadoOrden.query.filter(
+            EstadoOrden.ESTADO_ORDEN.ilike("Fin de tiempo limite")
+        ).first()
+
         if estado_vencido:
             now = datetime.now()
             estados_activos = ["Pendiente", "En Progreso"]
-            # Join explícito para evitar errores si la relación no está cargada
+
             ordenes_vencidas = OrdenTrabajo.query.join(EstadoOrden).filter(
                 OrdenTrabajo.FECHA_LIMITE != None,
                 OrdenTrabajo.FECHA_LIMITE < now,
                 EstadoOrden.ESTADO_ORDEN.in_(estados_activos)
             ).all()
-            
+
             count = 0
             for o in ordenes_vencidas:
                 o.ID_ESTADO_ORDEN = estado_vencido.ID_ESTADO_ORDEN
                 count += 1
-            if count > 0: db.session.commit()
+            if count > 0:
+                db.session.commit()
 
+        # ---------------------------------------------------------
+        # 1) Query base
+        # ---------------------------------------------------------
         query = db.session.query(OrdenTrabajo, Empleado, Usuario)\
             .outerjoin(Empleado, OrdenTrabajo.ID_EMPLEADO == Empleado.ID_EMPLEADO)\
             .outerjoin(Usuario, Empleado.ID_EMPLEADO == Usuario.ID_EMPLEADO)\
             .filter(OrdenTrabajo.ELIMINADA == False)
 
-        if not es_gestor:
-            if not empleado_id_actual: return jsonify([]), 200
+        role_lower = rol.lower()
+
+        # ---------------------------------------------------------
+        # 2) SCOPING POR REGLAS (TU REQUERIMIENTO)
+        # ---------------------------------------------------------
+        if role_lower == "master_admin":
+            # Master ve TODO, y opcionalmente puede filtrar por depósito
+            deposito_qs = request.args.get("deposito_id")
+            if deposito_qs and str(deposito_qs).upper() != "TODOS":
+                try:
+                    query = query.filter(OrdenTrabajo.ID_DEPOSITO == int(deposito_qs))
+                except:
+                    pass
+
+        elif role_lower == "admin":
+            # Admin ve SOLO su depósito (aunque sea gestor)
+            if not deposito_id_user:
+                return jsonify([]), 200
+            query = query.filter(OrdenTrabajo.ID_DEPOSITO == deposito_id_user)
+
+        else:
+            # Empleado/Chofer/etc: SOLO asignadas a él
+            if not empleado_id_actual:
+                return jsonify([]), 200
             query = query.filter(OrdenTrabajo.ID_EMPLEADO == empleado_id_actual)
-        
+
+        # ---------------------------------------------------------
+        # 3) Respuesta
+        # ---------------------------------------------------------
         results = query.order_by(OrdenTrabajo.ID_ESTADO_ORDEN.asc(), OrdenTrabajo.FECHA_INICIO.desc()).all()
-        
+
         lista_ordenes = []
         for orden, empleado_asignado, usuario_asignado in results:
             data = orden.to_dict()
-            # Inyectar datos extra del movimiento si existen
+
+            # extras
             data["tipo_orden"] = orden.TIPO_ORDEN or "General"
             data["cantidad_mov"] = orden.CANTIDAD_MOVIMIENTO
             data["nueva_ubicacion"] = orden.NUEVA_UBICACION
-            
+
+            # info empleado
             if empleado_asignado:
-                 data["empleado_nombre"] = format_nombre(f"{empleado_asignado.NOMBRE} {empleado_asignado.APELLIDO}")
-                 data["empleado_avatar"] = usuario_asignado.AVATAR if usuario_asignado else None
+                data["empleado_nombre"] = format_nombre(f"{empleado_asignado.NOMBRE} {empleado_asignado.APELLIDO}")
+                data["empleado_avatar"] = usuario_asignado.AVATAR if usuario_asignado else None
             else:
-                 data["empleado_nombre"] = "Sin Asignar"
-                 data["empleado_avatar"] = None
+                data["empleado_nombre"] = "Sin Asignar"
+                data["empleado_avatar"] = None
+
             lista_ordenes.append(data)
-        
+
         return jsonify(lista_ordenes), 200
 
     except Exception as e:
         print(f"Error get_ordenes: {e}")
         return jsonify({"error": str(e)}), 500
+
 
 # --- 2. CREAR ORDEN (MANUAL) ---
 @ordenes_bp.route("/ordenes", methods=["POST"])

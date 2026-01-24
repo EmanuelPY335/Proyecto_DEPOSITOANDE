@@ -13,7 +13,7 @@ const HistorialPedidos = ({ defaultView = "solicitudes", onAtenderPedido }) => {
   
   const navigate = useNavigate();
   const userRole = sessionStorage.getItem("user_rol");
-  const canManage = ["Master_Admin", "Administrador"].includes(userRole);
+  const canManage = ["Master_Admin", "Admin"].includes(userRole);
 
   const fetchData = async () => {
     setLoading(true);
@@ -103,10 +103,10 @@ const HistorialPedidos = ({ defaultView = "solicitudes", onAtenderPedido }) => {
             <table className="discord-table historial-table">
                 <thead>
                     <tr>
-                        <th>ID</th>
+                        <th>N° Vale</th>
                         <th>Fecha</th>
                         <th>{view === "solicitudes" ? "Solicitante" : "Destino"}</th>
-                        <th>Detalle</th>
+                        <th>Detalle Chofer</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
