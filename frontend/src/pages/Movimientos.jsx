@@ -22,11 +22,14 @@ const iconDestino = new L.Icon({ iconUrl: "https://raw.githubusercontent.com/poi
 const iconDisponible = new L.Icon({ iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png", shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png", iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
 const iconCamion = new L.Icon({ iconUrl: "https://cdn-icons-png.flaticon.com/512/1048/1048313.png", iconSize: [35, 35], iconAnchor: [17, 35], popupAnchor: [0, -30] });
 
-const MapUpdater = ({ center }) => {
+const MapUpdater = ({ center, zoom = 13 }) => {
   const map = useMap();
-  useEffect(() => { if (center) map.flyTo(center, 13); }, [center, map]);
+  useEffect(() => {
+    if (center) map.flyTo(center, zoom);
+  }, [center, zoom, map]);
   return null;
 };
+
 
 const Movimientos = () => {
   // -----------------------------------------------------------------------
@@ -321,13 +324,16 @@ useEffect(() => {
     } catch(e) { console.error(e); } 
   };
   const loadTraslados = async () => {
-  try {
-    const data = await apiFetch("http://127.0.0.1:5000/api/traslados/historial?limit=100");
-    setTraslados(data || []);
-  } catch (e) {
-    console.error(e);
-  }
-};
+    try {
+      const data = await apiFetch("http://127.0.0.1:5000/api/traslados/historial?limit=100");
+      console.log("TRASLADOS RESPONSE:", data);
+      console.log("TRASLADO[0]:", data?.[0]);
+      setTraslados(data || []);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const loadDepositos = async () => { 
     try { 
       const data = await apiFetch("http://127.0.0.1:5000/api/depositos"); 
@@ -646,59 +652,61 @@ const handleDelete = async (m) => {
   // ==========================================================
   // VER TRAYECTO (modal con mapa) - usa tu endpoint polyline
   // ==========================================================
-  const handleVerTrayecto = async (t) => {
-    try {
-      setTrasladoSeleccionado(t);
-      setTrayectoLoading(true);
-      setShowTrayectoModal(true);
+const handleVerTrayecto = (t, e) => {
+  e?.preventDefault?.();
+  e?.stopPropagation?.();
 
-      const data = await apiFetch(`http://127.0.0.1:5000/api/movimientos_ruta/${t.id_vale}/polyline`);
-      // data = { gps: [], plan: [], meta: {...} }
-      setTrayectoData(data);
-    } catch (e) {
-      console.error(e);
-      alert("No se pudo cargar el trayecto.");
-      setShowTrayectoModal(false);
-      setTrayectoData(null);
-    } finally {
-      setTrayectoLoading(false);
-    }
-  };
+  const id = t?.id_vale_ref ?? t?.id_vale ?? t?.id;
+  if (!id) return alert("Traslado sin id_vale_ref (revisar backend).");
+
+  navigate("/mapa", {
+    state: {
+      from: "movimientos",
+      id_vale_ref: id,
+      traslado: t,
+    },
+  });
+};
 
   // ==========================================================
   // PDF TRASLADO (detalle real desde backend + generarValePDF)
   // ==========================================================
   const handlePrintTraslado = async (t, isPreview) => {
-    try {
-      const det = await apiFetch(`http://127.0.0.1:5000/api/traslados/${t.id_vale}/detalle`);
-
-      const meta = det.meta || {};
-      const items = det.items || [];
-
-      // Armamos el mismo formato que ya usa tu generarValePDF()
-      const pdfData = {
-        id: meta.id_vale || t.id_vale,
-        fecha: (t.fecha_salida || ""),   // tu tabla muestra fecha salida
-        estado: "Finalizado",
-        origen: meta.origen || t.origen || "",
-        destino: meta.destino || t.destino || "",
-        chofer: meta.chofer || t.chofer || "",
-        vehiculo: meta.vehiculo || t.vehiculo || "",
-        items: items.map(it => ({
-          codigo: it.codigo || "-",
-          material: it.material || "-",
-          lote: it.lote || "-",
-          cantidad: it.cantidad || 0,
-          unidad: it.unidad || "Unid."
-        }))
-      };
-
-      generarValePDF(pdfData, isPreview);
-    } catch (e) {
-      console.error(e);
-      alert("No se pudo generar el PDF del traslado.");
+  try {
+    // ✅ el multiparada se identifica por grupo_ruta
+    const grupo = t.grupo_ruta;
+    if (!grupo) {
+      alert("Traslado sin grupo_ruta (revisar backend)");
+      return;
     }
-  };
+
+    const det = await apiFetch(`http://127.0.0.1:5000/api/traslados/grupo/${grupo}/detalle`);
+
+    const meta = det.meta || {};
+    const paradas = det.paradas || [];
+
+    // 👇 ESTE ES EL CAMBIO CLAVE:
+    const pdfData = {
+      tipo: "ruta",
+      id: grupo, // o meta.grupo_ruta
+      fecha: t.fecha_salida || "",
+      estado: "Finalizado",
+      origen: meta.origen || t.origen || "",
+      destino: "Multiparada",
+      chofer: meta.chofer || t.chofer || "",
+      vehiculo: meta.vehiculo || t.vehiculo || "",
+      paradas // ✅ ahora generarValePDF entra en la rama de paradas
+    };
+
+    console.log("✅ PDF DATA:", pdfData);
+    generarValePDF(pdfData, isPreview);
+  } catch (e) {
+    console.error(e);
+    alert("No se pudo generar el PDF del traslado.");
+  }
+};
+
+
 
   const handleSubmit = async () => { 
     const emptyStops = stops.filter(s => s.items.length === 0); 
@@ -1046,7 +1054,7 @@ const handleDelete = async (m) => {
                       return term ? text.includes(term) : true;
                     })
                     .map(t => (
-                      <tr key={t.grupo_ruta || t.id_vale}>
+                      <tr key={t.grupo_ruta || t.id_vale_ref}>
                         <td>{t.fecha_salida || "-"}</td>
                         <td>{t.fecha_entrega || "-"}</td>
                         <td>
@@ -1077,12 +1085,14 @@ const handleDelete = async (m) => {
                           <div className="actions-group">
                             {/* VER TRAYECTO */}
                             <button
+                              type="button"
                               className="btn-action secondary btn-icon-only"
-                              onClick={() => handleVerTrayecto(t)}
+                              onClick={(e) => handleVerTrayecto(t, e)}
                               title="Ver trayecto"
                             >
                               <MapIcon size={16} />
                             </button>
+
 
                             {/* PDF (preview) */}
                             <button
@@ -1386,12 +1396,17 @@ const handleDelete = async (m) => {
                       const gps = trayectoData.gps || [];
                       const plan = trayectoData.plan || [];
                       const pts = (gps.length >= 2 ? gps : plan);
+                      const base = (gps.length >= 2 ? gps : plan);
+                      const start = base[0];
+                      const end = base[base.length - 1];
+
 
                       const center = pts?.length ? [pts[0].lat, pts[0].lng] : [-25.2800, -57.6350];
 
                       return (
                         <div style={{ height: "100%", width: "100%" }}>
                           <MapContainer center={center} zoom={13} style={{ height: "100%", width: "100%" }}>
+                            <MapUpdater center={center} zoom={13} />
                             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
                             {/* Polyline */}

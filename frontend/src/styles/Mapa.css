@@ -410,4 +410,385 @@
     font-size: 14px;
   }
 }
+.ruta-modal-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
 
+.ruta-modal{
+  width: min(560px, 96vw);
+  max-height: 85vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+}
+
+.ruta-modal-header{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.ruta-modal-close{
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 10px;
+}
+
+.ruta-panel-box{
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 12px;
+  background: #fff;
+}
+
+.ruta-panel-title{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ruta-actions{
+  display:flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+/* ===========================
+   MODAL RUTAS (ÚNICO)
+   =========================== */
+.modal-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index: 9999;
+  padding: 16px;
+}
+
+.ruta-modal{
+  width: min(900px, 92vw);
+  height: min(720px, 90vh);
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  display:flex;
+  flex-direction:column;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+}
+
+.ruta-modal-header{
+  padding: 14px 16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.ruta-modal-title{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+.ruta-modal-title h3{
+  margin:0;
+  font-size: 16px;
+  font-weight: 800;
+  color:#0f172a;
+}
+
+.ruta-modal-close{
+  background: transparent;
+  border:none;
+  cursor:pointer;
+  padding: 8px;
+  border-radius: 10px;
+}
+
+.ruta-modal-close:hover{
+  background:#f1f5f9;
+}
+
+.ruta-modal-tabs{
+  display:flex;
+  gap:8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.ruta-modal-tabs .tab{
+  border:1px solid #e5e7eb;
+  background:#f8fafc;
+  padding:8px 10px;
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:700;
+}
+
+.ruta-modal-tabs .tab.active{
+  background:#e0e7ff;
+  border-color:#c7d2fe;
+}
+
+.ruta-modal-filter{
+  padding: 10px 16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.filter-label{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:#334155;
+  font-weight:700;
+}
+
+.ruta-month-input{
+  border:1px solid #e5e7eb;
+  border-radius:10px;
+  padding:8px 10px;
+}
+
+/* ✅ FORZAR SCROLL DEL CONTENIDO DEL MODAL */
+.ruta-modal{
+  max-height: 90vh !important;
+  height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important; /* importante: el scroll va adentro */
+}
+
+.ruta-modal-body{
+  flex: 1 1 auto !important;
+  min-height: 0 !important;   /* CLAVE en flex para que overflow funcione */
+  overflow-y: auto !important;
+}
+
+
+.ruta-list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.ruta-item{
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:pointer;
+  background:#fff;
+}
+
+.ruta-item:hover{
+  background:#f8fafc;
+}
+
+.ruta-item.selected{
+  border-color:#93c5fd;
+  background:#eff6ff;
+}
+
+.ruta-item-title{
+  font-weight:800;
+  color:#0f172a;
+}
+
+.ruta-item-sub{
+  color:#64748b;
+  font-size: 12px;
+  margin-top:2px;
+}
+
+.ruta-item-badge{
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background:#f1f5f9;
+  color:#334155;
+  border:1px solid #e2e8f0;
+}
+
+/* acciones abajo del listado */
+.ruta-actions{
+  display:flex;
+  gap:10px;
+  margin-top: 12px;
+}
+
+/* footer */
+.ruta-modal-footer{
+  border-top: 1px solid #e5e7eb;
+  padding: 10px 16px;
+  display:flex;
+  justify-content:flex-end;
+  background:#fff;
+}
+
+
+/* (opcional) scroll más lindo */
+.ruta-list::-webkit-scrollbar{
+  width: 8px;
+}
+.ruta-list::-webkit-scrollbar-thumb{
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+/* ⬅️ Tarjeta info ruta flotante */
+.ruta-info-card{
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 1200;
+  width: min(340px, 92vw);
+  background: #ffffff;
+  border: 3px solid #ef4444; /* rojo tipo tu referencia */
+  border-radius: 14px;
+  padding: 12px 12px;
+  box-shadow: 0 16px 50px rgba(0,0,0,.25);
+  font-weight: 800;
+}
+
+.ruta-info-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom: 8px;
+}
+
+.ruta-info-close{
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+}
+/* ✅ RutaPanel: hacer que el body scrollee sí o sí */
+
+
+.ruta-modal-body{
+  flex: 1 1 auto;
+  min-height: 0;         /* CLAVE para overflow en flex */
+  overflow-y: auto;
+  padding-bottom: 12px;  /* opcional */
+}
+
+/* opcional: si querés que solo la lista tenga scroll */
+.ruta-list{
+  min-height: 0;
+}
+/* Botón Ver tramo (mini) */
+.btn-mini{
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .12s, background .12s, border-color .12s;
+}
+
+.btn-mini:hover{
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  transform: translateY(-1px);
+}
+
+.btn-mini:active{
+  transform: scale(0.98);
+}
+
+.btn-mini.success{
+  background: #e0e7ff;
+  border-color: #93c5fd;
+}
+
+.btn-mini.success:hover{
+  background: #c7d2fe;
+}
+/* ✅ Estilo PRO solo para el botón Ver tramo */
+.btn-mini.btn-ver-tramo{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;           /* pill */
+  font-size: 12px;
+  font-weight: 900;
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #1d4ed8;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.10);
+  transition: transform .12s ease, background .12s ease, box-shadow .12s ease;
+}
+
+.btn-mini.btn-ver-tramo:hover{
+  background: #e0e7ff;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
+  transform: translateY(-1px);
+}
+
+.btn-mini.btn-ver-tramo:active{
+  transform: scale(0.98);
+}
+
+.btn-mini.btn-ver-tramo.success{
+  background: #1d4ed8;            /* seleccionado */
+  border-color: #1d4ed8;
+  color: #ffffff;
+}
+/* ✅ FIX SCROLL: NO toca tu layout, solo asegura que el body del modal scrollee */
+.ruta-modal{
+  display: flex;
+  flex-direction: column;
+  height: min(720px, 90vh);
+  overflow: hidden;        /* el scroll NO va aquí */
+}
+
+/* ✅ el scroll va aquí */
+.ruta-modal-body{
+  flex: 1 1 auto;
+  min-height: 0;           /* CLAVE */
+  overflow-y: auto;
+}
+
+/* ✅ evita que la lista "rompa" el overflow */
+.ruta-list{
+  min-height: 0;
+}
+/* ✅ FIX REAL: el RutaPanel debe ocupar el alto del modal */
+.ruta-panel-box{
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;     /* el scroll NO va acá */
+}
+
+/* ✅ el scroll va aquí */
+.ruta-panel-box .ruta-modal-body{
+  flex: 1 1 auto;
+  min-height: 0;        /* CLAVE para que funcione overflow en flex */
+  overflow-y: auto;
+}

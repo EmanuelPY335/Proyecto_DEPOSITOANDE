@@ -1,632 +1,192 @@
-/* src/styles/Buzon.css */
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+.bz-page { padding: 16px; max-width: 1200px; margin: 0 auto; }
 
-.buzon-layout {
-  display: flex;
-  flex-direction: column;
-  height: 100%; /* Ocupar toda la altura */
-  background-color: #ffffff;
-  color: #202124;
-  font-family: 'Roboto', sans-serif;
-  overflow: hidden;
-}
+.bz-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.bz-title h1 { margin: 0; font-size: 22px; font-weight: 900; }
+.bz-title p { margin: 4px 0 0 0; opacity: 0.75; font-weight: 700; font-size: 13px; }
 
-/* --- HEADER --- */
-.buzon-header {
-  height: 64px;
-  padding: 8px 15px;
-  background-color: #ffffff;
-  border-bottom: 1px solid #dadce0;
-  color: #202124;
-  display: flex;
-  align-items: center;
-  
+.bz-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.bz-error {
+  padding: 12px; border-radius: 12px;
+  border: 1px solid rgba(255, 0, 0, 0.25);
+  background: rgba(255, 0, 0, 0.06);
+  color: rgb(140, 0, 0);
+  margin-bottom: 12px; font-weight: 800;
 }
 
-.buzon-logo {
-  display: flex;
-  align-items: center;
-  min-width: 230px;
-  color: white;
+.bz-filters {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px; border-radius: 14px;
+  border: 1px solid rgba(0,0,0,0.10);
+  background: rgba(255,255,255,0.75);
+  margin-bottom: 10px;
 }
 
-.buzon-search-bar {
-  border-radius: 24px; /* Más redondeado estilo nuevo Gmail */
-  padding: 0 15px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  flex: 1;
-  max-width: 720px;
-  background-color: #f1f3f4;
-  border: 1px solid #dadce0;
-  transition: background-color 0.2s, box-shadow 0.2s;
-}
-.buzon-search-bar input {
-  color: #202124;
-}
-
-.buzon-search-bar:focus-within {
-  background-color: #ffffff; /* Blanco puro */
-  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
-}
-
-/* IMPORTANTE: Si usas fondo blanco, debes cambiar el color del texto e iconos a oscuro */
-.buzon-search-bar:focus-within input {
-  background-color: #ffffff;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
-}
-.buzon-search-bar:focus-within .search-icon,
-.buzon-search-bar:focus-within .filter-btn {
-  color: #5f6368;
-}
-
-.buzon-search-bar input {
-  background: transparent;
-  border: none;
-  color: #000000;
-  flex: 1;
+.bz-input, .bz-select {
+  border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 12px;
+  padding: 10px 12px;
   outline: none;
-  font-size: 1rem;
-  margin: 0 10px;
-}
-
-.search-icon, .filter-btn {
-  background: none;
-  border: none;
-  color: #5f6368;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-}
-
-/* --- BODY & TOOLBAR --- */
-.buzon-body {
-  background-color: #ffffff;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  margin-right: 10px; /* Pequeño margen derecho estético */
-}
-
-.buzon-toolbar {
-  padding: 0 15px;
-  height: 48px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: #ffffff;
-  border-bottom: 1px solid #dadce0;
-  color: #5f6368;
-}
-
-.toolbar-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.checkbox-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 5px;
-  color: #b9bbbe;
-  cursor: pointer;
-}
-
-.checkbox-wrapper:hover {
-  color: #020202;
-}
-
-.tool-btn {
-  background: none;
-  border: none;
-  color: #b9bbbe;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 50%;
-  transition: background 0.2s;
-}
-
-.tool-btn:hover {
-  background-color: rgba(232, 234, 237, 0.08);
-  color: #020202;
-}
-
-.page-info {
-  font-size: 0.8rem;
-  color: #9aa0a6;
-  margin-right: 10px;
-}
-
-/* --- LISTA DE EMAILS --- */
-.buzon-list-container {
-  flex: 1;
-  overflow-y: auto;
-  /* Scrollbar personalizado */
-  scrollbar-width: thin;
-  scrollbar-color: #5f6368 #121212;
-  background-color: #ffffff;
-
-}
-
-.email-list {
-  display: flex;
-  flex-direction: column;
-  padding-bottom: 20px;
-  background-color: #ffffff;
-}
-
-/* FILA INDIVIDUAL (Estilo Gmail) */
-.email-row {
-  display: flex;
-  align-items: center;
-  padding: 0 15px;
-  height: 44px; /* Compacto */
-  background-color: #121212;
-  cursor: pointer;
-  background-color: #ffffff;
-  color: #5f6368;
-  border-bottom: 1px solid #e0e0e0;
-  font-weight: 400;
-  font-size: 0.875rem;
-  position: relative;
-}
-.email-row.unread .sender-name,
-.email-row.unread .subject-text {
-  color: #8a8e9b;
-}
-
-.email-row:hover {
-  border-bottom-color: transparent;
-  z-index: 2;
-}
-.email-row:hover {
-  background-color: #f1f3f4;
-  box-shadow: none;
-}
-
-.email-row.selected {
-  background-color: #e8f0fe;
-}
-
-/* Estilo para NO LEÍDOS */
-.email-row.unread {
-  background-color: #92969c; /* Un poco distinto al fondo base */
-  color: #000000; /* Blanco brillante */
-  font-weight: 700;
-}
-
-.email-row.unread .sender-name,
-.email-row.unread .subject-text {
-  font-weight: 700;
-  color: #080808;
-}
-
-/* Columnas Internas */
-.row-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 65px;
-}
-
-.star-btn {
-  background: none;
-  border: none;
-  color: #5f6368;
-  cursor: pointer;
-  padding: 0;
-  display: flex;
-}
-.star-btn:hover { color: #9aa0a6; }
-.star-btn.active { color: #f59e0b; }
-
-.row-content {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.sender-name {
-  width: 160px; /* Ancho fijo para remitente */
-  min-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.email-subject {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.subject-text {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.link-badge {
-  font-size: 0.7rem;
-  background-color: #2b2d31;
-  border: 1px solid #3c4043;
-  color: #8ab4f8; /* Azul enlace google */
-  padding: 1px 6px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-weight: 500;
-  flex-shrink: 0;
-}
-
-.row-meta {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-width: 120px;
-  padding-left: 10px;
-}
-
-.email-date {
-  font-size: 0.75rem;
-
-  font-weight: 500;
-  display: block;
-}
-
-.email-row.unread .email-date {
-
-  font-weight: 700;
-}
-.email-date {
-  color: #000000;
-}
-
-.email-row.unread .email-date {
-  color: #202124;
-}
-/* Acciones Hover - La magia de Gmail */
-.row-actions {
-  display: none;
-  align-items: center;
-  gap: 5px;
-}
-
-.email-row:hover .email-date {
-  display: none; /* Oculta fecha */
-}
-
-.email-row:hover .row-actions {
-  display: flex; /* Muestra iconos */
-}
-
-.action-btn {
-  background: none;
-  border: none;
-  color: #9aa0a6;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.action-btn:hover {
-  background-color: rgba(232, 234, 237, 0.1);
-  color: #030303;
-}
-
-/* Estados Vacíos / Carga */
-.loading-state, .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 50vh;
-  color: #6b7280;
-}
-
-.empty-state svg {
-  margin-bottom: 20px;
-  opacity: 0.1;
-  color: #e8eaed;
-}
-
-.fade-in {
-  animation: fadeIn 0.3s ease-out;
-}
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-/* --- BOTÓN VOLVER --- */
-.back-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: transparent;
-  border: none;
-
-  font-size: 0.9rem;
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 20px;
-  transition: background 0.2s;
-}
-
-
-.back-btn {
-  color: #1a73e8;
-}
-
-.back-btn:hover {
-  background-color: #e8f0fe;
-}
-
-/* --- HEADER MEJORADO --- */
-.buzon-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 260px;
-}
-
-.buzon-logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 1.1rem;
-}
-
-/* --- EMAIL ROW MEJORADO --- */
-.email-row {
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.email-row.selected {
-  background-color: rgba(138, 180, 248, 0.18);
-}
-
-.email-row:hover {
-  background-color: #ccd6f8;
-  box-shadow: inset 0 0 0 1px #3c4043;
-}
-
-/* --- BOTONES ACCIÓN --- */
-.row-actions button {
-  background: none;
-  border: none;
-  padding: 6px;
-  border-radius: 50%;
-  cursor: pointer;
-  color: #0d0d0e;
-}
-
-.row-actions button:hover {
-  background-color: rgba(255,255,255,0.12);
-  color: #0063f8;
-}
-
-/* --- LINK BADGE --- */
-.link-badge {
-  background-color: rgba(138, 180, 248, 0.15);
-  color: #005df1;
-  border-radius: 12px;
-  padding: 2px 8px;
-  font-size: 0.7rem;
-}
-
-/* --- TITULO DERECHA HEADER --- */
-.buzon-title-right {
-  min-width: 100px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #000000;
-  
-}
-
-/* Icono mail izquierdo */
-.mail-icon {
-  color: #000000;
-  padding-right: 10px;
-  padding-left: 100px;
-  text-align: right;
-
-}
-/* Estilos adicionales para Buzon.css */
-
-/* Filtros */
-.filters-panel {
-  background: #f8f9fa;
-  border: 1px solid #e1e4e8;
-  border-radius: 8px;
-  padding: 16px;
-  margin: 16px 24px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.filters-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.filters-header h4 {
-  margin: 0;
-  color: #2c3e50;
-}
-
-.filters-header button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: #6c757d;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.filters-header button:hover {
-  background: #5a6268;
-}
-
-.filters-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-}
-
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.filter-group label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 500;
-  color: #495057;
-  font-size: 14px;
-}
-
-.filter-group select {
-  padding: 8px 12px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  font-size: 14px;
   background: white;
+  font-weight: 700;
 }
 
-.filter-group.checkboxes {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.bz-input { min-width: 280px; flex: 1; }
+.bz-select { min-width: 210px; }
+
+.bz-check { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; opacity: 0.9; }
+
+.bz-batchbar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 
-.filter-group.checkboxes label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-weight: normal;
-}
+.bz-count { margin-left: auto; font-weight: 900; opacity: 0.8; }
 
-.filter-group.checkboxes input[type="checkbox"] {
-  margin: 0;
-  width: 16px;
-  height: 16px;
-}
-
-.filter-btn.active {
-  background: #e3f2fd;
-  color: #1976d2;
-}
-
-/* Botones de herramientas */
-.tool-btn.danger {
-  color: #dc3545;
-}
-
-.tool-btn.danger:hover {
-  background: #f8d7da;
-}
-
-/* Estados de botones de estrella */
-.star-btn.starred {
-  color: #ffc107;
-}
-
-.row-actions button.danger-action {
-  color: #dc3545;
-}
-
-.row-actions button.danger-action:hover {
-  background: #f8d7da;
-}
-
-/* Badge de depósito */
-.deposito-badge {
-  background: #e9ecef;
-  color: #495057;
-  padding: 2px 8px;
+.bz-btn {
+  border: 1px solid rgba(0,0,0,0.15);
   border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-  margin-left: 8px;
-}
-
-/* Información del remitente */
-.sender-info {
-  display: flex;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-/* Meta información */
-.meta-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.meta-star {
-  color: #ffc107;
-}
-
-/* Botón limpiar filtros */
-.clear-filters-btn {
-  margin-top: 12px;
-  background: #6c757d;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
+  padding: 10px 12px;
+  background: white;
   cursor: pointer;
-  font-size: 14px;
-  transition: background 0.2s;
+  font-weight: 900;
+}
+.bz-btn:hover { background: rgba(0,0,0,0.03); }
+.bz-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.bz-small { padding: 8px 10px; }
+
+.bz-danger {
+  border-color: rgba(255,0,0,0.35);
+  color: rgb(150, 0, 0);
+  background: rgba(255,0,0,0.03);
 }
 
-.clear-filters-btn:hover {
-  background: #5a6268;
+.bz-ghost { background: transparent; }
+
+.bz-list {
+  border: 1px solid rgba(0,0,0,0.10);
+  border-radius: 16px;
+  background: white;
+  overflow: hidden;
 }
 
-/* Estados visuales para filas */
-.email-row.selected .row-controls button:not(.star-btn) {
-  opacity: 1;
+.bz-empty { padding: 16px; font-weight: 800; opacity: 0.8; }
+
+.bz-row {
+  padding: 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  display: grid;
+  grid-template-columns: 28px 1fr 160px;
+  gap: 10px;
+  align-items: center;
+}
+.bz-row:last-child { border-bottom: 0; }
+.bz-row:hover { background: rgba(0,0,0,0.02); }
+.bz-row.unread .bz-msg { font-weight: 950; }
+
+.bz-row-left { display: flex; justify-content: center; }
+
+.bz-row-body { display: flex; flex-direction: column; gap: 6px; }
+
+.bz-row-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.bz-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.10);
+  background: rgba(0,0,0,0.03);
+  font-size: 12px;
+  font-weight: 900;
+}
+.bz-tag.blue { border-color: rgba(59,130,246,0.25); background: rgba(59,130,246,0.08); }
+
+.bz-msg { font-weight: 850; }
+
+.bz-sub { display: flex; gap: 8px; opacity: 0.75; font-size: 12px; font-weight: 800; }
+
+.bz-row-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.bz-iconbtn {
+  border: 1px solid rgba(0,0,0,0.15);
+  background: white;
+  border-radius: 12px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-weight: 900;
+}
+.bz-iconbtn:hover { background: rgba(0,0,0,0.03); }
+
+/* MODAL */
+.bz-modal-overlay{
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex; justify-content: center; align-items: center;
+  padding: 16px;
+  z-index: 9999;
+}
+.bz-modal{
+  width: min(860px, 100%);
+  background: white;
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,0.12);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  overflow: hidden;
+}
+.bz-modal-head{
+  padding: 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  display:flex; align-items:center; justify-content: space-between;
+}
+.bz-modal-title{ font-weight: 950; }
+
+.bz-detail-tags { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 12px 0 12px; }
+
+.bz-detail-title {
+  margin: 10px 12px 8px 12px;
+  font-size: 16px;
+  font-weight: 950;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-  .filters-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .filters-panel {
-    margin: 12px;
-    padding: 12px;
-  }
-  
-  .toolbar-group {
-    flex-wrap: wrap;
-    gap: 4px;
-  }
+.bz-detail-sub {
+  opacity: 0.8;
+  font-weight: 800;
+  font-size: 13px;
+  margin: 0 12px 12px 12px;
+}
+
+.bz-motivo {
+  border: 1px solid rgba(255, 0, 0, 0.15);
+  background: rgba(255, 0, 0, 0.05);
+  border-radius: 14px;
+  padding: 12px;
+  margin: 0 12px 12px 12px;
+}
+.bz-motivo-title { font-weight: 950; margin-bottom: 6px; }
+.bz-motivo-body { font-weight: 800; opacity: 0.95; }
+
+.bz-meta { padding: 0 12px 12px 12px; }
+.bz-meta-title { font-weight: 950; margin-bottom: 8px; }
+.bz-meta-box {
+  margin: 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(0,0,0,0.03);
+  border: 1px solid rgba(0,0,0,0.08);
+  overflow: auto;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.bz-modal-actions{
+  padding: 12px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+  display: flex; gap: 8px; flex-wrap: wrap;
+  justify-content: flex-end;
 }

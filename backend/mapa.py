@@ -7,8 +7,8 @@ from sqlalchemy import func
 from db import db, Vehiculo, PosicionGps, Deposito, Vale, Usuario, DetalleVale
 from datetime import datetime
 from sqlalchemy import or_
-
-
+from db import Deposito  # asegurate de tenerlo importado
+from db import Empleado
 
 
 mapa_bp = Blueprint("mapa", __name__)
@@ -207,55 +207,94 @@ def get_depositos():
 
 
 # ---------------- RUTA ASIGNADA AL CHOFER ----------------
+
+
 @mapa_bp.route("/chofer/mi_ruta", methods=["GET"])
 @jwt_required()
 def get_chofer_route():
     try:
         current_user_id = get_jwt_identity()
         usuario = Usuario.query.get(current_user_id)
-        
+
         if not usuario or not usuario.empleado:
             return jsonify({"error": "Usuario no es empleado"}), 400
 
-        # Buscamos vales asignados a este chofer que estén Pendientes (1) o En Tránsito (2)
+        # ✅ Activos: pendientes o en proceso (ajustá si querés)
+        # dentro de get_chofer_route()
+
         vales_activos = Vale.query.filter(
-            Vale.ID_CHOFER == usuario.empleado.ID_EMPLEADO,
-            Vale.ID_ESTADO_VALE.in_([2])
-        ).all()
+        Vale.ID_CHOFER == usuario.empleado.ID_EMPLEADO,
+        Vale.ID_ESTADO_VALE.in_([1,2,3])
+        ).order_by(Vale.FECHA_CREACION.asc()).all()
 
         if not vales_activos:
             return jsonify([]), 200
 
-        rutas_agrupadas = {}
-        
-        for vale in vales_activos:
-            grupo_id = vale.GRUPO_RUTA or f"vale-{vale.ID_VALE}"
-            
-            if grupo_id not in rutas_agrupadas:
-                rutas_agrupadas[grupo_id] = []
-            
-            if vale.origen.LATITUD and vale.origen.LONGITUD and vale.destino.LATITUD and vale.destino.LONGITUD:
-                rutas_agrupadas[grupo_id].append({
-                    "lat": vale.origen.LATITUD,
-                    "lng": vale.origen.LONGITUD
-                })
-                rutas_agrupadas[grupo_id].append({
-                    "lat": vale.destino.LATITUD,
-                    "lng": vale.destino.LONGITUD
-                })
+        # agrupar por grupo_ruta
+        grupos = {}
+        for v in vales_activos:
+            gid = v.GRUPO_RUTA or f"vale-{v.ID_VALE}"
+            grupos.setdefault(gid, {"vales": [], "estados": []})
+            grupos[gid]["vales"].append(v)
+            grupos[gid]["estados"].append(v.ID_ESTADO_VALE)
+
+        # cache depósitos
+        dep_cache = {}
+        def get_dep(dep_id):
+            if not dep_id:
+                return None
+            if dep_id in dep_cache:
+                return dep_cache[dep_id]
+            dep = Deposito.query.get(dep_id)
+            dep_cache[dep_id] = dep
+            return dep
 
         trayectos_finales = []
-        for gid, puntos in rutas_agrupadas.items():
+
+        for gid, info in grupos.items():
+            vales = info["vales"]
+
+            # construir secuencia de paradas por IDs
+            paradas_ids = []
+            first = vales[0]
+            if first.ID_DEPOSITO_ORIGEN:
+                paradas_ids.append(first.ID_DEPOSITO_ORIGEN)
+
+            for vv in vales:
+                if vv.ID_DEPOSITO_DESTINO:
+                    if paradas_ids[-1] != vv.ID_DEPOSITO_DESTINO:
+                        paradas_ids.append(vv.ID_DEPOSITO_DESTINO)
+
+            # convertir a objetos paradas
+            paradas = []
+            for dep_id in paradas_ids:
+                dep = get_dep(dep_id)
+                if dep and dep.LATITUD is not None and dep.LONGITUD is not None:
+                    paradas.append({
+                        "id_deposito": dep.ID_DEPOSITO,
+                        "nombre": dep.NOMBRE or f"Depósito #{dep.ID_DEPOSITO}",
+                        "lat": float(dep.LATITUD),
+                        "lng": float(dep.LONGITUD),
+                    })
+
+            estado = "en_proceso" if any(e in [2,3] for e in info["estados"]) else "pendiente"
+
             trayectos_finales.append({
                 "id_grupo": gid,
-                "puntos": puntos
+                "estado": estado,
+                "paradas": paradas,
+                "origen": paradas[0]["nombre"] if len(paradas) else "",
+                "destino": paradas[-1]["nombre"] if len(paradas) else "",
             })
 
         return jsonify(trayectos_finales), 200
 
+
+
     except Exception as e:
         print(f"[ERROR /chofer/mi_ruta] {e}")
         return jsonify({'error': str(e)}), 500
+
  # ======================================================
 # HISTORIAL DE RECORRIDOS FINALIZADOS (AUDITORÍA EN MAPA)
 # ======================================================
@@ -374,7 +413,7 @@ def ruta_traza(grupo_ruta):
 # ======================================================
 # TRASLADOS (HISTORIAL PARA MOVIMIENTOS) - TAB NUEVO
 # Devuelve: fecha_salida, fecha_entrega, chofer, vehiculo, items_count, etc.
-# ======================================================
+## ======================================================
 @mapa_bp.route("/traslados/historial", methods=["GET"])
 @jwt_required()
 def traslados_historial():
@@ -385,7 +424,12 @@ def traslados_historial():
         limit = request.args.get("limit", 100, type=int)
         limit = max(1, min(limit, 300))
 
-        # Si NO es master_admin, filtramos por depósito del usuario
+        # filtros extra (solo master_admin)
+        filtro_deposito = request.args.get("deposito_id", type=int)  # ej: 13
+        filtro_chofer_txt = (request.args.get("chofer") or "").strip()  # ej: "Roberto"
+        filtro_id_chofer = request.args.get("id_chofer", type=int)  # ej: 55
+
+        # Depósito del usuario (para admin/usuario normal)
         deposito_user = None
         if rol != "master_admin":
             deposito_user = _get_user_deposito_id()
@@ -405,12 +449,50 @@ def traslados_historial():
             .filter(Vale.ID_ESTADO_VALE >= 4)
         )
 
-        # ✅ FILTRO POR DEPÓSITO (solo si NO es master_admin)
-        # El admin del depósito solo ve rutas donde su depósito es origen o destino.
-        if deposito_user is not None:
+        # Filtro por mes (YYYY-MM)
+        month = request.args.get("month")
+        if month:
+            y, m = month.split("-")
+            y = int(y)
+            m = int(m)
+            start = datetime(y, m, 1)
+            end = datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)
+            q = q.filter(Vale.FECHA_LLEGADA >= start, Vale.FECHA_LLEGADA < end)
+
+        # ✅ chofer: solo sus traslados
+        if rol == "chofer":
+            uid = get_jwt_identity()
+            usuario = Usuario.query.get(uid)
+            if not usuario or not usuario.empleado:
+                return jsonify([]), 200
+            q = q.filter(Vale.ID_CHOFER == usuario.empleado.ID_EMPLEADO)
+
+        # ✅ admin (no master_admin y no chofer): solo rutas donde su depósito es origen o destino
+        if rol != "master_admin" and rol != "chofer":
+            if deposito_user is not None:
+                q = q.filter(or_(
+                    Vale.ID_DEPOSITO_ORIGEN == deposito_user,
+                    Vale.ID_DEPOSITO_DESTINO == deposito_user
+                ))
+
+        # ✅ master_admin: puede filtrar por depósito específico (origen o destino)
+        if rol == "master_admin" and filtro_deposito:
             q = q.filter(or_(
-                Vale.ID_DEPOSITO_ORIGEN == deposito_user,
-                Vale.ID_DEPOSITO_DESTINO == deposito_user
+                Vale.ID_DEPOSITO_ORIGEN == filtro_deposito,
+                Vale.ID_DEPOSITO_DESTINO == filtro_deposito
+            ))
+
+        # ✅ master_admin: puede filtrar por id_chofer exacto
+        if rol == "master_admin" and filtro_id_chofer:
+            q = q.filter(Vale.ID_CHOFER == filtro_id_chofer)
+
+        # ✅ master_admin: puede filtrar por texto de chofer (nombre/apellido)
+        # Para esto, necesitamos join a Empleado (chofer).
+        # Ajustá si tu modelo se llama distinto.
+        if rol == "master_admin" and filtro_chofer_txt:
+            q = q.join(Empleado, Empleado.ID_EMPLEADO == Vale.ID_CHOFER).filter(or_(
+                Empleado.NOMBRE.ilike(f"%{filtro_chofer_txt}%"),
+                Empleado.APELLIDO.ilike(f"%{filtro_chofer_txt}%")
             ))
 
         q = (
@@ -526,75 +608,207 @@ def traslado_detalle(id_vale):
         print("Error traslado_detalle:", e)
         return jsonify({"error": str(e)}), 500
 
+## ======================================================
+# POLYLINE POR VALE (GPS real + plan multiparada por GRUPO)
 # ======================================================
-# POLYLINE POR VALE (GPS real + fallback plan)
-# ======================================================
+
+def _plan_points_grupo(vales):
+    """
+    Devuelve plan multiparada:
+      - origen del primer vale
+      - destinos en orden
+    Dedupea consecutivos para evitar puntos repetidos.
+    """
+    pts = []
+
+    if not vales:
+        return pts
+
+    # Origen del primer vale
+    first = vales[0]
+    if first.origen and first.origen.LATITUD is not None and first.origen.LONGITUD is not None:
+        pts.append({"lat": float(first.origen.LATITUD), "lng": float(first.origen.LONGITUD)})
+
+    # Destinos en orden
+    for v in vales:
+        if v.destino and v.destino.LATITUD is not None and v.destino.LONGITUD is not None:
+            next_pt = {"lat": float(v.destino.LATITUD), "lng": float(v.destino.LONGITUD)}
+            if not pts:
+                pts.append(next_pt)
+            else:
+                last = pts[-1]
+                # dedupe consecutivo
+                if abs(last["lat"] - next_pt["lat"]) > 1e-9 or abs(last["lng"] - next_pt["lng"]) > 1e-9:
+                    pts.append(next_pt)
+
+    return pts
 
 
 @mapa_bp.route("/movimientos_ruta/<int:id_vale>/polyline", methods=["GET"])
 @jwt_required()
 def get_polyline_vale(id_vale):
-    vale = Vale.query.get(id_vale)
-    claims = get_jwt()
-    rol = (claims.get("rol_nombre") or "").lower()
+    try:
+        vale_ref = Vale.query.get(id_vale)
+        if not vale_ref:
+            return jsonify({"error": "Vale no encontrado"}), 404
 
-    if rol != "master_admin":
-        deposito_user = _get_user_deposito_id()
-        if deposito_user is not None:
-            if not (vale.ID_DEPOSITO_ORIGEN == deposito_user or vale.ID_DEPOSITO_DESTINO == deposito_user):
-                return jsonify({"error": "No autorizado"}), 403
+        claims = get_jwt()
+        rol = (claims.get("rol_nombre") or "").lower()
 
-    if not vale:
-        return jsonify({"error": "Vale no encontrado"}), 404
+        grupo = vale_ref.GRUPO_RUTA
 
-    # Puntos planificados (si no hay gps)
-    plan = _plan_points(vale)
+        # Si hay grupo => traemos todos los vales del grupo en orden (multiparada)
+        if grupo:
+            vales = (
+                Vale.query
+                .filter(Vale.GRUPO_RUTA == grupo)
+                .order_by(Vale.FECHA_CREACION.asc())
+                .all()
+            )
+            if not vales:
+                vales = [vale_ref]
+        else:
+            vales = [vale_ref]
 
-    # Si no tiene salida, todavía no hay ventana de GPS
-    if not vale.FECHA_SALIDA:
-        return jsonify({"gps": [], "plan": plan, "meta": {
-            "id_vale": vale.ID_VALE,
-            "grupo": vale.GRUPO_RUTA,
-            "vehiculo_id": vale.ID_VEHICULO,
-            "fecha_salida": None,
-            "fecha_llegada": None,
-        }}), 200
+        # ✅ Seguridad por depósito (NO master_admin):
+        # permitir si CUALQUIER vale del grupo toca mi depósito
+        if rol != "master_admin":
+            deposito_user = _get_user_deposito_id()
+            if deposito_user is not None:
+                allowed = any(
+                    (v.ID_DEPOSITO_ORIGEN == deposito_user) or (v.ID_DEPOSITO_DESTINO == deposito_user)
+                    for v in vales
+                )
+                if not allowed:
+                    return jsonify({"error": "No autorizado"}), 403
 
-    t0 = vale.FECHA_SALIDA
-    t1 = vale.FECHA_LLEGADA or datetime.now()
+        # ✅ Plan multiparada del grupo (en vez de solo último tramo)
+        plan = _plan_points_grupo(vales)
 
-    puntos = (
-        PosicionGps.query
-        .filter(PosicionGps.ID_VEHICULO == vale.ID_VEHICULO)
-        .filter(PosicionGps.FECHA_HORA >= t0)
-        .filter(PosicionGps.FECHA_HORA <= t1)
-        .order_by(PosicionGps.FECHA_HORA.asc())
-        .all()
-    )
+        # Ventana completa del grupo para GPS
+        t0_candidates = [v.FECHA_SALIDA for v in vales if v.FECHA_SALIDA]
+        t1_candidates = [v.FECHA_LLEGADA for v in vales if v.FECHA_LLEGADA]
 
-    gps_points = [{
-        "lat": float(p.LATITUD),
-        "lng": float(p.LONGITUD),
-        "t": p.FECHA_HORA.isoformat() if p.FECHA_HORA else None
-    } for p in puntos]
+        t0 = min(t0_candidates) if t0_candidates else None
+        t1 = max(t1_candidates) if t1_candidates else None
 
-    return jsonify({
-        "gps": gps_points,
-        "plan": plan,
-        "meta": {
-            "id_vale": vale.ID_VALE,
-            "grupo": vale.GRUPO_RUTA,
-            "vehiculo_id": vale.ID_VEHICULO,
-            "fecha_salida": vale.FECHA_SALIDA.isoformat() if vale.FECHA_SALIDA else None,
-            "fecha_llegada": vale.FECHA_LLEGADA.isoformat() if vale.FECHA_LLEGADA else None,
-        }
-    }), 200
+        # Vehículo: elegimos el primero que aparezca (normalmente es el mismo)
+        id_vehiculo = next((v.ID_VEHICULO for v in vales if v.ID_VEHICULO), vale_ref.ID_VEHICULO)
+
+        # Si no hay salida o no hay vehículo, devolvemos plan sin GPS
+        if not t0 or not id_vehiculo:
+            return jsonify({
+                "gps": [],
+                "plan": plan,
+                "meta": {
+                    "id_vale": vale_ref.ID_VALE,
+                    "grupo": grupo,
+                    "vehiculo_id": id_vehiculo,
+                    "fecha_salida": t0.isoformat() if t0 else None,
+                    "fecha_llegada": t1.isoformat() if t1 else None,
+                }
+            }), 200
+
+        if not t1:
+            # si no llegó, tomamos "ahora"
+            t1 = datetime.now(timezone.utc)
+
+        puntos = (
+            PosicionGps.query
+            .filter(PosicionGps.ID_VEHICULO == id_vehiculo)
+            .filter(PosicionGps.FECHA_HORA >= t0)
+            .filter(PosicionGps.FECHA_HORA <= t1)
+            .order_by(PosicionGps.FECHA_HORA.asc())
+            .all()
+        )
+
+        gps_points = [{
+            "lat": float(p.LATITUD),
+            "lng": float(p.LONGITUD),
+            "t": p.FECHA_HORA.isoformat() if p.FECHA_HORA else None
+        } for p in puntos]
+
+        return jsonify({
+            "gps": gps_points,
+            "plan": plan,
+            "meta": {
+                "id_vale": vale_ref.ID_VALE,
+                "grupo": grupo,
+                "vehiculo_id": id_vehiculo,
+                "fecha_salida": t0.isoformat() if t0 else None,
+                "fecha_llegada": t1.isoformat() if t1 else None,
+            }
+        }), 200
+
+    except Exception as e:
+        print("❌ Error get_polyline_vale:", e)
+        return jsonify({"error": str(e)}), 500
+
+@mapa_bp.route("/rutas/<string:grupo_ruta>/iniciar", methods=["POST"])
+@jwt_required()
+def iniciar_ruta_grupo(grupo_ruta):
+    try:
+        uid = get_jwt_identity()
+        usuario = Usuario.query.get(uid)
+        if not usuario or not usuario.empleado:
+            return jsonify({"error": "No autorizado"}), 403
+
+        # Solo el chofer dueño de esos vales debería poder iniciar
+        vales = Vale.query.filter(
+            Vale.GRUPO_RUTA == grupo_ruta,
+            Vale.ID_CHOFER == usuario.empleado.ID_EMPLEADO,
+            Vale.ID_ESTADO_VALE.in_([1, 2, 3])  # ajustá si usás otros
+        ).all()
+
+        if not vales:
+            return jsonify({"error": "No hay vales iniciables"}), 404
+
+        ahora = datetime.now(timezone.utc)
+
+        for v in vales:
+            if not v.FECHA_SALIDA:
+                v.FECHA_SALIDA = ahora
+            v.ID_ESTADO_VALE = 2  # en proceso
+
+        db.session.commit()
+        return jsonify({"ok": True, "grupo_ruta": grupo_ruta, "fecha_salida": ahora.isoformat()}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 
-def _plan_points(vale):
-    pts = []
-    if vale.origen and vale.origen.LATITUD and vale.origen.LONGITUD:
-        pts.append({"lat": float(vale.origen.LATITUD), "lng": float(vale.origen.LONGITUD)})
-    if vale.destino and vale.destino.LATITUD and vale.destino.LONGITUD:
-        pts.append({"lat": float(vale.destino.LATITUD), "lng": float(vale.destino.LONGITUD)})
-    return pts
+@mapa_bp.route("/rutas/<string:grupo_ruta>/finalizar", methods=["POST"])
+@jwt_required()
+def finalizar_ruta_grupo(grupo_ruta):
+    try:
+        uid = get_jwt_identity()
+        usuario = Usuario.query.get(uid)
+        if not usuario or not usuario.empleado:
+            return jsonify({"error": "No autorizado"}), 403
+
+        vales = Vale.query.filter(
+            Vale.GRUPO_RUTA == grupo_ruta,
+            Vale.ID_CHOFER == usuario.empleado.ID_EMPLEADO,
+            Vale.ID_ESTADO_VALE.in_([2, 3])  # en proceso
+        ).all()
+
+        if not vales:
+            return jsonify({"error": "No hay vales finalizables"}), 404
+
+        ahora = datetime.now(timezone.utc)
+
+        for v in vales:
+            if not v.FECHA_SALIDA:
+                v.FECHA_SALIDA = ahora  # por si nunca inició pero finaliza igual
+            v.FECHA_LLEGADA = ahora
+            v.ID_ESTADO_VALE = 4  # finalizado
+
+        db.session.commit()
+        return jsonify({"ok": True, "grupo_ruta": grupo_ruta, "fecha_llegada": ahora.isoformat()}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
