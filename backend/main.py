@@ -17,14 +17,11 @@ from asistencia import asistencia_bp
 from perfil import perfil_bp
 from buzon_routes import buzon_bp
 
-
-# main.py
-from depositos import depositos_bp # O donde lo hayas guardado
+from depositos import depositos_bp
 from vehiculos import vehiculos_bp
 from personal import personal_bp
 from roles_permisos import role_required, crear_rol, roles_bp
-from solicitudes import solicitudes_bp # <--- Tu nuevo archivo
-# ✅ NUEVO IMPORT: Traemos el blueprint correcto
+from solicitudes import solicitudes_bp
 from materiales import materiales_bp
 from notificaciones import notificaciones_bp
 from vales import vales_bp
@@ -45,9 +42,7 @@ app.register_blueprint(perfil_bp, url_prefix="/api")
 app.register_blueprint(personal_bp, url_prefix="/api")
 app.register_blueprint(asistencia_bp, url_prefix='/api/asistencia')
 app.register_blueprint(roles_bp, url_prefix="/api")
-# ✅ NUEVO REGISTRO: Activamos el módulo de materiales
 app.register_blueprint(materiales_bp, url_prefix="/api")
-# Donde registras los blueprints (aprox línea 80):
 app.register_blueprint(movimientos_bp, url_prefix="/api")
 app.register_blueprint(solicitudes_bp)
 app.register_blueprint(notificaciones_bp, url_prefix='/api')
@@ -56,21 +51,23 @@ app.register_blueprint(gastos_bp, url_prefix="/api")
 app.register_blueprint(depositos_bp)
 app.register_blueprint(buzon_bp)
 app.register_blueprint(vehiculos_bp, url_prefix="/api")
+
 # --- CORS (Con soporte para React y Raspberry Pi) ---
 CORS(
     app,
-    resources={r"/*": {  # r"/*" permite cualquier ruta
+    resources={r"/*": {
         "origins": [
-            "http://localhost:3000", 
+            "http://localhost:3000",
             "http://127.0.0.1:3000",
             "http://192.168.100.*",
             "http://192.168.0.*"
         ]
     }},
     supports_credentials=True,
-    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], # <--- CLAVE
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"]
 )
+
 # --- JWT ---
 app.config["JWT_SECRET_KEY"] = "clave_super_segura_sisdepo_2025"
 app.config["JWT_TOKEN_LOCATION"] = ["headers"]
@@ -98,7 +95,6 @@ db.init_app(app)
 socketio.init_app(
     app,
     cors_allowed_origins=[
-       
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://192.168.100.*",
@@ -107,7 +103,40 @@ socketio.init_app(
     ],
     cors_allowed_headers=["Authorization", "Content-Type"]
 )
-# main.py - AÑADE ESTO DESPUÉS DE app = Flask(__name__)
+
+# -----------------------------------------------------------------
+# 🧠 HELPERS (NUEVO) - Evita 500 por datetimes naive/aware
+# -----------------------------------------------------------------
+def utcnow_naive():
+    """
+    Retorna datetime UTC *naive* (sin tzinfo).
+    Esto evita el crash típico de MySQL/SQLAlchemy devolviendo datetimes naive.
+    """
+    return datetime.utcnow()
+
+def normalize_db_datetime(value):
+    """
+    Normaliza un datetime de DB para compararlo sin reventar:
+    - Si viene string, intenta parsear.
+    - Si viene aware, lo pasa a UTC y lo vuelve naive.
+    - Si viene naive, lo deja igual.
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        try:
+            # Si tu DB devuelve strings ISO (raro pero posible)
+            value = datetime.fromisoformat(value)
+        except Exception:
+            return None
+
+    if isinstance(value, datetime):
+        if value.tzinfo is not None:
+            value = value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+    return None
 
 # -----------------------------------------------------------------
 # 🧩 AUTENTICACIÓN Y REGISTRO
@@ -121,21 +150,15 @@ def login():
     user = Usuario.query.filter_by(CORREO=correo).first()
 
     if user and user.check_password(contrasena):
-        # 1. Obtener el nombre del Rol
         rol_nombre = user.rol.NOMBRE_ROL if user.rol else "Sin Rol"
-        
-        # 2. OBTENER LISTA DE PERMISOS (NUEVO)
-        # Hacemos una consulta uniendo tablas para sacar los nombres de permisos de este rol
+
         permisos_query = db.session.query(Permiso.NOMBRE_PERMISO)\
             .join(permiso_x_rol)\
             .join(Rol)\
             .filter(Rol.ID_ROL == user.ID_ROL).all()
-        
-        # Convertimos la respuesta de la base de datos en una lista simple de strings
-        # Ej: ['gestion_materiales', 'ver_mapa']
+
         lista_permisos = [p[0] for p in permisos_query]
 
-        # 3. Crear el Token
         access_token = create_access_token(
             identity=str(user.ID_USUARIO),
             additional_claims={
@@ -149,7 +172,7 @@ def login():
             "access_token": access_token,
             "user": user.to_dict_profile(),
             "rol": rol_nombre,
-            "permisos": lista_permisos # <--- ENVIAMOS LOS PERMISOS AL FRONTEND
+            "permisos": lista_permisos
         }), 200
 
     return jsonify({"error": "Credenciales inválidas"}), 401
@@ -159,7 +182,6 @@ def login():
 def registro():
     data = request.json
     try:
-        # Rol base por defecto: Empleado (se crea si no existe)
         rol_empleado = Rol.query.filter_by(NOMBRE_ROL="Empleado").first()
         if not rol_empleado:
             rol_empleado = Rol(NOMBRE_ROL="Empleado")
@@ -214,15 +236,22 @@ def me():
 # -----------------------------------------------------------------
 @app.route("/api/forgot-password", methods=["POST"])
 def forgot_password():
-    data = request.json
+    data = request.json or {}
     email = data.get("email")
+
+    if not email:
+        return jsonify({"success": False, "message": "Falta el campo email."}), 400
+
     try:
         user = Usuario.query.filter_by(CORREO=email).first()
         if not user:
             return jsonify({"success": False, "message": "El correo no está registrado."}), 404
 
         token = secrets.token_hex(32)
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        # ✅ CAMBIO: usamos UTC naive para que MySQL/SQLAlchemy no “pierda” tz y rompa comparaciones
+        expires_at = utcnow_naive() + timedelta(hours=1)
+
         nuevo_token = PasswordResetToken(EMAIL=email, TOKEN=token, EXPIRES_AT=expires_at)
         db.session.add(nuevo_token)
         db.session.commit()
@@ -239,6 +268,7 @@ def forgot_password():
         )
         mail.send(msg)
         return jsonify({"message": "Se envió un enlace de restablecimiento al correo registrado."}), 200
+
     except Exception as e:
         db.session.rollback()
         print(f"Error en forgot_password: {e}")
@@ -247,18 +277,29 @@ def forgot_password():
 
 @app.route("/api/reset-password", methods=["POST"])
 def reset_password():
-    data = request.json
+    data = request.json or {}
     token = data.get("token")
     new_password = data.get("password")
+
+    # ✅ VALIDACIONES para evitar 500 por None
+    if not token:
+        return jsonify({"success": False, "message": "Falta el token."}), 400
+    if not new_password:
+        return jsonify({"success": False, "message": "Falta la nueva contraseña."}), 400
+
     try:
         token_data = PasswordResetToken.query.filter_by(TOKEN=token).first()
-        
-        is_expired = not token_data or datetime.now(timezone.utc) > token_data.EXPIRES_AT
+        if not token_data:
+            return jsonify({"success": False, "message": "Token inválido o expirado."}), 400
 
-        if is_expired:
-            if token_data:
-                db.session.delete(token_data)
-                db.session.commit()
+        # ✅ CAMBIO CLAVE: normalizamos EXPIRES_AT para comparar sin naive/aware crash
+        expires_at = normalize_db_datetime(token_data.EXPIRES_AT)
+        now = utcnow_naive()
+
+        if (expires_at is None) or (now > expires_at):
+            # Si está expirado, borramos el token
+            db.session.delete(token_data)
+            db.session.commit()
             return jsonify({"success": False, "message": "Token inválido o expirado."}), 400
 
         usuario = Usuario.query.filter_by(CORREO=token_data.EMAIL).first()
@@ -266,60 +307,54 @@ def reset_password():
             return jsonify({"success": False, "message": "Usuario no encontrado."}), 404
 
         usuario.set_password(new_password)
+
+        # Consumimos el token
         db.session.delete(token_data)
         db.session.commit()
+
         return jsonify({"success": True, "message": "Contraseña actualizada exitosamente."}), 200
+
     except Exception as e:
         db.session.rollback()
         print(f"Error en reset_password: {e}")
         return jsonify({"success": False, "message": "Error al actualizar la contraseña."}), 500
 
-
-
 # -----------------------------------------------------------------
 # 🚀 EJECUCIÓN PRINCIPAL
 # -----------------------------------------------------------------
 ROLES_BASE = ["Empleado", "Chofer", "Personal_Inventario", "Admin", "Master_Admin"]
-# --- AGREGA ESTO EN MAIN.PY PARA PROBAR ---
-# En backend/main.py
 
 @app.route("/api/depositos_publico", methods=["GET"])
 def depositos_publico():
     print("📢 ACCESO A RUTA PÚBLICA DE EMERGENCIA")
     try:
-        # CORRECCIÓN: Quitamos .filter_by(ESTADO_ACTIVO=True)
-        # Simplemente pedimos todos los depósitos ordenados por nombre
         depositos = Deposito.query.order_by(Deposito.NOMBRE).all()
-        
         return jsonify([d.to_dict() for d in depositos]), 200
     except Exception as e:
         print(f"❌ Error: {e}")
         return jsonify({"error": str(e)}), 500
+
 @app.route("/api/_routes", methods=["GET"])
 def list_routes():
-        salida = []
-        for r in app.url_map.iter_rules():
-            salida.append({
-                "rule": str(r),
-                "methods": sorted([m for m in r.methods if m not in ("HEAD", "OPTIONS")]),
-                "endpoint": r.endpoint
-            })
-        salida.sort(key=lambda x: x["rule"])
-        return jsonify(salida), 200
+    salida = []
+    for r in app.url_map.iter_rules():
+        salida.append({
+            "rule": str(r),
+            "methods": sorted([m for m in r.methods if m not in ("HEAD", "OPTIONS")]),
+            "endpoint": r.endpoint
+        })
+    salida.sort(key=lambda x: x["rule"])
+    return jsonify(salida), 200
 
 if __name__ == "__main__":
     with app.app_context():
-        db.create_all()  # Asegura tablas
-        # Siembra de roles
+        db.create_all()
         for nombre in ROLES_BASE:
             try:
-                # Usamos la función del helper roles_permisos
-                crear_rol(nombre)  
+                crear_rol(nombre)
             except Exception:
                 pass
-    
 
-    # ⚙️ Ejecución
     socketio.run(
         app,
         host="0.0.0.0",

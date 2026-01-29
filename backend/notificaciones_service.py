@@ -1,9 +1,11 @@
 from db import db, Notificacion
 
+from db import db, Notificacion
+
 def crear_notificacion(
     user_id: int,
     mensaje: str,
-    evento: str = "sistema.info",
+    evento: str = "info.general",
     link: str | None = None,
     deposito: str | None = None,
     sender: str = "Sistema",
@@ -11,10 +13,9 @@ def crear_notificacion(
     meta: dict | None = None
 ):
     n = Notificacion(
-        
         ID_USUARIO=user_id,
         MENSAJE=mensaje,
-        TIPO=evento,   
+        TIPO=evento,
         LINK_NOTI=link,
         DEPOSITO=deposito,
         SENDER=sender,
@@ -24,3 +25,4 @@ def crear_notificacion(
     db.session.add(n)
     db.session.commit()
     return n
+

@@ -811,4 +811,3 @@ def finalizar_ruta_grupo(grupo_ruta):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-

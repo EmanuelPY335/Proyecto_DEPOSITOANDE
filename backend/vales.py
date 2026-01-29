@@ -4,6 +4,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from flask_cors import cross_origin
 from datetime import datetime
 import uuid
+import json
 
 from sqlalchemy import func, distinct
 from sqlalchemy.orm import aliased, joinedload
@@ -16,6 +17,7 @@ from db import (
     Usuario,
     Vehiculo,
     Empleado,
+    Rol,
     SolicitudStock,
     Inventario,
     MovimientoMaterial,
@@ -23,12 +25,163 @@ from db import (
     Deposito,
 )
 
-
 vales_bp = Blueprint("vales", __name__)
 
 # ==========================================
-# FUNCIONES AUXILIARES
+# HELPERS NOTIFICACIONES (NUEVO, SIMPLE, SEGURO)
 # ==========================================
+
+def _meta_json(meta):
+    """
+    ✅ SIEMPRE devuelve string JSON (o None).
+    Evita el error: Python 'dict' cannot be converted to a MySQL type
+    """
+    if meta is None:
+        return None
+    if isinstance(meta, str):
+        return meta
+    try:
+        return json.dumps(meta, ensure_ascii=False)
+    except Exception:
+        return json.dumps({"raw": str(meta)}, ensure_ascii=False)
+
+
+def crear_notificacion(
+    *,
+    id_usuario: int,
+    mensaje: str,
+    tipo: str = "info.general",
+    link: str = None,
+    deposito: str = "",
+    sender: str = "Sistema",
+    meta=None,
+    starred: bool = False,
+    fecha=None,
+):
+    """
+    Creador único de notificaciones: meta SIEMPRE serializada a JSON string.
+    """
+    n = Notificacion(
+        ID_USUARIO=int(id_usuario),
+        MENSAJE=(mensaje or "")[:255],
+        LEIDA=False,
+        FECHA_CREACION=fecha or datetime.now(),
+        TIPO=tipo,
+        LINK_NOTI=link,
+        DEPOSITO=deposito or "",
+        SENDER=sender or "Sistema",
+        STARRED=bool(starred),
+        META=_meta_json(meta),
+    )
+    db.session.add(n)
+    return n
+
+
+def notificar_chofer(id_chofer_empleado, grupo_ruta, id_vale_ref=None, origen_nombre=""):
+    """
+    En tu sistema: Vale.ID_CHOFER guarda ID_EMPLEADO.
+    Por eso buscamos Usuario por ID_EMPLEADO.
+    """
+    usuario_chofer = Usuario.query.filter_by(ID_EMPLEADO=int(id_chofer_empleado)).first()
+    if not usuario_chofer:
+        return
+
+    crear_notificacion(
+        id_usuario=usuario_chofer.ID_USUARIO,
+        mensaje=f"🚚 Ruta Lista {grupo_ruta}. ¡Ya puedes iniciar el viaje!",
+        tipo="solicitud.ruta",
+        link=f"/Mapa?ruta={id_vale_ref}" if id_vale_ref else "/Mapa",
+        deposito=origen_nombre or "",
+        sender="Sistema",
+        meta={"grupo_ruta": grupo_ruta, "id_vale": id_vale_ref},
+    )
+
+
+def notificar_usuario(user_id, mensaje, tipo="info.general", link=None, deposito="", sender="Sistema", meta=None):
+    try:
+        crear_notificacion(
+            id_usuario=int(user_id),
+            mensaje=mensaje,
+            tipo=tipo,
+            link=link,
+            deposito=deposito or "",
+            sender=sender or "Sistema",
+            meta=meta,
+        )
+    except Exception as e:
+        print("⚠️ notificar_usuario error:", e)
+
+
+def notificar_destino_recepcion_pendiente(vale: Vale):
+    """
+    ✅ CLAVE: cuando el vale queda APROBADO (estado 2),
+    avisamos al depósito DESTINO para que pueda marcar como recibido.
+
+    Tu frontend muestra el botón 📦 Traslado recibido si:
+      - tipo incluye 'recepcion' o meta.accion incluye 'recepcionar'
+    """
+    try:
+        id_destino = int(vale.ID_DEPOSITO_DESTINO)
+    except:
+        return
+
+    grupo = getattr(vale, "GRUPO_RUTA", None) or str(vale.ID_VALE)
+    link_ref = f"/movimientos?tab=traslados&highlight={grupo}"
+
+    roles_ok = ("Master_Admin", "Admin", "Personal_Inventario")
+
+    usuarios_destino = (
+        Usuario.query
+        .join(Empleado, Usuario.ID_EMPLEADO == Empleado.ID_EMPLEADO)
+        .join(Rol, Usuario.ID_ROL == Rol.ID_ROL)
+        .filter(Empleado.ID_DEPOSITO == id_destino)
+        .filter(Rol.NOMBRE_ROL.in_(roles_ok))
+        .all()
+    )
+
+    destino_nombre = ""
+    try:
+        destino_nombre = vale.destino.NOMBRE if vale.destino else ""
+    except:
+        destino_nombre = ""
+
+    origen_nombre = ""
+    try:
+        origen_nombre = vale.origen.NOMBRE if vale.origen else ""
+    except:
+        origen_nombre = ""
+
+    for u in usuarios_destino:
+        # Idempotencia: no duplicar si ya existe una igual
+        existe = Notificacion.query.filter_by(
+            ID_USUARIO=u.ID_USUARIO,
+            TIPO="traslado.recepcion",
+            LINK_NOTI=link_ref
+        ).first()
+        if existe:
+            continue
+
+        crear_notificacion(
+            id_usuario=u.ID_USUARIO,
+            mensaje=f"📦 Traslado {grupo} APROBADO. Pendiente de recepción en {destino_nombre or 'destino'}.",
+            tipo="traslado.recepcion",  # ✅ contiene 'recepcion'
+            link=link_ref,
+            deposito=destino_nombre or "",
+            sender="Sistema",
+            meta={
+                "accion": "recepcionar",  # ✅ tu front lo detecta
+                "id_vale": int(vale.ID_VALE),
+                "grupo_ruta": getattr(vale, "GRUPO_RUTA", None),
+                "origen": origen_nombre,
+                "destino": destino_nombre,
+            },
+        )
+
+
+# ==========================================
+# FUNCIONES AUXILIARES STOCK / IDEMPOTENCIA
+# ==========================================
+
 def _recepcion_ya_aplicada(id_vale: int) -> bool:
     """
     ✅ Idempotencia real:
@@ -45,36 +198,6 @@ def _recepcion_ya_aplicada(id_vale: int) -> bool:
         print("⚠️ _recepcion_ya_aplicada error:", e)
         return False
 
-def _get_usuario_actual():
-    uid = get_jwt_identity()
-    try:
-        uid = int(uid)
-    except:
-        pass
-    return Usuario.query.get(uid)
-
-def _deposito_id_usuario(usuario):
-    try:
-        if usuario and usuario.empleado and usuario.empleado.ID_DEPOSITO:
-            return int(usuario.empleado.ID_DEPOSITO)
-    except:
-        pass
-    return None
-
-def _rol_lower_db(usuario):
-    """
-    ✅ Rol real desde BD (evita tokens viejos cuando se cambian roles).
-    """
-    try:
-        if usuario and usuario.rol and getattr(usuario.rol, "NOMBRE_ROL", None):
-            return str(usuario.rol.NOMBRE_ROL).strip().lower()
-    except:
-        pass
-    # fallback a claim (por si acaso)
-    try:
-        return (get_jwt().get("rol_nombre") or "").strip().lower()
-    except:
-        return ""
 
 def get_id_estado_vale_anulado():
     """
@@ -88,7 +211,6 @@ def get_id_estado_vale_anulado():
         estado = EstadoVale()
         estado.estado_vale = "Anulado"
 
-        # Aseguramos que el ID sea None para que actúe el Auto-Increment
         if hasattr(estado, "ID_ESTADO_VALE"):
             estado.ID_ESTADO_VALE = None
 
@@ -150,68 +272,9 @@ def sumar_stock_destino(vale, user_id):
         )
         db.session.add(mov)
 
-def aplicar_transferencia_por_recepcion(vale, user_id_receptor):
-    """
-    ✅ Transferencia real al confirmar recepción:
-    - Valida stock en ORIGEN
-    - Resta stock ORIGEN (mov salida)
-    - Suma stock DESTINO (mov entrada)
-    """
-    # 1) Validar stock primero para no quedar a medias
-    for det in (vale.detalles or []):
-        inv_or = Inventario.query.filter_by(
-            ID_LOTE=det.ID_LOTE,
-            ID_DEPOSITO=vale.ID_DEPOSITO_ORIGEN
-        ).first()
-
-        if (not inv_or) or float(inv_or.CANTIDAD_ACTUAL or 0) < float(det.CANTIDAD_SOLICITADA or 0):
-            raise Exception(f"Stock insuficiente en origen para el lote {det.ID_LOTE}")
-
-    # 2) Aplicar salida + entrada (reusamos tus funciones)
-    descontar_stock_salida(vale, user_id_receptor)
-    sumar_stock_destino(vale, user_id_receptor)
-
-def notificar_chofer(id_chofer_empleado, grupo_ruta, id_vale_ref=None, origen_nombre=""):
-    """
-    En tu sistema: Vale.ID_CHOFER guarda ID_EMPLEADO.
-    Por eso buscamos Usuario por ID_EMPLEADO.
-    """
-    usuario_chofer = Usuario.query.filter_by(ID_EMPLEADO=id_chofer_empleado).first()
-    if usuario_chofer:
-        noti = Notificacion(
-            ID_USUARIO=usuario_chofer.ID_USUARIO,
-            MENSAJE=f"🚚 Ruta Lista {grupo_ruta}. ¡Ya puedes iniciar el viaje!",
-            LEIDA=False,
-            FECHA_CREACION=datetime.now(),
-            TIPO="solicitud.ruta",
-            LINK_NOTI=f"/Mapa?ruta={id_vale_ref}" if id_vale_ref else "/Mapa",
-            DEPOSITO=origen_nombre or "",
-            SENDER="Sistema",
-            META={"grupo_ruta": grupo_ruta, "id_vale": id_vale_ref},
-        )
-        db.session.add(noti)
-
-
-def notificar_usuario(user_id, mensaje, tipo="info.general", link=None, deposito="", sender="Sistema", meta=None):
-    try:
-        n = Notificacion(
-            ID_USUARIO=user_id,
-            MENSAJE=mensaje,
-            LEIDA=False,
-            FECHA_CREACION=datetime.now(),
-            TIPO=tipo,
-            LINK_NOTI=link,
-            DEPOSITO=deposito or "",
-            SENDER=sender or "Sistema",
-            META=meta,
-        )
-        db.session.add(n)
-    except Exception as e:
-        print("⚠️ notificar_usuario error:", e)
-
 
 # ==========================================
-# RUTAS (ENDPOINTS)
+# ENDPOINTS
 # ==========================================
 
 @vales_bp.route("/vehiculos/simple", methods=["GET"])
@@ -244,7 +307,6 @@ def crear_vale():
         if not stops:
             return jsonify({"error": "La ruta debe tener al menos una parada"}), 400
 
-        # ✅ Validaciones fuertes
         id_origen = data.get("id_origen")
         id_chofer = data.get("id_chofer")  # ID_EMPLEADO del chofer
         id_vehiculo = data.get("id_vehiculo")
@@ -256,8 +318,9 @@ def crear_vale():
         if not id_vehiculo:
             return jsonify({"error": "Falta id_vehiculo"}), 400
 
-        # ✅ estado inicial
-        es_admin = usuario.rol and getattr(usuario.rol, "NOMBRE_ROL", "") in ["Master_Admin", "Admin"]
+        # estado inicial
+        rol_nombre = getattr(getattr(usuario, "rol", None), "NOMBRE_ROL", "") or ""
+        es_admin = rol_nombre in ["Master_Admin", "Admin"]
         estado_inicial = 2 if es_admin else 1  # 2=Aprobado directo, 1=Pendiente
 
         created_vales = []
@@ -308,33 +371,29 @@ def crear_vale():
 
             created_vales.append(nuevo_vale)
 
-        # ✅ Opcional: marcar solicitudes “en proceso/completado”
+        # marcar solicitudes en proceso/completado (si aplica)
         if solicitudes_a_actualizar:
             for sid in solicitudes_a_actualizar:
                 solicitud = SolicitudStock.query.get(sid)
                 if solicitud:
                     solicitud.ID_ESTADO = 3  # ajusta según tu sistema
 
-        # ✅ Si queda aprobado directo: descontar stock + notificar chofer
         if estado_inicial == 2:
+            # descontar stock en origen (por cada vale)
             for vale in created_vales:
                 descontar_stock_salida(vale, current_user_id)
 
-            # noti chofer por el primer vale creado (sirve para link al mapa)
             primer = created_vales[0] if created_vales else None
             origen_nombre = ""
             try:
                 origen_nombre = primer.origen.NOMBRE if primer and primer.origen else ""
             except:
                 origen_nombre = ""
+
+            # noti chofer
             notificar_chofer(int(id_chofer), route_group_id, id_vale_ref=(primer.ID_VALE if primer else None), origen_nombre=origen_nombre)
 
             # ✅ noti al creador: aprobada
-            primer_dest = ""
-            try:
-                primer_dest = primer.destino.NOMBRE if primer and primer.destino else ""
-            except:
-                primer_dest = ""
             notificar_usuario(
                 current_user_id,
                 f"✅ Traslado {route_group_id} fue APROBADO y salió a ruta.",
@@ -345,18 +404,17 @@ def crear_vale():
                 meta={"grupo_ruta": route_group_id},
             )
 
+            # ✅ NUEVO: noti al DESTINO para recepcionar (por cada vale / destino)
+            for vale in created_vales:
+                notificar_destino_recepcion_pendiente(vale)
+
         db.session.commit()
 
-        return (
-            jsonify(
-                {
-                    "success": True,
-                    "message": "Ruta generada." + (" Aprobada." if estado_inicial == 2 else " Pendiente de aprobación."),
-                    "grupo_ruta": route_group_id,
-                }
-            ),
-            201,
-        )
+        return jsonify({
+            "success": True,
+            "message": "Ruta generada." + (" Aprobada." if estado_inicial == 2 else " Pendiente de aprobación."),
+            "grupo_ruta": route_group_id,
+        }), 201
 
     except Exception as e:
         db.session.rollback()
@@ -418,7 +476,7 @@ def aprobar_salida(id_vale):
         origen_nombre = vale.origen.NOMBRE if vale.origen else ""
         notificar_chofer(vale.ID_CHOFER, vale.GRUPO_RUTA, id_vale_ref=vale.ID_VALE, origen_nombre=origen_nombre)
 
-        # ✅ Notificar al creador: aprobación
+        # creador: aprobación
         notificar_usuario(
             vale.ID_USUARIO_CREADOR,
             f"✅ Vale/Traslado #{vale.GRUPO_RUTA or vale.ID_VALE} fue APROBADO.",
@@ -428,6 +486,9 @@ def aprobar_salida(id_vale):
             sender="Sistema",
             meta={"id_vale": vale.ID_VALE, "grupo_ruta": vale.GRUPO_RUTA},
         )
+
+        # ✅ NUEVO: destino puede recepcionar
+        notificar_destino_recepcion_pendiente(vale)
 
         db.session.commit()
         return jsonify({"success": True, "message": "Salida aprobada."}), 200
@@ -458,7 +519,6 @@ def rechazar_vale(id_vale):
         obs_actual = vale.OBSERVACIONES or ""
         vale.OBSERVACIONES = f"{obs_actual} | [ANULADO]: {motivo}".strip(" |")
 
-        # ✅ Notificar al creador (persistente + META con motivo)
         origen_nombre = vale.origen.NOMBRE if vale.origen else ""
         notificar_usuario(
             vale.ID_USUARIO_CREADOR,
@@ -477,6 +537,8 @@ def rechazar_vale(id_vale):
         db.session.rollback()
         print(f"Error al rechazar vale: {e}")
         return jsonify({"error": f"Error al rechazar: {str(e)}"}), 500
+
+
 @vales_bp.route("/vales/<int:id_vale>/confirmar_recepcion", methods=["PUT"])
 @jwt_required()
 def confirmar_recepcion(id_vale):
@@ -486,7 +548,6 @@ def confirmar_recepcion(id_vale):
     except:
         pass
 
-    # Traemos el vale con detalles cargados (evita sorpresas con lazy loading)
     vale = (
         Vale.query
         .options(joinedload(Vale.detalles))
@@ -500,13 +561,10 @@ def confirmar_recepcion(id_vale):
     try:
         estado = int(vale.ID_ESTADO_VALE or 0)
 
-        # Si aún no está aprobado/salió, no debería recepcionarse
         if estado < 2:
             return jsonify({"error": "El vale aún no está aprobado para ser recepcionado"}), 400
 
-        # ✅ Si ya se aplicó la recepción (entrada a inventario), no repetir
         if _recepcion_ya_aplicada(vale.ID_VALE):
-            # Asegurar campos finales (sin tocar stock)
             if int(vale.ID_ESTADO_VALE or 0) < 4:
                 vale.ID_ESTADO_VALE = 4
             if not getattr(vale, "FECHA_LLEGADA", None):
@@ -522,18 +580,14 @@ def confirmar_recepcion(id_vale):
                 "message": "ℹ️ Este traslado ya estaba confirmado (stock ya actualizado)."
             }), 200
 
-        # ✅ Si NO está aplicada, la aplicamos (aunque el vale esté “finalizado”)
-        # Esto corrige vales que quedaron en estado 4 pero sin impactar stock.
         if int(vale.ID_ESTADO_VALE or 0) < 4:
             vale.ID_ESTADO_VALE = 4
 
         vale.ID_USUARIO_RECEPTOR = current_user_id
         vale.FECHA_LLEGADA = datetime.now()
 
-        # 🔥 Aquí se actualiza stock destino (entrada)
         sumar_stock_destino(vale, current_user_id)
 
-        # Notificación (la dejamos tal cual tu lógica)
         destino_nombre = vale.destino.NOMBRE if vale.destino else ""
         notificar_usuario(
             vale.ID_USUARIO_CREADOR,
@@ -556,7 +610,6 @@ def confirmar_recepcion(id_vale):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Error al recepcionar: {str(e)}"}), 500
-
 
 
 @vales_bp.route("/solicitudes/pendientes", methods=["GET"])
@@ -582,23 +635,19 @@ def get_solicitudes_pendientes():
         for s in solicitudes:
             nombre_estado = {1: "Pendiente", 2: "En Proceso", 3: "Completado", 4: "Rechazado"}.get(s.ID_ESTADO, "Desconocido")
 
-            # ⚠️ Esta sección depende de tu modelo real de SolicitudStock.
-            # La dejo igual (compat) aunque en muchos modelos "material" no existe en cabecera.
-            resultado.append(
-                {
-                    "id_solicitud": s.ID_SOLICITUD,
-                    "deposito_solicitante": s.dep_solicitante.NOMBRE if getattr(s, "dep_solicitante", None) else "Desconocido",
-                    "id_destino": getattr(s, "ID_DEPOSITO_SOLICITANTE", None),
-                    "solicitante_usuario": f"{s.usuario.empleado.NOMBRE} {s.usuario.empleado.APELLIDO}" if getattr(s, "usuario", None) and getattr(s.usuario, "empleado", None) else "Usuario",
-                    "material": getattr(getattr(s, "material", None), "NOMBRE", "Material"),
-                    "id_material": getattr(s, "ID_MATERIAL", None),
-                    "cantidad": getattr(s, "CANTIDAD", None),
-                    "fecha": s.FECHA_SOLICITUD.strftime("%d/%m/%Y %H:%M") if s.FECHA_SOLICITUD else "",
-                    "observacion": getattr(s, "OBSERVACION", "") or getattr(s, "OBSERVACION_GENERAL", "") or "",
-                    "estado": nombre_estado,
-                    "id_estado": s.ID_ESTADO,
-                }
-            )
+            resultado.append({
+                "id_solicitud": s.ID_SOLICITUD,
+                "deposito_solicitante": s.dep_solicitante.NOMBRE if getattr(s, "dep_solicitante", None) else "Desconocido",
+                "id_destino": getattr(s, "ID_DEPOSITO_SOLICITANTE", None),
+                "solicitante_usuario": f"{s.usuario.empleado.NOMBRE} {s.usuario.empleado.APELLIDO}" if getattr(s, "usuario", None) and getattr(s.usuario, "empleado", None) else "Usuario",
+                "material": getattr(getattr(s, "material", None), "NOMBRE", "Material"),
+                "id_material": getattr(s, "ID_MATERIAL", None),
+                "cantidad": getattr(s, "CANTIDAD", None),
+                "fecha": s.FECHA_SOLICITUD.strftime("%d/%m/%Y %H:%M") if s.FECHA_SOLICITUD else "",
+                "observacion": getattr(s, "OBSERVACION", "") or getattr(s, "OBSERVACION_GENERAL", "") or "",
+                "estado": nombre_estado,
+                "id_estado": s.ID_ESTADO,
+            })
 
         return jsonify(resultado), 200
 
@@ -616,35 +665,27 @@ def get_vales_pendientes():
         nombre_chofer = f"{v.chofer.NOMBRE} {v.chofer.APELLIDO}" if getattr(v, "chofer", None) else "Sin Asignar"
         matricula_vehiculo = v.vehiculo.MATRICULA if getattr(v, "vehiculo", None) else "Sin Asignar"
 
-        res.append(
-            {
-                "id": v.ID_VALE,
-                "fecha": v.FECHA_CREACION.strftime("%d/%m %H:%M") if v.FECHA_CREACION else "",
-                "destino": v.destino.NOMBRE if getattr(v, "destino", None) else "Desconocido",
-                "chofer": nombre_chofer,
-                "vehiculo": matricula_vehiculo,
-                "origen": v.origen.NOMBRE if getattr(v, "origen", None) else "Desconocido",
-                "detalles": [
-                    {
-                        "codigo": d.material.CODIGO_UNICO,
-                        "material": d.material.NOMBRE,
-                        "unidad": d.material.UNIDAD_MEDIDA,
-                        "lote": d.lote.CODIGO,
-                        "cantidad": d.CANTIDAD_SOLICITADA,
-                    }
-                    for d in (v.detalles or [])
-                ],
-            }
-        )
+        res.append({
+            "id": v.ID_VALE,
+            "fecha": v.FECHA_CREACION.strftime("%d/%m %H:%M") if v.FECHA_CREACION else "",
+            "destino": v.destino.NOMBRE if getattr(v, "destino", None) else "Desconocido",
+            "chofer": nombre_chofer,
+            "vehiculo": matricula_vehiculo,
+            "origen": v.origen.NOMBRE if getattr(v, "origen", None) else "Desconocido",
+            "detalles": [{
+                "codigo": d.material.CODIGO_UNICO,
+                "material": d.material.NOMBRE,
+                "unidad": d.material.UNIDAD_MEDIDA,
+                "lote": d.lote.CODIGO,
+                "cantidad": d.CANTIDAD_SOLICITADA,
+            } for d in (v.detalles or [])],
+        })
     return jsonify(res), 200
 
 
 @vales_bp.route("/traslados/historial", methods=["GET"])
 @jwt_required()
 def get_historial_traslados():
-    """
-    Historial de traslados agrupado por GRUPO_RUTA.
-    """
     claims = get_jwt()
     sub = claims.get("sub")
     user_id = int(sub) if sub is not None else int(get_jwt_identity())
@@ -751,21 +792,19 @@ def get_historial_traslados():
             fecha_salida = r.fecha_salida.strftime("%d/%m/%Y %H:%M") if r.fecha_salida else None
             fecha_llegada = r.fecha_llegada.strftime("%d/%m/%Y %H:%M") if r.fecha_llegada else None
 
-            res.append(
-                {
-                    "grupo_ruta": r.grupo_ruta,
-                    "fecha_salida": fecha_salida,
-                    "fecha_llegada": fecha_llegada,
-                    "chofer": chofer_txt,
-                    "vehiculo": vehiculo_txt,
-                    "items_count": int(r.items_count or 0),
-                    "vales_count": int(r.vales_count or 0),
-                    "id_vale_ref": int(r.id_vale_ref) if r.id_vale_ref else None,
-                    "origen": r.origen or "N/A",
-                    "destino": r.destino or "N/A",
-                    "estado_id": int(r.estado_id) if r.estado_id else None,
-                }
-            )
+            res.append({
+                "grupo_ruta": r.grupo_ruta,
+                "fecha_salida": fecha_salida,
+                "fecha_llegada": fecha_llegada,
+                "chofer": chofer_txt,
+                "vehiculo": vehiculo_txt,
+                "items_count": int(r.items_count or 0),
+                "vales_count": int(r.vales_count or 0),
+                "id_vale_ref": int(r.id_vale_ref) if r.id_vale_ref else None,
+                "origen": r.origen or "N/A",
+                "destino": r.destino or "N/A",
+                "estado_id": int(r.estado_id) if r.estado_id else None,
+            })
 
         return jsonify(res), 200
 
@@ -810,14 +849,12 @@ def get_detalle_traslado_grupo(grupo_ruta):
         for v in vales:
             items = []
             for d in (v.detalles or []):
-                items.append(
-                    {
-                        "material": d.material.NOMBRE if d.material else "-",
-                        "lote": d.lote.CODIGO if d.lote else "-",
-                        "cantidad": d.CANTIDAD_SOLICITADA,
-                        "unidad": d.material.UNIDAD_MEDIDA if d.material else "u.",
-                    }
-                )
+                items.append({
+                    "material": d.material.NOMBRE if d.material else "-",
+                    "lote": d.lote.CODIGO if d.lote else "-",
+                    "cantidad": d.CANTIDAD_SOLICITADA,
+                    "unidad": d.material.UNIDAD_MEDIDA if d.material else "u.",
+                })
 
             paradas.append({"destino": v.destino.NOMBRE if v.destino else "N/A", "items": items})
 
@@ -832,12 +869,6 @@ def get_detalle_traslado_grupo(grupo_ruta):
 @cross_origin()
 @jwt_required()
 def get_polyline_ruta(id_vale):
-    """
-    Devuelve:
-      gps: [] (si no hay tracking)
-      plan: [{lat,lng}, ...] usando depósitos del grupo
-      meta: {grupo_ruta, ...}
-    """
     try:
         vale_ref = Vale.query.get(id_vale)
         if not vale_ref:
@@ -860,7 +891,6 @@ def get_polyline_ruta(id_vale):
                     plan.append({"lat": float(v.destino.LATITUD), "lng": float(v.destino.LONGITUD)})
 
         gps = []
-
         meta = {"grupo_ruta": grupo, "id_vale_ref": vale_ref.ID_VALE}
 
         return jsonify({"gps": gps, "plan": plan, "meta": meta}), 200
