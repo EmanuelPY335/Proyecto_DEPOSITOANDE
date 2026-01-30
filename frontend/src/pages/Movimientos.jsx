@@ -1,6 +1,5 @@
 // src/pages/Movimientos.jsx
 import React, { useEffect, useState, useMemo} from "react";
-// ... (mismos imports de antes)
 import { useLocation, useNavigate} from "react-router-dom";
 import { apiFetch } from "../utils/api";
 import {
@@ -16,7 +15,7 @@ import "../styles/Movimientos.css";
 import HistorialPedidos from "../components/HistorialPedidos";
 import { generarValePDF } from "../utils/pdfGenerator";
 
-// ... (MAP CONFIGURATION se mantiene igual) ...
+// ... (MAP CONFIGURATION) ...
 const iconOrigen = new L.Icon({ iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png", shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png", iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
 const iconDestino = new L.Icon({ iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png", shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png", iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
 const iconDisponible = new L.Icon({ iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png", shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png", iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
@@ -30,21 +29,19 @@ const MapUpdater = ({ center, zoom = 13 }) => {
   return null;
 };
 
-
 const Movimientos = () => {
-  // -----------------------------------------------------------------------
-  // 1. LECTURA DE ROL Y DEPÓSITO
-  // -----------------------------------------------------------------------
   const rawRole = sessionStorage.getItem("user_rol") || sessionStorage.getItem("rol_nombre") || "";
   const userRole = rawRole.trim().toLowerCase();
   
-  // Roles generales de administración (para ver, editar, borrar)
+  // Roles generales de gestión
   const adminRoles = ["master_admin", "admin", "administrador", "gerente", "it_support"];
   const esAdminGlobal = adminRoles.includes(userRole);
-
-  // --- NUEVA VARIABLE: SOLO MASTER ADMIN ---
-  // Esta variable es la que usaremos para habilitar el Select de Origen
+  
+  // Roles específicos
   const esMasterAdmin = userRole === "master_admin"; 
+  
+  // ✅ NUEVA VARIABLE: Solo estos roles pueden ver el botón de borrar
+  const canDelete = ["master_admin", "admin"].includes(userRole);
 
   const userPermissions = JSON.parse(sessionStorage.getItem("user_permissions") || "[]").map(p => p.trim());
   const userDepositoId = sessionStorage.getItem("user_deposito_id");
@@ -54,80 +51,60 @@ const Movimientos = () => {
   
   const [activeTab, setActiveTab] = useState(location.state?.activeTab || "movimientos");
   const [movimientos, setMovimientos] = useState([]);
-    // ✅ Filtros nuevos
-  const [tipoFiltro, setTipoFiltro] = useState("todos"); // todos | rutas | interno
-
-  const [estadoFiltro, setEstadoFiltro] = useState("todos"); // todos | anulado | finalizado | etc
-  const [dateFrom, setDateFrom] = useState(""); // yyyy-mm-dd
-  const [dateTo, setDateTo] = useState("");     // yyyy-mm-dd
-
+  const [tipoFiltro, setTipoFiltro] = useState("todos");
+  const [estadoFiltro, setEstadoFiltro] = useState("todos");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // States del Wizard
   const [showWizard, setShowWizard] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Data States
   const [depositos, setDepositos] = useState([]);
   const [materiales, setMateriales] = useState([]); 
   const [choferes, setChoferes] = useState([]); 
   const [vehiculosList, setVehiculosList] = useState([]); 
   const [activeVehicles, setActiveVehicles] = useState([]);
 
-  // Wizard Data
-const [step, setStep] = useState(1);
+  const [step, setStep] = useState(1);
+  const [routeConfig, setRouteConfig] = useState({
+    id_origen: "",
+    observacion: "",
+    id_chofer: "",
+    id_vehiculo: ""
+  });
 
-const [routeConfig, setRouteConfig] = useState({
-  id_origen: "",
-  observacion: "",
-  id_chofer: "",
-  id_vehiculo: ""
-});
-
-const [stops, setStops] = useState([]);
-
-
-
+  const [stops, setStops] = useState([]);
   const [editingStopIndex, setEditingStopIndex] = useState(null); 
   const [itemTemp, setItemTemp] = useState({ id_material: "", id_lote: "", cantidad: "" });
   const [lotesDisponibles, setLotesDisponibles] = useState([]);
   const [destinoSearch, setDestinoSearch] = useState("");
   const [materialSearch, setMaterialSearch] = useState("");
   const [traslados, setTraslados] = useState([]);
-    // ===========================
-  // TAB "MOVIMIENTOS" (TRASLADOS)
-  // ===========================
+  
   const [showTrayectoModal, setShowTrayectoModal] = useState(false);
   const [trayectoData, setTrayectoData] = useState(null);
   const [trayectoLoading, setTrayectoLoading] = useState(false);
   const [trasladoSeleccionado, setTrasladoSeleccionado] = useState(null);
-const totalPuntos = useMemo(() => {
-  return stops.reduce((acc, stop) => {
-    const sumStop = (stop.items || []).reduce((a, it) => {
-      const cant = Number(it.cantidad) || 0;
 
-      // buscamos el material en tu lista cargada
-      const mat = materiales.find(m => String(m.ID_MATERIAL) === String(it.id_material));
-      const factor = Number(mat?.FACTOR_PUNTOS ?? mat?.factor_puntos ?? 1);
-
-      return a + (cant * factor);
+  const totalPuntos = useMemo(() => {
+    return stops.reduce((acc, stop) => {
+      const sumStop = (stop.items || []).reduce((a, it) => {
+        const cant = Number(it.cantidad) || 0;
+        const mat = materiales.find(m => String(m.ID_MATERIAL) === String(it.id_material));
+        const factor = Number(mat?.FACTOR_PUNTOS ?? mat?.factor_puntos ?? 1);
+        return a + (cant * factor);
+      }, 0);
+      return acc + sumStop;
     }, 0);
+  }, [stops, materiales]);
 
-    return acc + sumStop;
-  }, 0);
-}, [stops, materiales]);
-
-  // -----------------------------------------------------------------------
-  // FUNCION DE LIMPIEZA TOTAL DEL WIZARD
-  // -----------------------------------------------------------------------
   const clearWizardData = () => {
-    // Limpiar localStorage
     localStorage.removeItem("wiz_step");
     localStorage.removeItem("wiz_config");
     localStorage.removeItem("wiz_stops");
     localStorage.removeItem("wiz_user");
 
-    // Resetear estados
     setStep(1);
     setStops([]);
     setRouteConfig({
@@ -140,13 +117,10 @@ const totalPuntos = useMemo(() => {
     setShowWizard(false);
   };
 
-
   const closeWizardPreserveData = () => {
     setShowWizard(false);
- };
-  // -----------------------------------------------------------------------
-  // PERMISOS UNIFICADOS
-  // -----------------------------------------------------------------------
+  };
+
   const puedeGestionarMovimientos = () => {
     if (esAdminGlobal) return true; 
     return userPermissions.includes("gestion_movimientos");
@@ -163,14 +137,11 @@ const totalPuntos = useMemo(() => {
     const rolesPermitidos = ["personal_inventario"];
     return rolesPermitidos.some(r => r === userRole) || userPermissions.includes("crear_rutas");
   };
-  // ✅ Convierte "2026-01-23" o "23/01/2026" a Date (tolerante)
+
   const parseAnyDate = (val) => {
     if (!val) return null;
-    // ISO / yyyy-mm-dd / yyyy-mm-ddTHH:mm
     const d1 = new Date(val);
     if (!isNaN(d1.getTime())) return d1;
-
-    // dd/mm/yyyy
     const m = String(val).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
     if (m) {
       const dd = Number(m[1]);
@@ -184,24 +155,14 @@ const totalPuntos = useMemo(() => {
 
   const inDateRange = (fechaStr) => {
     const f = parseAnyDate(fechaStr);
-    if (!f) return true; // si no hay fecha, no bloquees
-
-    // dateFrom/dateTo vienen como yyyy-mm-dd
+    if (!f) return true;
     const from = dateFrom ? new Date(dateFrom + "T00:00:00") : null;
     const to = dateTo ? new Date(dateTo + "T23:59:59") : null;
-
     if (from && f < from) return false;
     if (to && f > to) return false;
     return true;
   };
-  // =========================================
-  // TOTAL CARGA (para comparar contra capacidad)
-  // =========================================
 
-
-  // -----------------------------------------------------------------------
-  // EFECTOS
-  // -----------------------------------------------------------------------
   const userKey =
     sessionStorage.getItem("user_id") ||
     sessionStorage.getItem("id_usuario") ||
@@ -216,60 +177,47 @@ const totalPuntos = useMemo(() => {
     sessionStorage.getItem("jwt") ||
     "";
 
-  // ✅ DEFINILAS ACÁ (mismo scope que los useEffect)
-  const isLoggedIn = Boolean(token);   // exige ambos
-  const canPersistWizard = Boolean(userKey);      // userKey no vacío
+  const isLoggedIn = Boolean(token);
+  const canPersistWizard = Boolean(userKey);
 
+  useEffect(() => {
+    if (!isLoggedIn) {
+      clearWizardData();
+      return;
+    }
+    const savedUser = localStorage.getItem("wiz_user");
+    if (!savedUser || savedUser !== userKey) {
+      clearWizardData();
+      return;
+    }
+    const savedStep = localStorage.getItem("wiz_step");
+    const savedConfig = localStorage.getItem("wiz_config");
+    const savedStops = localStorage.getItem("wiz_stops");
 
+    if (!savedStep || !savedConfig || !savedStops) {
+      clearWizardData();
+      return;
+    }
+    try {
+      setStep(Number(savedStep));
+      setRouteConfig(JSON.parse(savedConfig));
+      setStops(JSON.parse(savedStops));
+      setShowWizard(true);
+    } catch (e) {
+      console.error("❌ Error restaurando wizard", e);
+      clearWizardData();
+    }
+  }, [isLoggedIn, userKey]);
 
-  // --- NUEVO: LIMPIEZA DE SEGURIDAD AL CARGAR ---
-  // Si entramos a la página y no hay rol (usuario deslogueado) o cambió el usuario, limpiamos.
-useEffect(() => {
-  // 🚨 si no hay token → NUNCA restaurar
-  if (!isLoggedIn) {
-    clearWizardData();
-    return;
-  }
+  useEffect(() => {
+    if (!showWizard) return;
+    if (!isLoggedIn) return;
+    localStorage.setItem("wiz_user", userKey);
+    localStorage.setItem("wiz_step", String(step));
+    localStorage.setItem("wiz_config", JSON.stringify(routeConfig));
+    localStorage.setItem("wiz_stops", JSON.stringify(stops));
+  }, [step, routeConfig, stops, showWizard, isLoggedIn, userKey]);
 
-  const savedUser = localStorage.getItem("wiz_user");
-  if (!savedUser || savedUser !== userKey) {
-    clearWizardData();
-    return;
-  }
-
-  const savedStep = localStorage.getItem("wiz_step");
-  const savedConfig = localStorage.getItem("wiz_config");
-  const savedStops = localStorage.getItem("wiz_stops");
-
-  if (!savedStep || !savedConfig || !savedStops) {
-    clearWizardData();
-    return;
-  }
-
-  try {
-    setStep(Number(savedStep));
-    setRouteConfig(JSON.parse(savedConfig));
-    setStops(JSON.parse(savedStops));
-    setShowWizard(true);
-  } catch (e) {
-    console.error("❌ Error restaurando wizard", e);
-    clearWizardData();
-  }
-}, [isLoggedIn, userKey]);
-
-useEffect(() => {
-  if (!showWizard) return;
-  if (!isLoggedIn) return;
-
-  localStorage.setItem("wiz_user", userKey);
-  localStorage.setItem("wiz_step", String(step));
-  localStorage.setItem("wiz_config", JSON.stringify(routeConfig));
-  localStorage.setItem("wiz_stops", JSON.stringify(stops));
-}, [step, routeConfig, stops, showWizard, isLoggedIn, userKey]);
-
-
-
-  // INITIAL LOAD
   useEffect(() => {
     if (location.state?.activeTab) setActiveTab(location.state.activeTab);
   }, [location.state]);
@@ -280,43 +228,31 @@ useEffect(() => {
       loadDepositos(); 
       loadMateriales(); 
       loadChoferes(); 
-      
       loadVehiculos(); 
       loadActiveVehicles(); 
       loadTraslados();
-
     }
   }, []);
 
   useEffect(() => {
-  if (!routeConfig.id_vehiculo) return;
+    if (!routeConfig.id_vehiculo) return;
+    const selected = vehiculosList.find(v =>
+      String(v.ID_VEHICULO ?? v.id) === String(routeConfig.id_vehiculo)
+    );
+    if (!selected) return;
+    const estado = String(selected.estado || "desconocido").toLowerCase();
+    const capacidad = Number(selected.CAPACIDAD_PUNTOS || 0);
+    if (estado !== "disponible" || capacidad < totalPuntos) {
+      setRouteConfig(prev => ({ ...prev, id_vehiculo: "" }));
+    }
+  }, [totalPuntos, vehiculosList]); 
 
-  const selected = vehiculosList.find(v =>
-    String(v.ID_VEHICULO ?? v.id) === String(routeConfig.id_vehiculo)
-  );
-
-  if (!selected) return;
-
-  const estado = String(selected.estado || "desconocido").toLowerCase();
-  const capacidad = Number(selected.CAPACIDAD_PUNTOS || 0);
-
-  if (estado !== "disponible" || capacidad < totalPuntos) {
-    setRouteConfig(prev => ({ ...prev, id_vehiculo: "" }));
-  }
-}, [totalPuntos, vehiculosList]); 
-
-  // --- CORRECCIÓN IMPORTANTE: FIJAR ORIGEN ---
-  // Si NO es Master Admin y tiene depósito, forzamos el origen siempre.
   useEffect(() => { 
       if (showWizard && !esMasterAdmin && userDepositoId) { 
-          // Forzamos el ID del usuario, ignorando cualquier cosa en localStorage
           setRouteConfig(prev => ({ ...prev, id_origen: userDepositoId })); 
       } 
   }, [showWizard, esMasterAdmin, userDepositoId]);
 
-  // -----------------------------------------------------------------------
-  // CARGA DE DATOS (Mismos métodos)
-  // -----------------------------------------------------------------------
   const loadMovimientos = async () => { 
     try { 
       const data = await apiFetch("http://127.0.0.1:5000/api/movimientos"); 
@@ -326,8 +262,6 @@ useEffect(() => {
   const loadTraslados = async () => {
     try {
       const data = await apiFetch("http://127.0.0.1:5000/api/traslados/historial?limit=100");
-      console.log("TRASLADOS RESPONSE:", data);
-      console.log("TRASLADO[0]:", data?.[0]);
       setTraslados(data || []);
     } catch (e) {
       console.error(e);
@@ -358,10 +292,6 @@ useEffect(() => {
   const loadVehiculos = async () => {
     try {
       const data = await apiFetch("http://127.0.0.1:5000/api/vehiculos");
-
-      console.log("✅ VEHICULOS RAW:", data);
-      console.table(data); // lindo en consola
-
       setVehiculosList(data || []);
     } catch (e) {
       console.error("❌ Error loadVehiculos:", e);
@@ -375,7 +305,6 @@ useEffect(() => {
     } catch(e) { console.error(e); } 
   };
 
-  // --- LOGIC HANDLERS ---
   const handleMapClick = (deposito) => { 
     if (String(deposito.ID_DEPOSITO) === String(routeConfig.id_origen)) return; 
     const existsIndex = stops.findIndex(s => String(s.id_destino) === String(deposito.ID_DEPOSITO)); 
@@ -415,15 +344,15 @@ useEffect(() => {
   };
   
   const getReservadoLote = (loteId) => {
-  const lid = String(loteId);
-  let sum = 0;
-  for (const s of stops) {
-    for (const it of (s.items || [])) {
-      if (String(it.id_lote) === lid) sum += Number(it.cantidad) || 0;
+    const lid = String(loteId);
+    let sum = 0;
+    for (const s of stops) {
+      for (const it of (s.items || [])) {
+        if (String(it.id_lote) === lid) sum += Number(it.cantidad) || 0;
+      }
     }
-  }
-  return sum;
-};
+    return sum;
+  };
 
   const handleMaterialPredictiveChange = (e) => { 
     const val = e.target.value; 
@@ -437,7 +366,6 @@ useEffect(() => {
     } 
   };
   
-  // LOGICA ATENDER PEDIDO
   const handleAtenderPedido = (pedido) => { 
     const depDestino = depositos.find(d => String(d.ID_DEPOSITO) === String(pedido.id_destino)); 
     if (!depDestino) return alert("Error: No se encuentran datos geográficos del depósito solicitante."); 
@@ -450,8 +378,6 @@ useEffect(() => {
       items: [] 
     }; 
 
-    // Solo Master Admin puede dejar el origen vacío para elegir después
-    // El resto usa su ID de depósito o vacío si no tienen (pero no podrán avanzar)
     const origenInicial = esMasterAdmin ? "" : (userDepositoId || "");
 
     setRouteConfig({ 
@@ -464,7 +390,6 @@ useEffect(() => {
     setStep(2); 
     
     if (!origenInicial && !esMasterAdmin) {
-       // Caso raro: Usuario sin permisos de master y sin deposito asignado
        alert("Error de configuración: Tu usuario no tiene un depósito de origen asignado.");
     } else if (!origenInicial && esMasterAdmin) {
         alert(`✅ Solicitud cargada. Por favor, regresa al PASO 1 para seleccionar el Depósito de Origen.`);
@@ -533,7 +458,6 @@ useEffect(() => {
   const updatedStops = [...stops];
   const stopItems = updatedStops[editingStopIndex].items || [];
 
-  // ✅ si ya existe el mismo lote en esa parada, SUMAR
   const exists = stopItems.find(it => String(it.id_lote) === String(itemTemp.id_lote));
 
   if (exists) {
@@ -557,42 +481,37 @@ useEffect(() => {
   setLotesDisponibles([]);
 };
 
-  
   const removeItemFromStop = (stopIndex, itemIndex) => {
     const updatedStops = [...stops];
     updatedStops[stopIndex].items.splice(itemIndex, 1);
     setStops(updatedStops);
   };
 
-const handleDelete = async (m) => {
-  if (!m) return;
-
-  // Si es un VALE, NO uses /api/movimientos/*
-  if (m.tipo_obj === "vale") {
-    alert("Este registro es una RUTA/VALE. No se elimina desde Movimientos.\n\nSi querés 'borrar' un vale, lo correcto es ANULARLO (rechazar) desde /api/vales/<id>/rechazar.");
-    return;
-  }
-  const BACKEND = "http://127.0.0.1:5000";
-  // Si es MOVIMIENTO INTERNO, sí usa /api/movimientos/*
-  const id = Number(m.id);
-  if (!Number.isFinite(id)) return alert("ID inválido para borrar.");
-
-  if (!window.confirm("¿Eliminar este movimiento?")) return;
-
-  try {
-    if (esMasterAdmin) {
-      await apiFetch(`${BACKEND}/api/movimientos/${id}/perma`, { method: "DELETE" });
-      alert("Eliminado permanentemente.");
-    } else {
-      await apiFetch(`${BACKEND}/api/movimientos/${id}/soft`, { method: "PUT" });
-      alert("Movimiento ocultado.");
+  const handleDelete = async (m) => {
+    if (!m) return;
+    if (m.tipo_obj === "vale") {
+      alert("Este registro es una RUTA/VALE. No se elimina desde Movimientos.\n\nSi querés 'borrar' un vale, lo correcto es ANULARLO (rechazar) desde /api/vales/<id>/rechazar.");
+      return;
     }
-    loadMovimientos();
-  } catch (e) {
-    alert("Error: " + e.message);
-  }
-};
+    const BACKEND = "http://127.0.0.1:5000";
+    const id = Number(m.id);
+    if (!Number.isFinite(id)) return alert("ID inválido para borrar.");
 
+    if (!window.confirm("¿Eliminar este movimiento?")) return;
+
+    try {
+      if (esMasterAdmin) {
+        await apiFetch(`${BACKEND}/api/movimientos/${id}/perma`, { method: "DELETE" });
+        alert("Eliminado permanentemente.");
+      } else {
+        await apiFetch(`${BACKEND}/api/movimientos/${id}/soft`, { method: "PUT" });
+        alert("Movimiento ocultado.");
+      }
+      loadMovimientos();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  };
 
   const handlePrint = (m, isPreview) => {
     // ✅ Caso 1: Movimiento interno
@@ -603,15 +522,16 @@ const handleDelete = async (m) => {
         fecha: m.fecha || m.fecha_movimiento || "",
         estado: m.estado || "Registrado",
         responsable: m.responsable || "Sin Responsable",
+        
+        // Pasamos el vehículo como Maquinaria para el PDF
+        maquinaria: m.vehiculo || m.maquinaria || "N/A",
 
-        // Si manejas sectores/ubicaciones, mandalos:
         sector_origen: m.sector_origen || m.ubicacion_anterior || "N/D",
         sector_destino: m.sector_destino || m.nueva_ubicacion || "N/D",
 
         deposito: m.deposito || "N/D",
         observaciones: m.observaciones || m.obs || "",
 
-        // Items (si tu backend devuelve items, mejor; si no, armamos uno)
         items: m.items && m.items.length
           ? m.items
           : [{
@@ -619,7 +539,8 @@ const handleDelete = async (m) => {
               material: m.material || "N/D",
               lote: m.lote || m.id_lote || "N/D",
               cantidad: m.cantidad || 0,
-              unidad: m.unidad || "u."
+              unidad: m.unidad || "u.",
+              sector_destino: m.sector_destino || m.nueva_ubicacion || "N/D" // Individual si existe
             }]
       };
 
@@ -649,64 +570,45 @@ const handleDelete = async (m) => {
     generarValePDF(pdfData, isPreview);
   };
 
-  // ==========================================================
-  // VER TRAYECTO (modal con mapa) - usa tu endpoint polyline
-  // ==========================================================
-const handleVerTrayecto = (t, e) => {
-  e?.preventDefault?.();
-  e?.stopPropagation?.();
+  const handleVerTrayecto = (t, e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    const id = t?.id_vale_ref ?? t?.id_vale ?? t?.id;
+    if (!id) return alert("Traslado sin id_vale_ref (revisar backend).");
+    navigate("/mapa", {
+      state: { from: "movimientos", id_vale_ref: id, traslado: t },
+    });
+  };
 
-  const id = t?.id_vale_ref ?? t?.id_vale ?? t?.id;
-  if (!id) return alert("Traslado sin id_vale_ref (revisar backend).");
-
-  navigate("/mapa", {
-    state: {
-      from: "movimientos",
-      id_vale_ref: id,
-      traslado: t,
-    },
-  });
-};
-
-  // ==========================================================
-  // PDF TRASLADO (detalle real desde backend + generarValePDF)
-  // ==========================================================
   const handlePrintTraslado = async (t, isPreview) => {
-  try {
-    // ✅ el multiparada se identifica por grupo_ruta
-    const grupo = t.grupo_ruta;
-    if (!grupo) {
-      alert("Traslado sin grupo_ruta (revisar backend)");
-      return;
+    try {
+      const grupo = t.grupo_ruta;
+      if (!grupo) {
+        alert("Traslado sin grupo_ruta (revisar backend)");
+        return;
+      }
+      const det = await apiFetch(`http://127.0.0.1:5000/api/traslados/grupo/${grupo}/detalle`);
+      const meta = det.meta || {};
+      const paradas = det.paradas || [];
+
+      const pdfData = {
+        tipo: "ruta",
+        id: grupo, 
+        fecha: t.fecha_salida || "",
+        estado: "Finalizado",
+        origen: meta.origen || t.origen || "",
+        destino: "Multiparada",
+        chofer: meta.chofer || t.chofer || "",
+        vehiculo: meta.vehiculo || t.vehiculo || "",
+        paradas 
+      };
+
+      generarValePDF(pdfData, isPreview);
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo generar el PDF del traslado.");
     }
-
-    const det = await apiFetch(`http://127.0.0.1:5000/api/traslados/grupo/${grupo}/detalle`);
-
-    const meta = det.meta || {};
-    const paradas = det.paradas || [];
-
-    // 👇 ESTE ES EL CAMBIO CLAVE:
-    const pdfData = {
-      tipo: "ruta",
-      id: grupo, // o meta.grupo_ruta
-      fecha: t.fecha_salida || "",
-      estado: "Finalizado",
-      origen: meta.origen || t.origen || "",
-      destino: "Multiparada",
-      chofer: meta.chofer || t.chofer || "",
-      vehiculo: meta.vehiculo || t.vehiculo || "",
-      paradas // ✅ ahora generarValePDF entra en la rama de paradas
-    };
-
-    console.log("✅ PDF DATA:", pdfData);
-    generarValePDF(pdfData, isPreview);
-  } catch (e) {
-    console.error(e);
-    alert("No se pudo generar el PDF del traslado.");
-  }
-};
-
-
+  };
 
   const handleSubmit = async () => { 
     const emptyStops = stops.filter(s => s.items.length === 0); 
@@ -716,10 +618,7 @@ const handleVerTrayecto = (t, e) => {
     try { 
         await apiFetch("http://127.0.0.1:5000/api/vales", { method: "POST", body: JSON.stringify(payload) }); 
         alert("✅ Ruta creada exitosamente."); 
-        
-        // USAMOS LA FUNCION DE LIMPIEZA
         clearWizardData();
-        
         loadMovimientos(); 
     } catch(e) { 
         alert("Error: " + e.message); 
@@ -737,14 +636,11 @@ const handleVerTrayecto = (t, e) => {
     return [start, ...waypoints]; 
   };
 
-  // --- FILTER LOGIC ---
   const filtered = movimientos.filter(m => {
-    // 1) Tipo
     let matchesType = true;
     if (tipoFiltro === "rutas") matchesType = !m.es_local;
     if (tipoFiltro === "interno") matchesType = m.es_local;
 
-    // 2) Search
     const term = searchTerm.toLowerCase();
     const matchesSearch =
       (m.material && m.material.toLowerCase().includes(term)) ||
@@ -752,29 +648,19 @@ const handleVerTrayecto = (t, e) => {
       (m.vehiculo && m.vehiculo.toLowerCase().includes(term)) ||
       (m.chofer && m.chofer.toLowerCase().includes(term));
 
-    // 3) Estado
-    // normalizamos
     const est = String(m.estado || "sin_estado").toLowerCase();
     let matchesEstado = true;
     if (estadoFiltro !== "todos") matchesEstado = est === estadoFiltro;
 
-    // 4) Fecha (usa fecha_salida si existe, sino fecha)
     const fechaRef = m.fecha_salida || m.fecha || m.fecha_movimiento || "";
     const matchesFecha = inDateRange(fechaRef);
 
     return matchesType && matchesSearch && matchesEstado && matchesFecha;
   });
 
-  // -----------------------------------------------------------------------
-  // RENDER
-  // -----------------------------------------------------------------------
-
-  // Bloqueo de Acceso (mismo código)
   if (!puedeGestionarMovimientos() && !puedeVerPedidos()) {
     return (
-      <div className="fade-in" style={{
-        display:'flex', flexDirection: 'column', justifyContent:'center', alignItems:'center', height:'60vh', color:'#4b5563', textAlign: 'center'
-      }}>
+      <div className="fade-in" style={{ display:'flex', flexDirection: 'column', justifyContent:'center', alignItems:'center', height:'60vh', color:'#4b5563', textAlign: 'center' }}>
         <ShieldAlert size={64} style={{color:'#ef4444', marginBottom: 20}} />
         <h1>Acceso Restringido</h1>
         <p>No tienes permisos para acceder a Gestión de Movimientos.</p>
@@ -803,7 +689,6 @@ const handleVerTrayecto = (t, e) => {
             )}
         </div>
 
-        {/* TABS */}
         <div className="tabs-header">
             <button onClick={() => setActiveTab("movimientos")} className={`tab-btn ${activeTab === "movimientos" ? "active-blue" : ""}`}>
                 <List size={18} /> Historial de Vales
@@ -812,7 +697,6 @@ const handleVerTrayecto = (t, e) => {
                 <button onClick={() => setActiveTab("pedidos")} className={`tab-btn ${activeTab === "pedidos" ? "active-yellow" : ""}`}>
                     <ClipboardList size={18} /> Pedidos
                 </button>
-          
             )}
             <button
               onClick={() => setActiveTab("traslados")}
@@ -822,10 +706,8 @@ const handleVerTrayecto = (t, e) => {
             </button>
         </div>
 
-        {/* MAIN TABLE (HISTORIAL) - Se mantiene igual */}
         {activeTab === "movimientos" && (
             <div className="discord-card historial-card fade-in">
-                {/* TOOLBAR */}
                <div className="toolbar-section relative">
                   <div className="search-bar-modern">
                     <Search size={18} className="search-icon" />
@@ -840,7 +722,6 @@ const handleVerTrayecto = (t, e) => {
                               type="button"
                               className="filters-close"
                               onClick={() => setShowFilters(false)}
-                              aria-label="Cerrar filtros"
                               title="Cerrar"
                             >
                               ×
@@ -855,70 +736,47 @@ const handleVerTrayecto = (t, e) => {
                             </button>
                           ))}
                         </div>
-                        {/* =========================================
-                              FILTRO: ESTADO
-                            ========================================= */}
-                          <div className="filter-group">
-                            <label>Estado</label>
-                            <div className="filter-chips">
-                              {["todos", "pendiente", "en progreso", "finalizado", "anulado"].map(est => (
-                                <button
-                                  key={est}
-                                  className={`chip ${estadoFiltro === est ? "active" : ""}`}
-                                  onClick={() => setEstadoFiltro(est)}
-                                >
-                                  {est === "todos" ? "Todos" : est.toUpperCase()}
-                                  {estadoFiltro === est && <Check size={12} />}
-                                </button>
-                              ))}
-                            </div>
-                            <small className="text-gray-400">
-                              * Ajustá esta lista a los estados reales que devuelve tu backend.
-                            </small>
-                          </div>
-
-                          {/* =========================================
-                              FILTRO: FECHAS
-                            ========================================= */}
-                          <div className="filter-group">
-                            <label>Rango de fechas</label>
-                            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                <small className="text-gray-400">Desde</small>
-                                <input
-                                  type="date"
-                                  className="discord-input"
-                                  value={dateFrom}
-                                  onChange={(e) => setDateFrom(e.target.value)}
-                                />
-                              </div>
-
-                              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                <small className="text-gray-400">Hasta</small>
-                                <input
-                                  type="date"
-                                  className="discord-input"
-                                  value={dateTo}
-                                  onChange={(e) => setDateTo(e.target.value)}
-                                />
-                              </div>
-                            </div>
-                          </div>
-
                       </div>
-                                <button
-                                  className="btn-text-only"
-                                  onClick={() => {
-                                    setTipoFiltro("todos");
-                                    setSearchTerm("");
-                                    setEstadoFiltro("todos");
-                                    setDateFrom("");
-                                    setDateTo("");
-                                  }}
-                                >
-                                  Limpiar filtros
-                                </button>
-
+                      <div className="filter-group">
+                        <label>Estado</label>
+                        <div className="filter-chips">
+                          {["todos", "pendiente", "en progreso", "finalizado", "anulado"].map(est => (
+                            <button
+                              key={est}
+                              className={`chip ${estadoFiltro === est ? "active" : ""}`}
+                              onClick={() => setEstadoFiltro(est)}
+                            >
+                              {est === "todos" ? "Todos" : est.toUpperCase()}
+                              {estadoFiltro === est && <Check size={12} />}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="filter-group">
+                        <label>Rango de fechas</label>
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <small className="text-gray-400">Desde</small>
+                            <input type="date" className="discord-input" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <small className="text-gray-400">Hasta</small>
+                            <input type="date" className="discord-input" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        className="btn-text-only"
+                        onClick={() => {
+                          setTipoFiltro("todos");
+                          setSearchTerm("");
+                          setEstadoFiltro("todos");
+                          setDateFrom("");
+                          setDateTo("");
+                        }}
+                      >
+                        Limpiar filtros
+                      </button>
                     </div>
                   )}
                 </div>
@@ -936,7 +794,7 @@ const handleVerTrayecto = (t, e) => {
                         </thead>
                         <tbody>
                             {filtered.map(m => (
-                                <tr key={m.id}>
+                                <tr key={`${m.es_local ? "interno" : (m.tipo_obj || "vale")}::${m.id}::${m.id_vale_ref || ""}`}>
                                     <td>{m.fecha}</td>
                                     <td>
                                         <span className={`badge-estado ${m.es_local ? 'badge-interno' : 'badge-ruta'}`}>
@@ -987,13 +845,16 @@ const handleVerTrayecto = (t, e) => {
                                             <button className="btn-print btn-icon-only" onClick={() => handlePrint(m, false)} title="Descargar PDF">
                                                 <Printer size={16}/>
                                             </button>
-                                            <button className="btn-action danger btn-small"
-                                                    onClick={() => handleDelete(m)}
-                                                    title={esMasterAdmin ? "Eliminar permanente" : "Ocultar (soft delete)"}>
-                                              <Trash2 size={16}/>
-                                            </button>
+                                            
+                                            {/* ✅ SOLO VISIBLE PARA ADMIN Y MASTER_ADMIN */}
+                                            {canDelete && (
+                                              <button className="btn-action danger btn-small"
+                                                      onClick={() => handleDelete(m)}
+                                                      title={esMasterAdmin ? "Eliminar permanente" : "Ocultar (soft delete)"}>
+                                                  <Trash2 size={16}/>
+                                              </button>
+                                            )}
 
-                                          
                                         </div>
                                     </td>
                                 </tr>
@@ -1010,8 +871,6 @@ const handleVerTrayecto = (t, e) => {
         )}
         {activeTab === "traslados" && (
           <div className="discord-card historial-card fade-in">
-
-            {/* TOOLBAR */}
             <div className="toolbar-section relative">
               <div className="search-bar-modern">
                 <Search size={18} className="search-icon" />
@@ -1022,7 +881,6 @@ const handleVerTrayecto = (t, e) => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-
               <button
                 className="btn-filter"
                 onClick={() => loadTraslados()}
@@ -1032,7 +890,6 @@ const handleVerTrayecto = (t, e) => {
               </button>
             </div>
 
-            {/* TABLA TRASLADOS */}
             <div className="table-responsive">
               <table className="historial-table">
                 <thead>
@@ -1045,7 +902,6 @@ const handleVerTrayecto = (t, e) => {
                     <th>Acciones</th>
                   </tr>
                 </thead>
-
                 <tbody>
                   {traslados
                     .filter(t => {
@@ -1080,10 +936,8 @@ const handleVerTrayecto = (t, e) => {
                             <Layers size={14} /> {t.items_count || 0} items
                           </span>
                         </td>
-
                         <td className="actions-cell">
                           <div className="actions-group">
-                            {/* VER TRAYECTO */}
                             <button
                               type="button"
                               className="btn-action secondary btn-icon-only"
@@ -1092,9 +946,6 @@ const handleVerTrayecto = (t, e) => {
                             >
                               <MapIcon size={16} />
                             </button>
-
-
-                            {/* PDF (preview) */}
                             <button
                               className="btn-action secondary btn-icon-only"
                               onClick={() => handlePrintTraslado(t, true)}
@@ -1102,8 +953,6 @@ const handleVerTrayecto = (t, e) => {
                             >
                               <Eye size={16} />
                             </button>
-
-                            {/* PDF (download) */}
                             <button
                               className="btn-print btn-icon-only"
                               onClick={() => handlePrintTraslado(t, false)}
@@ -1118,7 +967,6 @@ const handleVerTrayecto = (t, e) => {
                 </tbody>
               </table>
             </div>
-
             {traslados.length === 0 && (
               <div className="text-center p-5 text-gray-500">
                 No hay traslados finalizados para mostrar.
@@ -1127,18 +975,16 @@ const handleVerTrayecto = (t, e) => {
           </div>
         )}
 
-        {/* WIZARD */}
         {showWizard && ( 
             <div className="modal-backdrop">
                 <div className="discord-card modal-wizard relative" style={{ width: '95%', maxWidth: '1400px', height: '90vh', display: 'flex', flexDirection: 'column' }}>
-                    
-              <button
-                onClick={closeWizardPreserveData}
-                className="cerrar-newruta"
-                title="Cerrar (se guarda el progreso)"
-              >
-                <X size={24} />
-              </button>
+                    <button
+                      onClick={closeWizardPreserveData}
+                      className="cerrar-newruta"
+                      title="Cerrar (se guarda el progreso)"
+                    >
+                      <X size={24} />
+                    </button>
 
                     <div className="wizard-header pr-12">
                         <h2>Nueva Ruta</h2>
@@ -1148,7 +994,6 @@ const handleVerTrayecto = (t, e) => {
                           <span className={`step ${step>=2 ? 'active':''}`}>2. Carga</span>
                           <div className="line"></div>
                           <span className={`step ${step>=3 ? 'active':''}`}>3. Asignación</span>
-
                         </div>
                     </div>
                     
@@ -1159,9 +1004,6 @@ const handleVerTrayecto = (t, e) => {
                                 <div className="wizard-row">
                                     <div className="input-group wizard-col">
                                         <label>Depósito Origen</label>
-                                        
-                                        {/* --- CAMBIO: SOLO MASTER ADMIN TIENE SELECT --- */}
-                                        {/* Si es master_admin (o si el usuario no tiene depósito asignado por error), muestra el Select */}
                                         {(esMasterAdmin || !userDepositoId) ? (
                                             <select className="discord-select" value={routeConfig.id_origen} onChange={e => setRouteConfig({...routeConfig, id_origen: e.target.value})}>
                                                 <option value="">-- Seleccionar Origen --</option>
@@ -1173,8 +1015,7 @@ const handleVerTrayecto = (t, e) => {
                                                 <span>{depositos.find(d=>String(d.ID_DEPOSITO)===String(routeConfig.id_origen))?.NOMBRE || "Cargando..."}</span>
                                             </div>
                                         )}
-                                        {/* ----------------------------------- */}
-                                      <div className="fade-in h-full flex flex-col">
+                                        <div className="fade-in h-full flex flex-col">
                                             <div className="flex justify-between items-center mb-2">
                                                 <h3 className="flex items-center gap-2"><Navigation size={20}/> Selecciona las paradas</h3>
                                                 <div className="badge-estado bg-blue-500 text-white">{stops.length} Paradas Seleccionadas</div>
@@ -1187,7 +1028,6 @@ const handleVerTrayecto = (t, e) => {
                                                     <datalist id="depositos-list">{depositos.filter(d => String(d.ID_DEPOSITO) !== String(routeConfig.id_origen)).filter(d => !stops.some(s => String(s.id_destino) === String(d.ID_DEPOSITO))).map(d => (<option key={d.ID_DEPOSITO} value={d.NOMBRE} />))}</datalist>
                                                 </div>
                                             </div>
-                                            
                                             <div className="wizard-map-container" style={{ flex: 1, minHeight: '500px', width: '100%', position: 'relative' }}>
                                                 <MapContainer center={getCoords(routeConfig.id_origen)} zoom={13} style={{ height: "100%", width: "100%", position: "absolute", top: 0, left: 0 }}>
                                                     <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
@@ -1203,9 +1043,8 @@ const handleVerTrayecto = (t, e) => {
                                                 </MapContainer>
                                             </div>
                                         </div>
-                                        </div>
                                     </div>
-                                
+                                </div>
                                 <div className="input-group mt-4">
                                     <label>Observaciones</label>
                                     <textarea className="discord-input" value={routeConfig.observacion} onChange={e=>setRouteConfig({...routeConfig, observacion: e.target.value})} placeholder="Detalles del viaje..."/>
@@ -1218,79 +1057,73 @@ const handleVerTrayecto = (t, e) => {
                                 <h3 className="flex gap-2 mb-4"><Package/> Asignar Carga</h3>
                                 <div className="load-selector-container">
                                     <div className="stops-sidebar">
-                                        {stops.map((stop, idx) => (
-                                            <div key={idx} onClick={() => setEditingStopIndex(idx)} className={`stop-item ${editingStopIndex === idx ? 'active' : ''}`}>
-                                                <div className="font-bold">Parada #{idx+1}</div>
-                                                <div className="text-sm">{stop.nombre}</div>
-                                                <small>{stop.items.length} items</small>
-                                            </div>
-                                        ))}
+                                            {stops.map((stop, idx) => (
+                                                <div key={idx} onClick={() => setEditingStopIndex(idx)} className={`stop-item ${editingStopIndex === idx ? 'active' : ''}`}>
+                                                    <div className="font-bold">Parada #{idx+1}</div>
+                                                    <div className="text-sm">{stop.nombre}</div>
+                                                    <small>{stop.items.length} items</small>
+                                                </div>
+                                            ))}
                                     </div>
                                     <div className="flex-1 pl-4">
-                                        {editingStopIndex !== null ? (
-                                            <>
-                                                <h4 className="mb-2">Cargando para: {stops[editingStopIndex].nombre}</h4>
-                                                <div className="load-form-row">
-                                                    <div className="flex-1">
-                                                        <label className="text-xs">Material</label>
-                                                        <input type="text" list="materiales-list" className="discord-input" placeholder="Buscar material..." value={materialSearch} onChange={handleMaterialPredictiveChange}/>
-                                                        <datalist id="materiales-list">{materiales.map(m => (<option key={m.ID_MATERIAL} value={m.NOMBRE} />))}</datalist>
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <label className="text-xs">Lote</label>
-                                                         <select
-                                                            className="discord-select"
-                                                            value={itemTemp.id_lote}
-                                                            onChange={(e) => setItemTemp({ ...itemTemp, id_lote: e.target.value })}
-                                                            disabled={!itemTemp.id_material}
-                                                          >
-                                                            <option value="">-- Seleccionar Lote --</option>
-                                                            {lotesDisponibles.map(l => (
-                                                              <option key={l.lote_id} value={l.lote_id}>
-                                                                Lote {l.lote_id} • Disp: {l.disponible_wiz} • {l.codigo || ""}
-
-                                                              </option>
-                                                            ))}
-                                                          </select>
-
-
-
-                                                    </div>
-                                                    <div className="flex-1 ">
-                                                      <label>Cantidad</label>
-                                                      <div className="qty-input-wrapper">
-                                                        <input
-                                                          type="number"
-                                                          className="cantidad-input"
-                                                          value={itemTemp.cantidad}
-                                                          onChange={e => setItemTemp({ ...itemTemp, cantidad: e.target.value })}
-                                                        />
-                                                        <span className="qty-unit"> {materiales.find(m => String(m.ID_MATERIAL) === String(itemTemp.id_material))?.UNIDAD || "Unid."}</span>
-                                                      </div>
-                                                    </div>
-                                                    <button className="btn-icon-simple success" onClick={addItemToStop} type="button"><Plus size={18}/></button>
-                                                </div>
-                                                <div className="load-list">
-                                                        {stops[editingStopIndex].items.map((it, i) => (
-                                                          <div key={i} className="load-list-item flex justify-between items-center">
-                                                            <span>{it.nombre} ({it.cantidad} {it.UNIDAD})</span>
-                                                            <button className="btn-icon-simple danger" onClick={() => removeItemFromStop(editingStopIndex, i)} type="button">
-                                                              <Trash2 size={12}/>
-                                                            </button>
+                                            {editingStopIndex !== null ? (
+                                                <>
+                                                    <h4 className="mb-2">Cargando para: {stops[editingStopIndex].nombre}</h4>
+                                                    <div className="load-form-row">
+                                                        <div className="flex-1">
+                                                            <label className="text-xs">Material</label>
+                                                            <input type="text" list="materiales-list" className="discord-input" placeholder="Buscar material..." value={materialSearch} onChange={handleMaterialPredictiveChange}/>
+                                                            <datalist id="materiales-list">{materiales.map(m => (<option key={m.ID_MATERIAL} value={m.NOMBRE} />))}</datalist>
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <label className="text-xs">Lote</label>
+                                                             <select
+                                                                className="discord-select"
+                                                                value={itemTemp.id_lote}
+                                                                onChange={(e) => setItemTemp({ ...itemTemp, id_lote: e.target.value })}
+                                                                disabled={!itemTemp.id_material}
+                                                              >
+                                                                <option value="">-- Seleccionar Lote --</option>
+                                                                {lotesDisponibles.map(l => (
+                                                                  <option key={l.lote_id} value={l.lote_id}>
+                                                                    Lote {l.lote_id} • Disp: {l.disponible_wiz} • {l.codigo || ""}
+                                                                  </option>
+                                                                ))}
+                                                              </select>
+                                                        </div>
+                                                        <div className="flex-1 ">
+                                                          <label>Cantidad</label>
+                                                          <div className="qty-input-wrapper">
+                                                            <input
+                                                              type="number"
+                                                              className="cantidad-input"
+                                                              value={itemTemp.cantidad}
+                                                              onChange={e => setItemTemp({ ...itemTemp, cantidad: e.target.value })}
+                                                            />
+                                                            <span className="qty-unit"> {materiales.find(m => String(m.ID_MATERIAL) === String(itemTemp.id_material))?.UNIDAD || "Unid."}</span>
                                                           </div>
-                                                        ))}
-                                                </div>
-                                            </>
-                                        ) : <div className="h-full flex items-center justify-center text-gray-500">Selecciona una parada a la izquierda</div>}
+                                                        </div>
+                                                        <button className="btn-icon-simple success" onClick={addItemToStop} type="button"><Plus size={18}/></button>
+                                                    </div>
+                                                    <div className="load-list">
+                                                            {stops[editingStopIndex].items.map((it, i) => (
+                                                              <div key={i} className="load-list-item flex justify-between items-center">
+                                                                <span>{it.nombre} ({it.cantidad} {it.UNIDAD})</span>
+                                                                <button className="btn-icon-simple danger" onClick={() => removeItemFromStop(editingStopIndex, i)} type="button">
+                                                                  <Trash2 size={12}/>
+                                                                </button>
+                                                              </div>
+                                                            ))}
+                                                    </div>
+                                                </>
+                                            ) : <div className="h-full flex items-center justify-center text-gray-500">Selecciona una parada a la izquierda</div>}
                                     </div>
                                 </div>
                             </div>
-                            
                         )}
 
                         {step === 3 && (
                           <div className="fade-in">
-                            {/* CHOFER */}
                             <div className="input-group wizard-col">
                               <label>Chofer (Obligatorio)</label>
                               <select
@@ -1301,20 +1134,17 @@ const handleVerTrayecto = (t, e) => {
                                 <option value="">-- Seleccionar Chofer --</option>
                                   {choferes.map((c, idx) => {
                                     const id = (c.ID_EMPLEADO ?? c.id) ?? `idx-${idx}`;
-
                                     const nombreBase = (c.nombre ?? `${c.NOMBRE || ""} ${c.APELLIDO || ""}`.trim());
                                     const nombre = (nombreBase && nombreBase.length > 0) ? nombreBase : `Chofer ${idx + 1}`;
-
                                     return (
                                       <option key={`ch-${id}`} value={c.ID_EMPLEADO ?? c.id ?? ""}>
                                         {nombre}
                                       </option>
-                                  );
+                                    );
                                 })}
                               </select>
                             </div>
 
-                            {/* VEHÍCULO */}
                             <div className="input-group wizard-col">
                               <label>Vehículo (Obligatorio)</label>
                               <select
@@ -1327,19 +1157,15 @@ const handleVerTrayecto = (t, e) => {
                                     .filter(v => {
                                       const estado = String(v.estado || "desconocido").toLowerCase();
                                       const capacidad = Number(v.CAPACIDAD_PUNTOS || 0);
-
                                       const disponible = estado === "disponible";
                                       const alcanza = capacidad >= totalPuntos;
-
                                       return disponible && alcanza;
                                     })
                                     .map((v) => {
                                       const id = v.ID_VEHICULO ?? v.id;
                                       const estado = String(v.estado || "desconocido").toLowerCase();
                                       const capacidad = Number(v.CAPACIDAD_PUNTOS || 0);
-
                                       const label = `${v.MATRICULA || "-"} ${v.MARCA || ""} ${v.MODELO || ""} • Cap: ${capacidad} pts • ${estado}`;
-
                                       return (
                                         <option key={`veh-${id}`} value={id}>
                                           {label}
@@ -1347,162 +1173,131 @@ const handleVerTrayecto = (t, e) => {
                                       );
                                     })
                                   }
-
-
-
-
                               </select>
-
                               <small style={{ color: "#94a3b8" }}>
                                 Total planificado: <b>{totalPuntos.toFixed(2)}</b> pts. Se bloquean vehículos sin capacidad o no disponibles.
                               </small>
                             </div>
                           </div>
                         )}
-
                     </div>
-{/* ==========================================================
-    MODAL: VER TRAYECTO (Polyline GPS si existe, sino PLAN)
-   ========================================================== */}
-{showTrayectoModal && (
-  <div className="modal-backdrop">
-    <div className="discord-card modal-wizard relative" style={{ width: "95%", maxWidth: 1100, height: "85vh" }}>
 
-      <button
-        onClick={() => { setShowTrayectoModal(false); setTrayectoData(null); }}
-        className="cerrar-newruta"
-        title="Cerrar"
-      >
-        <X size={24} />
-      </button>
+                    {showTrayectoModal && (
+                      <div className="modal-backdrop">
+                        <div className="discord-card modal-wizard relative" style={{ width: "95%", maxWidth: 1100, height: "85vh" }}>
+                          <button
+                            onClick={() => { setShowTrayectoModal(false); setTrayectoData(null); }}
+                            className="cerrar-newruta"
+                            title="Cerrar"
+                          >
+                            <X size={24} />
+                          </button>
 
-      <div className="wizard-header pr-12">
-        <h2>Trayecto del Traslado</h2>
-        <small className="text-gray-400">
-          {trasladoSeleccionado?.grupo_ruta ? `Grupo: ${trasladoSeleccionado.grupo_ruta}` : ""}
-        </small>
-      </div>
+                          <div className="wizard-header pr-12">
+                            <h2>Trayecto del Traslado</h2>
+                            <small className="text-gray-400">
+                              {trasladoSeleccionado?.grupo_ruta ? `Grupo: ${trasladoSeleccionado.grupo_ruta}` : ""}
+                            </small>
+                          </div>
 
-      <div className="wizard-body" style={{ height: "calc(85vh - 130px)" }}>
-        {trayectoLoading && (
-          <div className="loading-map" style={{ height: "100%" }}>
-            <div className="spinner"></div>
-            <p>Cargando trayecto...</p>
-          </div>
-        )}
-
-          {!trayectoLoading && trayectoData && (
-                (() => {
-                      const gps = trayectoData.gps || [];
-                      const plan = trayectoData.plan || [];
-                      const pts = (gps.length >= 2 ? gps : plan);
-                      const base = (gps.length >= 2 ? gps : plan);
-                      const start = base[0];
-                      const end = base[base.length - 1];
-
-
-                      const center = pts?.length ? [pts[0].lat, pts[0].lng] : [-25.2800, -57.6350];
-
-                      return (
-                        <div style={{ height: "100%", width: "100%" }}>
-                          <MapContainer center={center} zoom={13} style={{ height: "100%", width: "100%" }}>
-                            <MapUpdater center={center} zoom={13} />
-                            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
-                            {/* Polyline */}
-                            {pts.length >= 2 && (
-                              <Polyline
-                                positions={pts.map(p => [p.lat, p.lng])}
-                                weight={5}
-                              />
+                          <div className="wizard-body" style={{ height: "calc(85vh - 130px)" }}>
+                            {trayectoLoading && (
+                              <div className="loading-map" style={{ height: "100%" }}>
+                                <div className="spinner"></div>
+                                <p>Cargando trayecto...</p>
+                              </div>
                             )}
 
-                            {/* Marcadores inicio/fin (usamos plan si existe, si no gps) */}
-                            {(plan.length >= 1) && (
-                              <Marker position={[plan[0].lat, plan[0].lng]}>
-                                <Popup><strong>Origen</strong></Popup>
-                              </Marker>
-                            )}
+                              {!trayectoLoading && trayectoData && (
+                                    (() => {
+                                          const gps = trayectoData.gps || [];
+                                          const plan = trayectoData.plan || [];
+                                          const pts = (gps.length >= 2 ? gps : plan);
+                                          const base = (gps.length >= 2 ? gps : plan);
+                                          const center = pts?.length ? [pts[0].lat, pts[0].lng] : [-25.2800, -57.6350];
 
-                            {(plan.length >= 2) && (
-                              <Marker position={[plan[plan.length - 1].lat, plan[plan.length - 1].lng]}>
-                                <Popup><strong>Destino</strong></Popup>
-                              </Marker>
-                            )}
-                          </MapContainer>
+                                          return (
+                                            <div style={{ height: "100%", width: "100%" }}>
+                                              <MapContainer center={center} zoom={13} style={{ height: "100%", width: "100%" }}>
+                                                <MapUpdater center={center} zoom={13} />
+                                                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                                                {pts.length >= 2 && (
+                                                  <Polyline
+                                                    positions={pts.map(p => [p.lat, p.lng])}
+                                                    weight={5}
+                                                  />
+                                                )}
+                                                {(plan.length >= 1) && (
+                                                  <Marker position={[plan[0].lat, plan[0].lng]}>
+                                                    <Popup><strong>Origen</strong></Popup>
+                                                  </Marker>
+                                                )}
+                                                {(plan.length >= 2) && (
+                                                  <Marker position={[plan[plan.length - 1].lat, plan[plan.length - 1].lng]}>
+                                                    <Popup><strong>Destino</strong></Popup>
+                                                  </Marker>
+                                                )}
+                                              </MapContainer>
+                                            </div>
+                                          );
+                                        })()
+                                      )}
+
+                                      {!trayectoLoading && !trayectoData && (
+                                        <div className="text-center p-5 text-gray-500">
+                                          No hay datos para mostrar.
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                        <div className="wizard-footer">
+                          <button
+                            className="btn-status"
+                            type="button"
+                            onClick={() => {
+                              if (step > 1) setStep(step - 1);
+                              else setShowWizard(false);
+                            }}
+                          >
+                            {step === 1 ? "Cerrar" : "Atrás"}
+                          </button>
+
+                          <button
+                            className="btn-save"
+                            type="button"
+                            onClick={() => {
+                              if (step === 1) {
+                                if (!routeConfig.id_origen) return alert("Selecciona el Depósito de Origen.");
+                                if (stops.length === 0) return alert("Selecciona al menos 1 parada/destino.");
+                                setStep(2);
+                                setEditingStopIndex(0);
+                                return;
+                              }
+                              if (step === 2) {
+                                const emptyStops = stops.filter(s => (s.items || []).length === 0);
+                                if (emptyStops.length > 0) {
+                                  return alert(`La parada "${emptyStops[0].nombre}" no tiene carga asignada.`);
+                                }
+                                setStep(3);
+                                return;
+                              }
+                              if (step === 3) {
+                                if (!routeConfig.id_chofer) return alert("Debes seleccionar un Chofer.");
+                                if (!routeConfig.id_vehiculo) return alert("Debes seleccionar un Vehículo.");
+                                handleSubmit();
+                              }
+                            }}
+                          >
+                            {step === 3 ? "Finalizar y Crear Ruta" : "Siguiente"}
+                          </button>
                         </div>
-                      );
-                    })()
-                  )}
-
-                  {!trayectoLoading && !trayectoData && (
-                    <div className="text-center p-5 text-gray-500">
-                      No hay datos para mostrar.
                     </div>
-                  )}
                 </div>
-              </div>
-            </div>
-          )}
-
-                <div className="wizard-footer">
-                  <button
-                    className="btn-status"
-                    type="button"
-                    onClick={() => {
-                      if (step > 1) setStep(step - 1);
-                      else setShowWizard(false);
-                    }}
-                  >
-                    {step === 1 ? "Cerrar" : "Atrás"}
-                  </button>
-
-                  <button
-                    className="btn-save"
-                    type="button"
-                    onClick={() => {
-                      // ===============================
-                      // PASO 1 -> PASO 2
-                      // ===============================
-                      if (step === 1) {
-                        if (!routeConfig.id_origen) return alert("Selecciona el Depósito de Origen.");
-                        if (stops.length === 0) return alert("Selecciona al menos 1 parada/destino.");
-                        setStep(2);
-                        setEditingStopIndex(0);
-                        return;
-                      }
-
-                      // ===============================
-                      // PASO 2 -> PASO 3
-                      // ===============================
-                      if (step === 2) {
-                        const emptyStops = stops.filter(s => (s.items || []).length === 0);
-                        if (emptyStops.length > 0) {
-                          return alert(`La parada "${emptyStops[0].nombre}" no tiene carga asignada.`);
-                        }
-                        setStep(3);
-                        return;
-                      }
-
-                      // ===============================
-                      // PASO 3 -> SUBMIT
-                      // ===============================
-                      if (step === 3) {
-                        if (!routeConfig.id_chofer) return alert("Debes seleccionar un Chofer.");
-                        if (!routeConfig.id_vehiculo) return alert("Debes seleccionar un Vehículo.");
-                        handleSubmit();
-                      }
-                    }}
-                  >
-                    {step === 3 ? "Finalizar y Crear Ruta" : "Siguiente"}
-                  </button>
-                </div>
-                    
-                </div>
-            </div>
         )}
 
-        {/* COMPONENTES SECUNDARIOS */}
         {activeTab === "pedidos" && puedeVerPedidos() && (
           <div className="fade-in">
             <HistorialPedidos onAtenderPedido={handleAtenderPedido} />

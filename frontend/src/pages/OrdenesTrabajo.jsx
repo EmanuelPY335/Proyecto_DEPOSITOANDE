@@ -1,11 +1,12 @@
 // src/pages/OrdenesTrabajo.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../utils/api";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Plus, CheckCircle, AlertCircle,
   User, ArrowRight, ArrowLeft, MapPin, UserPlus,
-  Trash2, ShieldAlert, Send, Edit, Calendar, Wrench, ArrowRightLeft, Box
+  Trash2, ShieldAlert, Send, Edit, Calendar, Wrench, ArrowRightLeft, Box,
+  Info, Clock
 } from "lucide-react";
 import "../styles/Ordenes.css";
 
@@ -35,6 +36,15 @@ const OrdenesTrabajo = () => {
 
   const [inventario, setInventario] = useState([]);
 
+  // ✅ NUEVO: sectores + maquinaria
+  const [sectores, setSectores] = useState([]);
+  const [maquinarias, setMaquinarias] = useState([]);
+
+  // ✅ NUEVO: modal detalle inventario
+  const [showInvInfo, setShowInvInfo] = useState(false);
+  const [invInfoLoading, setInvInfoLoading] = useState(false);
+  const [invInfo, setInvInfo] = useState(null);
+
   const [newOrden, setNewOrden] = useState({
     titulo: "",
     descripcion: "",
@@ -43,9 +53,16 @@ const OrdenesTrabajo = () => {
     id_empleado: "",
     fecha_limite: "",
     tipo_orden: "General",
+
+    // movimiento
     id_lote: "",
     cantidad: 0,
     nueva_ubicacion: "",
+
+    // ✅ NUEVOS
+    id_sector_destino: "",
+    id_maquinaria: "",
+
     id_solicitud_origen: null
   });
 
@@ -59,37 +76,24 @@ const OrdenesTrabajo = () => {
   });
 
   useEffect(() => {
-    // =========================================================
-    // 1) CONTEXTO DE USUARIO (ROL / DEPÓSITO / PERMISOS)
-    // =========================================================
     const rol = (sessionStorage.getItem("user_rol") || sessionStorage.getItem("rol_nombre") || "").trim();
     const depId = sessionStorage.getItem("user_deposito_id") || "";
 
     const permisosStr = sessionStorage.getItem("user_permissions");
     const permisos = permisosStr ? JSON.parse(permisosStr) : [];
-
     const roleLower = rol.toLowerCase();
 
-    // Admin global
     const esAdminGlobal = roleLower === "master_admin" || roleLower === "admin";
-
-    // Puede gestionar órdenes (crear/editar/borrar/asignar)
     const puedeGestionarOrdenes = esAdminGlobal || permisos.includes("gestion_ordenes");
-
-    // (Opcional) Permiso específico para ver personal
     const puedeVerPersonal = esAdminGlobal || permisos.includes("ver_personal") || permisos.includes("gestion_personal");
 
     setRolUser(rol);
     setUserDepositoId(depId);
     setCanManage(puedeGestionarOrdenes);
 
-    // =========================================================
-    // 2) CARGAS INICIALES
-    // =========================================================
     loadOrdenes();
     loadRecursos();
 
-    // 👇 Evitar 403 en Chofer
     if (puedeGestionarOrdenes || puedeVerPersonal) {
       loadEmpleados();
     }
@@ -106,10 +110,13 @@ const OrdenesTrabajo = () => {
     // eslint-disable-next-line
   }, [location.search, ordenes]);
 
-  // ✅ Crear desde Solicitud (mantengo tu lógica, sin romper)
+  // Crear desde Solicitud (LÓGICA ACTUALIZADA PARA OBS)
   useEffect(() => {
     if (location.state?.crearDesdeSolicitud && location.state?.solicitud) {
       const sol = location.state.solicitud;
+
+      // ✅ Capturamos la observación correctamente
+      const obsReal = sol.observacion || sol.obs || "Ninguna";
 
       let descripcionGenerada = "";
       if (sol.items && Array.isArray(sol.items) && sol.items.length > 0) {
@@ -120,12 +127,12 @@ const OrdenesTrabajo = () => {
         descripcionGenerada =
           `Solicitud #${sol.id_solicitud} de ${sol.deposito_solicitante}:\n\n` +
           `Materiales requeridos:\n${listaItems}\n\n` +
-          `Obs: ${sol.observacion || "Ninguna"}`;
+          `Obs: ${obsReal}`;
       } else {
         const unidad = sol.unidad || "u.";
         descripcionGenerada =
           `Solicitud de ${sol.deposito_solicitante}: ${sol.cantidad} ${unidad} de ${sol.material}.\n\n` +
-          `Obs: ${sol.observacion || "Ninguna"}`;
+          `Obs: ${obsReal}`;
       }
 
       setNewOrden((prev) => ({
@@ -142,21 +149,6 @@ const OrdenesTrabajo = () => {
       setStep(1);
     }
   }, [location.state]);
-
-  useEffect(() => {
-    if (showModalNew && newOrden.tipo_orden === "Movimiento") {
-      const fetchInventario = async () => {
-        try {
-          const data = await apiFetch(`${API_BASE_URL}/api/recursos/inventario-local`);
-          setInventario(data || []);
-        } catch (e) {
-          console.error(e);
-        }
-      };
-      fetchInventario();
-    }
-    // eslint-disable-next-line
-  }, [newOrden.tipo_orden, showModalNew]);
 
   const loadOrdenes = async () => {
     try {
@@ -197,6 +189,93 @@ const OrdenesTrabajo = () => {
     }
   };
 
+  const isMaster = useMemo(() => (rolUser || "").trim().toLowerCase() === "master_admin", [rolUser]);
+
+  // ✅ Cargar recursos de movimiento según depósito
+  const fetchMovimientoRecursos = async (depositoId) => {
+    try {
+      const qs = depositoId ? `?deposito_id=${depositoId}` : "";
+      const [inv, secs, maqs] = await Promise.all([
+        apiFetch(`${API_BASE_URL}/api/recursos/inventario-local${qs}`),
+        apiFetch(`${API_BASE_URL}/api/recursos/sectores${qs}`),
+        apiFetch(`${API_BASE_URL}/api/recursos/maquinaria${qs}`),
+      ]);
+      setInventario(inv || []);
+      setSectores(secs || []);
+      setMaquinarias(maqs || []);
+    } catch (e) {
+      console.error(e);
+      setInventario([]);
+      setSectores([]);
+      setMaquinarias([]);
+    }
+  };
+
+  // ✅ cuando abro modal y tipo Movimiento: cargar inventario/sectores/maquinaria
+  useEffect(() => {
+    if (!showModalNew) return;
+
+    if (newOrden.tipo_orden === "Movimiento") {
+      if (isMaster) {
+        if (!newOrden.id_deposito) {
+          // Master debe elegir depósito primero
+          setInventario([]);
+          setSectores([]);
+          setMaquinarias([]);
+          return;
+        }
+        fetchMovimientoRecursos(newOrden.id_deposito);
+      } else {
+        fetchMovimientoRecursos(null);
+      }
+    }
+    // eslint-disable-next-line
+  }, [showModalNew, newOrden.tipo_orden, newOrden.id_deposito, isMaster]);
+
+  const selectedItem = useMemo(() => {
+    if (!newOrden.id_lote) return null;
+    return (inventario || []).find((x) => String(x.lote_id) === String(newOrden.id_lote)) || null;
+  }, [inventario, newOrden.id_lote]);
+
+  const openInvInfo = async () => {
+    if (!selectedItem?.id_inventario) return;
+    setShowInvInfo(true);
+    setInvInfo(null);
+    setInvInfoLoading(true);
+    try {
+      const data = await apiFetch(`${API_BASE_URL}/api/recursos/inventario-detalle/${selectedItem.id_inventario}`);
+      setInvInfo(data || null);
+    } catch (e) {
+      alert(e?.message || "No se pudo cargar el detalle del lote");
+    } finally {
+      setInvInfoLoading(false);
+    }
+  };
+
+  const resetNewOrden = () => {
+    setStep(1);
+    setNewOrden({
+      titulo: "",
+      descripcion: "",
+      prioridad: "Media",
+      id_deposito: "",
+      id_empleado: "",
+      fecha_limite: "",
+      tipo_orden: "General",
+
+      id_lote: "",
+      cantidad: 0,
+      nueva_ubicacion: "",
+      id_sector_destino: "",
+      id_maquinaria: "",
+
+      id_solicitud_origen: null
+    });
+    setInventario([]);
+    setSectores([]);
+    setMaquinarias([]);
+  };
+
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
 
@@ -206,28 +285,34 @@ const OrdenesTrabajo = () => {
       return;
     }
 
+    // ✅ validaciones mínimas seguras para Movimiento
+    if (newOrden.tipo_orden === "Movimiento") {
+      if (!newOrden.id_lote) return alert("Seleccioná un lote.");
+      const qty = Number(newOrden.cantidad);
+      if (!qty || qty <= 0) return alert("Cantidad inválida.");
+      if (!newOrden.id_sector_destino) return alert("Seleccioná un sector destino.");
+      if (!newOrden.id_maquinaria) return alert("Seleccioná una maquinaria.");
+    }
+
     try {
+      // Nos aseguramos de enviar la fecha limite
       const ordenPayload = { ...newOrden, id_empleado: null };
 
-      // ✅ FIX: si creás desde endpoint especial, mandamos también OBS y PRIORIDAD
-      // (si tu backend ignora campos extra, no se rompe)
       if (newOrden.id_solicitud_origen) {
         await apiFetch(`${API_BASE_URL}/api/ordenes/crear-desde-solicitud`, {
           method: "POST",
           body: JSON.stringify({
             id_solicitud: newOrden.id_solicitud_origen,
             id_empleado: null,
-
-            // ✅ extras seguros:
             titulo: newOrden.titulo,
             descripcion: newOrden.descripcion,
             prioridad: newOrden.prioridad,
-            fecha_limite: newOrden.fecha_limite || null,
+            fecha_limite: newOrden.fecha_limite || null, // ✅ Se envía la fecha límite
             tipo_orden: newOrden.tipo_orden
           })
         });
       } else {
-        if (rolUser !== "Master_Admin") delete ordenPayload.id_deposito;
+        if (!isMaster) delete ordenPayload.id_deposito;
 
         await apiFetch(`${API_BASE_URL}/api/ordenes`, {
           method: "POST",
@@ -236,26 +321,11 @@ const OrdenesTrabajo = () => {
       }
 
       setShowModalNew(false);
-      setStep(1);
-
-      setNewOrden({
-        titulo: "",
-        descripcion: "",
-        prioridad: "Media",
-        id_deposito: "",
-        id_empleado: "",
-        fecha_limite: "",
-        tipo_orden: "General",
-        id_lote: "",
-        cantidad: 0,
-        nueva_ubicacion: "",
-        id_solicitud_origen: null
-      });
-
+      resetNewOrden();
       loadOrdenes();
       alert("✅ Orden creada.");
     } catch (err) {
-      alert("Error: " + err.message);
+      alert("Error: " + (err?.message || "No se pudo crear la orden"));
     }
   };
 
@@ -284,7 +354,7 @@ const OrdenesTrabajo = () => {
       setShowModalEdit(false);
       loadOrdenes();
     } catch (err) {
-      alert("Error: " + err.message);
+      alert("Error: " + (err?.message || "No se pudo editar"));
     }
   };
 
@@ -313,21 +383,39 @@ const OrdenesTrabajo = () => {
         setNuevoMensaje("");
       }
     } catch (e) {
-      alert("Error: " + e.message);
+      alert("Error: " + (e?.message || "No se pudo enviar avance"));
     }
   };
 
+  // ✅ NUEVA LÓGICA DE FINALIZACIÓN CON CONTROL DE TIEMPO
   const handleFinalizarTarea = async () => {
-    if (!window.confirm("¿Confirmar que la tarea está terminada?")) return;
+    // 1. Verificamos si tiene fecha límite y si ya pasó
+    let estadoFinal = "Completada";
+    let mensajeConfirm = "¿Confirmar que la tarea está terminada?";
+
+    if (selectedOrden.fecha_limite) {
+      const ahora = new Date();
+      const limite = new Date(selectedOrden.fecha_limite);
+      
+      // Si ahora es mayor al límite, está fuera de tiempo
+      if (ahora > limite) {
+        estadoFinal = "Fuera de Tiempo";
+        mensajeConfirm = "⚠️ El tiempo límite ha expirado. ¿Deseas finalizar la tarea como 'Fuera de Tiempo'?";
+      }
+    }
+
+    if (!window.confirm(mensajeConfirm)) return;
+
     try {
       await apiFetch(`${API_BASE_URL}/api/ordenes/${selectedOrden.id}`, {
         method: "PUT",
-        body: JSON.stringify({ nuevo_estado: "Completada" })
+        body: JSON.stringify({ nuevo_estado: estadoFinal })
       });
       setShowModalUpdate(false);
       loadOrdenes();
     } catch (e) {
       console.error(e);
+      alert("Error al finalizar: " + e.message);
     }
   };
 
@@ -337,7 +425,7 @@ const OrdenesTrabajo = () => {
       await apiFetch(`${API_BASE_URL}/api/ordenes/${id}`, { method: "DELETE" });
       setOrdenes(ordenes.filter((o) => o.id !== id));
     } catch (error) {
-      alert(error.message);
+      alert(error?.message || "No se pudo enviar a papelera");
     }
   };
 
@@ -347,7 +435,7 @@ const OrdenesTrabajo = () => {
       await apiFetch(`${API_BASE_URL}/api/ordenes/${id}/perma`, { method: "DELETE" });
       setOrdenes(ordenes.filter((o) => o.id !== id));
     } catch (error) {
-      alert(error.message);
+      alert(error?.message || "No se pudo eliminar");
     }
   };
 
@@ -388,20 +476,30 @@ const OrdenesTrabajo = () => {
       <div className="ordenes-grid">
         {ordenes.map((orden) => {
           const isCompleted = ["Aprobada", "Completada", "Finalizada"].includes(orden.estado);
-          const isExpired = orden.estado === "Fin de tiempo limite";
+          const isLate = orden.estado === "Fuera de Tiempo"; // ✅ Detectamos si se entregó tarde
+          const isExpired = orden.estado === "Fin de tiempo limite"; // ✅ Detectamos si el cron job la venció
+          
           let estadoClase = orden.estado.toLowerCase().replace(/ /g, "-");
           let estadoTexto = orden.estado;
+
           if (isCompleted) {
             estadoClase = "completada";
             estadoTexto = "Completada";
           } else if (isExpired) {
             estadoTexto = "TIEMPO AGOTADO";
+          } else if (isLate) {
+            estadoClase = "vencida"; // Usará CSS de alerta/rojo
+            estadoTexto = "FUERA DE TIEMPO";
           }
 
           return (
             <div key={orden.id} className={`orden-card priority-${orden.prioridad.toLowerCase()}`}>
               <div className="orden-header">
-                <span className={`badge-estado ${estadoClase}`}>{estadoTexto}</span>
+                {/* Badge de estado dinámico */}
+                <span className={`badge-estado ${estadoClase}`} 
+                      style={isLate ? { backgroundColor: "#ef4444", color: "white" } : {}}>
+                  {estadoTexto}
+                </span>
                 <span className="orden-date">{orden.fecha_inicio}</span>
               </div>
 
@@ -433,7 +531,16 @@ const OrdenesTrabajo = () => {
                   <div style={{ fontWeight: "bold", display: "flex", alignItems: "center", gap: "5px" }}>
                     <Box size={14} /> Mover {orden.cantidad_mov}u
                   </div>
-                  <div>A: {orden.nueva_ubicacion}</div>
+                  <div>
+                    A:{" "}
+                    {orden.sector_destino_codigo
+                      ? `${orden.sector_destino_codigo} - ${orden.sector_destino_nombre || ""}`
+                      : "—"}
+                    {orden.nueva_ubicacion ? ` (${orden.nueva_ubicacion})` : ""}
+                  </div>
+                  <div>
+                    Maquinaria: {orden.maquinaria_nombre ? `${orden.maquinaria_nombre}${orden.maquinaria_tipo ? ` (${orden.maquinaria_tipo})` : ""}` : "—"}
+                  </div>
                 </div>
               )}
 
@@ -441,7 +548,8 @@ const OrdenesTrabajo = () => {
                 <div
                   style={{
                     fontSize: "0.85rem",
-                    color: isExpired ? "#991b1b" : "#e11d48",
+                    // Si está vencida o entregada tarde, rojo oscuro. Si no, rojo suave
+                    color: (isExpired || isLate) ? "#991b1b" : "#e11d48",
                     marginBottom: "10px",
                     display: "flex",
                     alignItems: "center",
@@ -458,14 +566,15 @@ const OrdenesTrabajo = () => {
                   style={{
                     marginBottom: "10px",
                     fontSize: "0.9rem",
-                    color: "#059669",
+                    color: isLate ? "#b91c1c" : "#059669", // Rojo si tardó, verde si no
                     fontWeight: "bold",
                     display: "flex",
                     alignItems: "center",
                     gap: "5px"
                   }}
                 >
-                  <CheckCircle size={14} /> Tiempo: {orden.tiempo_empleado}
+                  {isLate ? <Clock size={14} /> : <CheckCircle size={14} />} 
+                  Tiempo: {orden.tiempo_empleado}
                 </div>
               )}
 
@@ -507,7 +616,7 @@ const OrdenesTrabajo = () => {
                   )
                 ) : (
                   <button className="btn-action secondary" onClick={() => openUpdateModal(orden)}>
-                    {canManage ? "Ver Bitácora" : (isCompleted || isExpired ? "Ver Bitácora" : "Avance / Finalizar")}
+                    {canManage ? "Ver Bitácora" : ((isCompleted || isExpired || isLate) ? "Ver Bitácora" : "Avance / Finalizar")}
                   </button>
                 )}
 
@@ -569,7 +678,7 @@ const OrdenesTrabajo = () => {
                       value={newOrden.descripcion}
                       onChange={(e) => setNewOrden({ ...newOrden, descripcion: e.target.value })}
                       style={{ resize: "vertical" }}
-                    ></textarea>
+                    />
                     <small style={{ color: "#aaa" }}>Tip: Puedes editar esta descripción antes de crear la orden.</small>
                   </div>
                 </div>
@@ -577,6 +686,20 @@ const OrdenesTrabajo = () => {
 
               {step === 2 && (
                 <div className="fade-in">
+                  {/* ✅ ACTUALIZADO: Input de Fecha Límite visible para TODOS los tipos de orden al principio del paso 2 */}
+                  <div className="input-group" style={{ marginBottom: "15px", borderBottom: "1px solid #eee", paddingBottom: "15px" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                      <Calendar size={16} /> Fecha Límite (Opcional)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      className="discord-select"
+                      value={newOrden.fecha_limite}
+                      onChange={(e) => setNewOrden({ ...newOrden, fecha_limite: e.target.value })}
+                    />
+                    <small style={{ color: "#888" }}>Si se deja vacío, no tendrá vencimiento.</small>
+                  </div>
+
                   {!newOrden.id_solicitud_origen && (
                     <div className="input-group" style={{ marginBottom: "15px" }}>
                       <label>Tipo de Tarea</label>
@@ -584,106 +707,56 @@ const OrdenesTrabajo = () => {
                         <button
                           type="button"
                           className={`btn-status ${newOrden.tipo_orden === "General" ? "btn-primary" : ""}`}
-                          onClick={() => setNewOrden({ ...newOrden, tipo_orden: "General" })}
+                          onClick={() =>
+                            setNewOrden({
+                              ...newOrden,
+                              tipo_orden: "General",
+                              // reset movimiento
+                              id_lote: "",
+                              cantidad: 0,
+                              nueva_ubicacion: "",
+                              id_sector_destino: "",
+                              id_maquinaria: ""
+                            })
+                          }
                         >
                           General
                         </button>
                         <button
                           type="button"
                           className={`btn-status ${newOrden.tipo_orden === "Movimiento" ? "btn-primary" : ""}`}
-                          onClick={() => setNewOrden({ ...newOrden, tipo_orden: "Movimiento" })}
+                          onClick={() =>
+                            setNewOrden({
+                              ...newOrden,
+                              tipo_orden: "Movimiento",
+                              prioridad: "Media", // no molesta
+                            })
+                          }
                         >
-                          <ArrowRightLeft size={14} style={{ marginRight: 5 }} /> Movimiento Local
+                          <ArrowRightLeft size={14} style={{ marginRight: 5 }} /> Movimiento Interno
                         </button>
                       </div>
                     </div>
                   )}
 
-                  {newOrden.tipo_orden === "Movimiento" ? (
-                    <div
-                      style={{
-                        background: "#f8fafc",
-                        padding: "10px",
-                        borderRadius: "8px",
-                        border: "1px solid #e2e8f0",
-                        marginBottom: "15px"
-                      }}
-                    >
-                      <div className="input-group">
-                        <label>Material / Lote a Mover</label>
-                        <select
-                          className="discord-select"
-                          value={newOrden.id_lote}
-                          onChange={(e) => setNewOrden({ ...newOrden, id_lote: e.target.value })}
-                          required
-                        >
-                          <option value="">-- Seleccionar Material del Stock --</option>
-                          {inventario.map((item) => (
-                            <option key={item.lote_id} value={item.lote_id}>
-                              {item.material} (Lote: {item.lote_id}) - Disp: {item.cantidad} {item.unidad}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="row-2" style={{ display: "flex", gap: "10px" }}>
-                        <div className="input-group">
-                          <label>Cantidad</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            required
-                            value={newOrden.cantidad}
-                            onChange={(e) => setNewOrden({ ...newOrden, cantidad: parseFloat(e.target.value) })}
-                          />
-                        </div>
-                        <div className="input-group">
-                          <label>Nueva Ubicación (Sección)</label>
-                          <input
-                            type="text"
-                            placeholder="Ej: Pasillo B, Estante 3"
-                            required
-                            value={newOrden.nueva_ubicacion}
-                            onChange={(e) => setNewOrden({ ...newOrden, nueva_ubicacion: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="input-group">
-                        <label>Prioridad</label>
-                        <select
-                          className="discord-select"
-                          value={newOrden.prioridad}
-                          onChange={(e) => setNewOrden({ ...newOrden, prioridad: e.target.value })}
-                        >
-                          <option value="Baja">🟢 Baja</option>
-                          <option value="Media">🟡 Media</option>
-                          <option value="Alta">🔴 Alta</option>
-                        </select>
-                      </div>
-
-                      <div className="input-group">
-                        <label>Fecha Límite (Opcional)</label>
-                        <input
-                          type="datetime-local"
-                          className="discord-select"
-                          value={newOrden.fecha_limite}
-                          onChange={(e) => setNewOrden({ ...newOrden, fecha_limite: e.target.value })}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {rolUser === "Master_Admin" ? (
-                    <div className="input-group" style={{ marginTop: "15px" }}>
+                  {/* ✅ Para Master: elegir depósito ANTES cuando es Movimiento */}
+                  {isMaster ? (
+                    <div className="input-group" style={{ marginTop: "5px" }}>
                       <label>Depósito (Master Admin)</label>
                       <select
                         className="discord-select"
                         required
                         value={newOrden.id_deposito}
-                        onChange={(e) => setNewOrden({ ...newOrden, id_deposito: e.target.value })}
+                        onChange={(e) =>
+                          setNewOrden({
+                            ...newOrden,
+                            id_deposito: e.target.value,
+                            // reset movimiento al cambiar depósito
+                            id_lote: "",
+                            id_sector_destino: "",
+                            id_maquinaria: "",
+                          })
+                        }
                       >
                         <option value="">-- Seleccionar --</option>
                         {depositos.map((d) => (
@@ -719,12 +792,190 @@ const OrdenesTrabajo = () => {
                       </p>
                     </div>
                   )}
+
+                  {newOrden.tipo_orden === "Movimiento" ? (
+                    <div
+                      style={{
+                        background: "#f8fafc",
+                        padding: "10px",
+                        borderRadius: "8px",
+                        border: "1px solid #e2e8f0",
+                        marginBottom: "15px",
+                        marginTop: "12px"
+                      }}
+                    >
+                      <div className="input-group">
+                        <label>Material / Lote a Mover</label>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <select
+                            className="discord-select"
+                            value={newOrden.id_lote}
+                            onChange={(e) =>
+                              setNewOrden({
+                                ...newOrden,
+                                id_lote: e.target.value,
+                              })
+                            }
+                            required
+                            style={{ flex: 1 }}
+                            disabled={isMaster && !newOrden.id_deposito}
+                          >
+                            <option value="">
+                              {isMaster && !newOrden.id_deposito
+                                ? "-- Elegí depósito primero --"
+                                : "-- Seleccionar del stock --"}
+                            </option>
+                            {(inventario || []).map((item) => (
+                              <option key={item.id_inventario} value={item.lote_id}>
+                                {item.material} — Lote {item.lote_codigo || item.lote_id} — Disp: {item.cantidad} {item.unidad}
+                                {item.sector_codigo ? ` — Sector: ${item.sector_codigo}` : ""}
+                              </option>
+                            ))}
+                          </select>
+
+                          <button
+                            type="button"
+                            className="btn-icon-simple"
+                            onClick={openInvInfo}
+                            title="Ver detalles del lote"
+                            disabled={!selectedItem?.id_inventario}
+                            style={{ width: 42, height: 42, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                          >
+                            <Info size={16} />
+                          </button>
+                        </div>
+
+                        {/* mini resumen bonito */}
+                        {selectedItem && (
+                          <div style={{ marginTop: 8, fontSize: "0.85rem", color: "#334155" }}>
+                            <b>{selectedItem.material}</b> • Lote <span style={{ fontFamily: "monospace" }}>{selectedItem.lote_codigo || selectedItem.lote_id}</span>{" "}
+                            • Disponible: <b>{selectedItem.cantidad} {selectedItem.unidad}</b>{" "}
+                            {selectedItem.sector_codigo ? `• Sector actual: ${selectedItem.sector_codigo}` : ""}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="row-2" style={{ display: "flex", gap: "10px" }}>
+                        <div className="input-group" style={{ flex: 1 }}>
+                          <label>Cantidad a mover</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            required
+                            value={newOrden.cantidad}
+                            onChange={(e) => setNewOrden({ ...newOrden, cantidad: parseFloat(e.target.value || "0") })}
+                          />
+                          {selectedItem?.unidad && (
+                            <small style={{ color: "#64748b" }}>Unidad: {selectedItem.unidad}</small>
+                          )}
+                        </div>
+
+                        <div className="input-group" style={{ flex: 1 }}>
+                          <label>Sector destino</label>
+                          <select
+                            className="discord-select"
+                            required
+                            value={newOrden.id_sector_destino}
+                            onChange={(e) => setNewOrden({ ...newOrden, id_sector_destino: e.target.value })}
+                            disabled={isMaster && !newOrden.id_deposito}
+                          >
+                            <option value="">-- Seleccionar --</option>
+                            {(sectores || []).map((s) => (
+                              <option key={s.id_sector} value={s.id_sector}>
+                                {s.codigo} - {s.nombre}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="row-2" style={{ display: "flex", gap: "10px" }}>
+                        <div className="input-group" style={{ flex: 1 }}>
+                          <label>Maquinaria</label>
+                          <select
+                            className="discord-select"
+                            required
+                            value={newOrden.id_maquinaria}
+                            onChange={(e) => setNewOrden({ ...newOrden, id_maquinaria: e.target.value })}
+                            disabled={isMaster && !newOrden.id_deposito}
+                          >
+                            <option value="">-- Seleccionar --</option>
+                            {(maquinarias || []).map((m) => (
+                              <option key={m.id_maquinaria} value={m.id_maquinaria}>
+                                {m.nombre}{m.tipo ? ` (${m.tipo})` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="input-group" style={{ flex: 1 }}>
+                          <label>Detalle ubicación (Opcional)</label>
+                          <input
+                            type="text"
+                            placeholder="Ej: Estante 3, Posición 2"
+                            value={newOrden.nueva_ubicacion}
+                            onChange={(e) => setNewOrden({ ...newOrden, nueva_ubicacion: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="input-group">
+                        <label>Prioridad</label>
+                        <select
+                          className="discord-select"
+                          value={newOrden.prioridad}
+                          onChange={(e) => setNewOrden({ ...newOrden, prioridad: e.target.value })}
+                        >
+                          <option value="Baja">🟢 Baja</option>
+                          <option value="Media">🟡 Media</option>
+                          <option value="Alta">🔴 Alta</option>
+                        </select>
+                      </div>
+
+                      {/* para General: el depósito master ya lo eligió arriba */}
+                      {!isMaster && (
+                        <div
+                          className="info-box"
+                          style={{
+                            background: "#f0f9ff",
+                            padding: "10px",
+                            borderRadius: "6px",
+                            marginTop: "10px",
+                            border: "1px solid #bae6fd"
+                          }}
+                        >
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: "0.85rem",
+                              color: "#0369a1",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "5px"
+                            }}
+                          >
+                            <MapPin size={14} />
+                            <b>Depósito:</b> Se asignará automáticamente a tu sucursal.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
 
               <div className="wizard-buttons" style={{ marginTop: "20px" }}>
                 {step === 1 ? (
-                  <button type="button" className="btn-status btn-danger" onClick={() => setShowModalNew(false)}>
+                  <button
+                    type="button"
+                    className="btn-status btn-danger"
+                    onClick={() => {
+                      setShowModalNew(false);
+                      resetNewOrden();
+                    }}
+                  >
                     Cancelar
                   </button>
                 ) : (
@@ -745,6 +996,47 @@ const OrdenesTrabajo = () => {
               </div>
             </form>
           </div>
+
+          {/* ✅ Modal de info inventario */}
+          {showInvInfo && (
+            <div className="modal-backdrop" onClick={() => setShowInvInfo(false)}>
+              <div className="discord-card" style={{ width: 520 }} onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header" style={{ borderBottom: "1px solid #eee", paddingBottom: 10 }}>
+                  <h2 style={{ margin: 0, fontSize: "1.1rem" }}>Detalle del Lote</h2>
+                  <small style={{ color: "#64748b" }}>Información del stock y ubicación</small>
+                </div>
+
+                <div style={{ paddingTop: 12 }}>
+                  {invInfoLoading ? (
+                    <div style={{ padding: 20, color: "#64748b" }}>Cargando...</div>
+                  ) : !invInfo ? (
+                    <div style={{ padding: 20, color: "#64748b" }}>Sin datos.</div>
+                  ) : (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      <div><b>Material:</b> {invInfo.material || "—"}</div>
+                      <div><b>Código material:</b> <span style={{ fontFamily: "monospace" }}>{invInfo.codigo_material || "—"}</span></div>
+                      <div><b>Lote:</b> <span style={{ fontFamily: "monospace" }}>{invInfo.lote_codigo || invInfo.id_lote}</span></div>
+                      <div><b>Estado:</b> {invInfo.estado || "Disponible"}</div>
+                      <div><b>Disponible:</b> {invInfo.cantidad_disponible} {invInfo.unidad}</div>
+                      <div>
+                        <b>Sector actual:</b>{" "}
+                        {invInfo.sector_codigo ? `${invInfo.sector_codigo} - ${invInfo.sector_nombre || ""}` : "—"}
+                        {invInfo.ubicacion_detalle ? ` (${invInfo.ubicacion_detalle})` : ""}
+                      </div>
+                      <div><b>Fecha ingreso:</b> {invInfo.fecha_ingreso || "—"}</div>
+                      <div style={{ color: "#64748b" }}><b>Obs lote:</b> {invInfo.obs_lote || "—"}</div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
+                  <button className="btn-status btn-danger" onClick={() => setShowInvInfo(false)}>
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -854,16 +1146,7 @@ const OrdenesTrabajo = () => {
               }}
             >
               {avancesList.length === 0 ? (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    height: "100%",
-                    color: "#ccc"
-                  }}
-                >
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: "#ccc" }}>
                   <Wrench size={40} style={{ opacity: 0.2, marginBottom: 10 }} />
                   <p>Sin avances registrados.</p>
                 </div>
@@ -884,6 +1167,7 @@ const OrdenesTrabajo = () => {
               selectedOrden.estado !== "Completada" &&
               selectedOrden.estado !== "Finalizada" &&
               selectedOrden.estado !== "Fin de tiempo limite" &&
+              selectedOrden.estado !== "Fuera de Tiempo" &&
               !canManage && (
                 <div style={{ display: "flex", gap: "8px", marginBottom: "15px" }}>
                   <input
@@ -910,6 +1194,7 @@ const OrdenesTrabajo = () => {
                 selectedOrden.estado !== "Completada" &&
                 selectedOrden.estado !== "Finalizada" &&
                 selectedOrden.estado !== "Fin de tiempo limite" &&
+                selectedOrden.estado !== "Fuera de Tiempo" &&
                 !canManage && (
                   <button className="btn-save" style={{ background: "#23a559" }} onClick={handleFinalizarTarea}>
                     <CheckCircle size={16} style={{ marginRight: 5 }} /> Finalizar Tarea

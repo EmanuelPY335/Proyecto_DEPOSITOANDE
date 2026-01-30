@@ -19,178 +19,217 @@ export const generarValePDF = (vale, isPreview = false) => {
     v === null || v === undefined || v === "" ? fallback : v;
 
   const fechaDoc = safe(vale.fecha, new Date().toLocaleDateString());
+  const numero = safe(vale.id_vale || vale.id, "-");
+  
+  // Estado
   const estadoDoc = safe(vale.estado, esInterno ? "Registrado" : "Pendiente");
 
-  // ---------------------------------------------------------
-  // Encabezado
-  // ---------------------------------------------------------
-  doc.setFontSize(18);
-  doc.setTextColor(0);
-
+  // ==========================================================================
+  // DISEÑO ESPECÍFICO PARA MOVIMIENTO INTERNO (TIPO IMAGEN REFERENCIA)
+  // ==========================================================================
   if (esInterno) {
-    doc.text("SISDEPO - Comprobante de Movimiento Interno", 14, 20);
-  } else {
-    doc.text("SISDEPO - Vale de Traslado", 14, 20);
-  }
+    // 1. Título Principal
+    doc.setFontSize(18);
+    doc.setTextColor(0);
+    doc.text("SISDEPO - Comprobante de Movimiento Interno", 14, 22);
 
-  doc.setFontSize(12);
+    // 2. Subtítulo (Número y Fecha y Estado)
+    doc.setFontSize(11);
+    doc.setTextColor(0);
+    
+    // Izquierda
+    doc.text(`Movimiento N°: ${numero}`, 14, 32);
+    doc.text(`Fecha: ${fechaDoc}`, 14, 38);
 
-  const numero = safe(vale.id_vale || vale.id, "-");
-  doc.text(`${esInterno ? "Movimiento" : "Vale"} N°: ${numero}`, 14, 30);
-  doc.text(`Fecha: ${fechaDoc}`, 14, 36);
+    // Derecha (Estado)
+    doc.text(`Estado: ${estadoDoc}`, 150, 32);
 
-  // Estado (a la derecha)
-  doc.text(`Estado: ${estadoDoc}`, 150, 30);
+    // 3. CAJA GRIS DE INFORMACIÓN (Header Datos)
+    // Coordenadas: x=14, y=45
+    doc.setFillColor(240, 240, 240); // Gris muy suave
+    doc.rect(14, 45, 182, 35, "F"); // Caja rellena
 
-  // ---------------------------------------------------------
-  // Bloque gris con datos principales
-  // ---------------------------------------------------------
-  doc.setFillColor(240, 240, 240);
-  doc.rect(14, 42, 182, esInterno ? 33 : 25, "F");
-  doc.setFontSize(10);
-  doc.setTextColor(50);
+    doc.setFontSize(10);
+    doc.setTextColor(60); // Gris oscuro para etiquetas
 
-  // ---------------------------------------------------------
-  // Datos por tipo
-  // ---------------------------------------------------------
-  if (esInterno) {
-    const deposito = safe(vale.deposito, "Depósito");
-    const responsable = safe(vale.responsable, safe(vale.chofer, "Sin asignar"));
-    const sectorOrigen = safe(vale.sector_origen, safe(vale.ubicacion_anterior, "N/D"));
-    const sectorDestino = safe(vale.sector_destino, safe(vale.nueva_ubicacion, "N/D"));
+    const deposito = safe(vale.deposito, "Depósito Central");
+    const responsable = safe(vale.responsable, "Sin Asignar");
+    const maquinaria = safe(vale.maquinaria || vale.vehiculo, "N/A"); // Mapeamos vehículo como maquinaria
+    const sectorOrg = safe(vale.sector_origen, "N/D");
+    const sectorDst = safe(vale.sector_destino, "N/D");
 
-    doc.text(`Depósito: ${deposito}`, 20, 50);
-    doc.text(`Responsable: ${responsable}`, 20, 60);
+    // -- Columna Izquierda --
+    doc.text("Depósito:", 18, 55);
+    doc.setTextColor(0); // Negro para valor
+    doc.text(deposito, 45, 55);
 
-    doc.text(`Sector Origen: ${sectorOrigen}`, 100, 50);
-    doc.text(`Sector Destino: ${sectorDestino}`, 100, 60);
+    doc.setTextColor(60);
+    doc.text("Responsable:", 18, 63);
+    doc.setTextColor(0);
+    doc.text(responsable, 45, 63);
 
+    // Maquinaria (Resaltada como en la foto)
+    doc.setTextColor(0);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14); // Más grande
+    doc.text(`Maquinaria: ${maquinaria}`, 18, 74);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+
+    // -- Columna Derecha --
+    doc.setTextColor(60);
+    doc.text("Sector Origen:", 110, 55);
+    doc.setTextColor(0);
+    doc.setFont("helvetica", "bold"); // Resaltar sector
+    doc.text(sectorOrg, 140, 55);
+    doc.setFont("helvetica", "normal");
+
+    doc.setTextColor(60);
+    doc.text("Sector Destino:", 110, 63);
+    doc.setTextColor(0);
+    doc.setFont("helvetica", "bold"); // Resaltar sector
+    doc.text(sectorDst, 140, 63);
+    doc.setFont("helvetica", "normal");
+
+    // 4. TABLA DE ITEMS (Azul como referencia)
+    const items = vale.detalles || vale.items || [];
+    
+    // Columnas exactas de la imagen: Material | Lote | Cantidad | Sector Destino
+    const tableBody = items.map(item => {
+        const mat = safe(item.material, "Material N/D");
+        const lote = safe(item.lote || item.id_lote, "-");
+        const cant = `${safe(item.cantidad, 0)} ${safe(item.unidad, "u.")}`;
+        // A veces el item tiene un destino específico, sino usa el general del vale
+        const dest = item.sector_destino || item.nueva_ubicacion || sectorDst; 
+
+        return [mat, lote, cant, dest];
+    });
+
+    doc.autoTable({
+        startY: 85,
+        head: [["Material", "Lote", "Cantidad", "Sector Destino"]],
+        body: tableBody,
+        theme: "grid",
+        headStyles: {
+            fillColor: [47, 128, 237], // Azul brillante (tipo Google/Material Design)
+            textColor: 255,
+            fontStyle: "bold",
+            halign: "left"
+        },
+        styles: {
+            fontSize: 10,
+            cellPadding: 5,
+            valign: "middle"
+        },
+        columnStyles: {
+            0: { cellWidth: 'auto' }, // Material expande
+            1: { cellWidth: 40 },
+            2: { cellWidth: 30, halign: "center", fontStyle: "bold" },
+            3: { cellWidth: 40, fontStyle: "bold" } // Sector destino resaltado
+        }
+    });
+
+    // 5. Observaciones (si existen) al pie
     const obs = (vale.observaciones || vale.obs || "").trim();
-    if (obs) doc.text(`Obs: ${obs}`, 20, 70);
-  } else {
-    doc.text(`Origen: ${safe(vale.origen, "Depósito Central")}`, 20, 50);
+    if (obs) {
+        const finalY = doc.lastAutoTable.finalY + 10;
+        doc.setFontSize(9);
+        doc.setTextColor(100);
+        doc.text(`Observaciones: ${obs}`, 14, finalY);
+    }
 
+  } 
+  // ==========================================================================
+  // DISEÑO PARA RUTA EXTERNA (Mantiene el estilo anterior funcional)
+  // ==========================================================================
+  else {
+    doc.setFontSize(18);
+    doc.setTextColor(0);
+    doc.text("SISDEPO - Vale de Traslado", 14, 20);
+
+    doc.setFontSize(12);
+    doc.text(`Vale N°: ${numero}`, 14, 30);
+    doc.text(`Fecha: ${fechaDoc}`, 14, 36);
+    doc.text(`Estado: ${estadoDoc}`, 150, 30);
+
+    // Bloque Gris
+    doc.setFillColor(240, 240, 240);
+    doc.rect(14, 42, 182, 25, "F");
+    doc.setFontSize(10);
+    doc.setTextColor(50);
+
+    doc.text(`Origen: ${safe(vale.origen, "Depósito Central")}`, 20, 50);
     const esMultiparada = Array.isArray(vale.paradas) && vale.paradas.length > 1;
     doc.text(`Destino: ${esMultiparada ? "Multiparada" : safe(vale.destino, "Sin definir")}`, 100, 50);
-
     doc.text(`Chofer: ${safe(vale.chofer, "Sin asignar")}`, 20, 60);
     doc.text(`Vehículo: ${safe(vale.vehiculo, "Sin asignar")}`, 100, 60);
-  }
 
-  doc.setTextColor(0);
+    doc.setTextColor(0);
 
-  /// ---------------------------------------------------------
-// Tabla(s)
-// ---------------------------------------------------------
-// ---------------------------------------------------------
-// TABLA MULTIPARADA (FORMATO CORRECTO)
-// ---------------------------------------------------------
-if (!esInterno && Array.isArray(vale.paradas) && vale.paradas.length) {
-  const startY = 75;
+    // Tabla Multiparada o Simple
+    if (Array.isArray(vale.paradas) && vale.paradas.length) {
+      const startY = 75;
+      const head = [["Paradas", "Material", "Lote", "Cantidad"]];
+      const body = [];
 
-  const head = [["Paradas", "Material", "Lote", "Cantidad"]];
-  const body = [];
+      vale.paradas.forEach((parada) => {
+        const destino = safe(parada.destino, "Destino");
+        const items = Array.isArray(parada.items) ? parada.items : [];
+        items.forEach((it) => {
+          body.push([
+            destino,
+            safe(it.material, "N/D"),
+            safe(it.lote || it.id_lote, "N/A"),
+            `${safe(it.cantidad, 0)} ${safe(it.unidad, "u.")}`
+          ]);
+        });
+      });
 
-  vale.paradas.forEach((parada) => {
-    const destino = safe(parada.destino, "Destino");
-    const items = Array.isArray(parada.items) ? parada.items : [];
-
-    items.forEach((it) => {
-      body.push([
-        destino, // se repite
-        safe(it.material, "N/D"),
-        safe(it.lote || it.id_lote, "N/A"),
-        `${safe(it.cantidad, 0)} ${safe(it.unidad, "u.")}`
+      doc.autoTable({
+        startY,
+        head,
+        body,
+        theme: "grid",
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: "bold" },
+        styles: { fontSize: 10, cellPadding: 4, valign: "middle", overflow: "linebreak" },
+      });
+    } else {
+      const items = vale.detalles || vale.items || [];
+      const tableRows = items.map((item) => [
+          safe(item.codigo, "-"),
+          safe(item.material, "N/D"),
+          safe(item.lote || item.id_lote, "N/A"),
+          `${safe(item.cantidad, 0)} ${safe(item.unidad, "u.")}`
       ]);
-    });
-  });
 
-  doc.autoTable({
-    startY,
-    head,
-    body,
-    theme: "grid",
-    headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: "bold" },
-    styles: { fontSize: 10, cellPadding: 4, valign: "middle", overflow: "linebreak" },
-    columnStyles: {
-      0: { cellWidth: 45, fontStyle: "bold" },
-      1: { cellWidth: 85, halign: "left" },
-      2: { cellWidth: 40, fontStyle: "bold" },
-      3: { cellWidth: 25, halign: "right" }
-    }
-  });
-
-
-
-} else {
-  // ✅ Caso normal (interno o externo simple)
-  const items = vale.detalles || vale.items || [];
-
-  const tableColumn = esInterno
-    ? ["Material", "Lote", "Cantidad", "Sector Destino"]
-    : ["Código", "Material", "Lote", "Cantidad"];
-
-  const tableRows = items.map((item) => {
-    const material = safe(item.material, "N/D");
-    const lote = safe(item.lote || item.id_lote, "N/A");
-    const cantidad = `${safe(item.cantidad, 0)} ${safe(item.unidad, "u.")}`;
-
-    if (esInterno) {
-      const sectorDst = safe(
-        item.nueva_ubicacion || item.sector_destino || vale.nueva_ubicacion,
-        "N/D"
-      );
-      return [material, lote, cantidad, sectorDst];
+      doc.autoTable({
+        startY: 75,
+        head: [["Código", "Material", "Lote", "Cantidad"]],
+        body: tableRows,
+        theme: "grid",
+        headStyles: { fillColor: [59, 130, 246] },
+        styles: { fontSize: 10, cellPadding: 4 },
+        columnStyles: { 3: { halign: "right", fontStyle: "bold" } }
+      });
     }
 
-    const codigo = safe(item.codigo, "-");
-    return [codigo, material, lote, cantidad];
-  });
+    // Firmas Externa
+    const lastY = (doc.lastAutoTable && typeof doc.lastAutoTable.finalY === "number") ? doc.lastAutoTable.finalY : 75;
+    const finalY = lastY + 40;
 
-  const startY = esInterno ? 80 : 75;
+    const drawFirmas = (y) => {
+      doc.line(20, y, 80, y);
+      doc.text("Firma Responsable Almacén", 25, y + 5);
+      doc.line(120, y, 180, y);
+      doc.text("Firma Chofer", 125, y + 5);
+    };
 
-  doc.autoTable({
-    startY,
-    head: [tableColumn],
-    body: tableRows,
-    theme: "grid",
-    headStyles: { fillColor: [59, 130, 246] },
-    styles: { fontSize: 10, cellPadding: 4 },
-    columnStyles: {
-      2: { halign: "right", fontStyle: "bold" }
+    if (finalY > 270) {
+      doc.addPage();
+      drawFirmas(40);
+    } else {
+      drawFirmas(finalY);
     }
-  });
-}
-
-  // ---------------------------------------------------------
-  // Firmas (SIN startY -> no rompe nunca)
-  // ---------------------------------------------------------
-  const lastY =
-    (doc.lastAutoTable && typeof doc.lastAutoTable.finalY === "number")
-      ? doc.lastAutoTable.finalY
-      : 75; // fallback fijo seguro
-
-  const finalY = lastY + 40;
-
-  const firma1 = "Firma Responsable Almacén";
-  const firma2 = esInterno ? "Firma Responsable del Movimiento" : "Firma Chofer";
-
-  const drawFirmas = (y) => {
-    const yy = Number(y);
-    if (!Number.isFinite(yy)) return;
-
-    doc.line(20, yy, 80, yy);
-    doc.text(firma1, 25, yy + 5);
-
-    doc.line(120, yy, 180, yy);
-    doc.text(firma2, 125, yy + 5);
-  };
-
-  if (finalY > 270) {
-    doc.addPage();
-    drawFirmas(40);
-  } else {
-    drawFirmas(finalY);
   }
 
   // ---------------------------------------------------------
@@ -208,7 +247,7 @@ if (!esInterno && Array.isArray(vale.paradas) && vale.paradas.length) {
   }
 };
 
-// --- REPORTE DE GASTOS CON DEPÓSITO ---
+// --- REPORTE DE GASTOS (Se mantiene igual) ---
 export const generarReporteGastosPDF = (
   gastos,
   nombreUsuario = "Usuario",
@@ -218,14 +257,12 @@ export const generarReporteGastosPDF = (
   const doc = new jsPDF();
   const fechaGeneracion = new Date().toLocaleDateString();
 
-  // --- 1. Encabezado ---
   doc.setFontSize(18);
   doc.setTextColor(37, 99, 235);
   doc.text("SISDEPO - Reporte de Gastos", 14, 20);
 
   doc.setFontSize(10);
   doc.setTextColor(100);
-
   doc.text(`Generado por: ${nombreUsuario}`, 14, 28);
   doc.text(`Fecha de emisión: ${fechaGeneracion}`, 14, 33);
   doc.text(`Periodo: ${periodo}`, 14, 38);
@@ -234,9 +271,7 @@ export const generarReporteGastosPDF = (
   doc.text(`Depósito / Sucursal: ${nombreDeposito}`, 14, 44);
   doc.setFont("helvetica", "normal");
 
-  // --- 2. Tabla ---
   const tableColumn = ["Fecha", "Concepto", "Categoría", "Vehículo", "Monto (Gs)"];
-
   const tableRows = (gastos || []).map((g) => [
     g.fecha_iso || g.fecha,
     g.titulo + (g.descripcion ? `\n(${g.descripcion})` : ""),
@@ -250,20 +285,11 @@ export const generarReporteGastosPDF = (
     head: [tableColumn],
     body: tableRows,
     theme: "striped",
-    headStyles: {
-      fillColor: [30, 41, 59],
-      fontSize: 10,
-      fontStyle: "bold",
-    },
+    headStyles: { fillColor: [30, 41, 59], fontSize: 10, fontStyle: "bold" },
     styles: { fontSize: 9, cellPadding: 3, valign: "middle" },
-    columnStyles: {
-      0: { cellWidth: 25 },
-      1: { cellWidth: "auto" },
-      4: { halign: "right", fontStyle: "bold", cellWidth: 30 },
-    },
+    columnStyles: { 4: { halign: "right", fontStyle: "bold", cellWidth: 30 } },
   });
 
-  // --- 3. Total General ---
   const finalY = (doc.lastAutoTable?.finalY || 50) + 10;
   const total = (gastos || []).reduce((sum, g) => sum + (Number(g.monto) || 0), 0);
 
@@ -275,16 +301,6 @@ export const generarReporteGastosPDF = (
   doc.setTextColor(22, 163, 74);
   doc.setFont("helvetica", "bold");
   doc.text(`TOTAL: Gs. ${total.toLocaleString("es-PY")}`, 135, finalY + 2);
-
-  // --- 4. Pie de página ---
-  const pageCount = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.text("Sistema de Gestión de Depósito - SISDEPO", 14, 285);
-    doc.text(`Página ${i} de ${pageCount}`, 185, 285);
-  }
 
   const nombreArchivo = `Gastos_${String(nombreDeposito).replace(/ /g, "")}_${String(periodo).replace(/ /g, "")}.pdf`;
   doc.save(nombreArchivo);

@@ -21,14 +21,12 @@ const normalizeEmpleado = (raw) => {
   const ID_EMPLEADO = raw?.ID_EMPLEADO ?? raw?.id_empleado ?? raw?.ID ?? null;
   const ID_USUARIO = raw?.ID_USUARIO ?? raw?.usuario_id ?? raw?.id_usuario ?? null;
 
-  // ⚠️ id lo dejamos tal cual venga (lo usan tus PUT /estado /etc),
-  // pero garantizamos ID_EMPLEADO como fallback seguro.
   const id = raw?.id ?? raw?.ID_EMPLEADO ?? raw?.id_empleado ?? raw?.ID ?? raw?.ID_USUARIO ?? raw?.usuario_id ?? null;
 
   return {
     ...raw,
     id,
-    ID_EMPLEADO: ID_EMPLEADO ?? id, // si no viene, cae al id (modo legacy)
+    ID_EMPLEADO: ID_EMPLEADO ?? id,
     ID_USUARIO: ID_USUARIO ?? null,
     nombre,
     apellido,
@@ -60,6 +58,23 @@ const Empleados = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [ordenPendiente, setOrdenPendiente] = useState(null);
+
+  // ✅ Identidad actual (para ocultar Master_Admin salvo a sí mismo)
+  const currentUserRoleLow = useMemo(() => {
+    const r = (sessionStorage.getItem("user_rol") || sessionStorage.getItem("rol_nombre") || "").trim().toLowerCase();
+    return r;
+  }, []);
+
+  const currentUserId = useMemo(() => {
+    // intentamos varias keys comunes (no rompe nada si no existen)
+    const raw =
+      sessionStorage.getItem("user_id") ||
+      sessionStorage.getItem("id_usuario") ||
+      sessionStorage.getItem("ID_USUARIO") ||
+      sessionStorage.getItem("usuario_id") ||
+      sessionStorage.getItem("sub");
+    return toNum(raw);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -108,7 +123,7 @@ const Empleados = () => {
     }
   };
 
-  // ✅ Cargar últimas asistencias al abrir modal (con fallback de IDs)
+  // ✅ Cargar últimas asistencias al abrir modal
   useEffect(() => {
     const run = async () => {
       setAsistenciasEmpleado([]);
@@ -128,7 +143,6 @@ const Empleados = () => {
         .filter((v) => v != null);
 
       const unique = Array.from(new Set(candidates));
-
       if (!unique.length) return;
 
       setAsistenciasEmpleadoLoading(true);
@@ -137,7 +151,6 @@ const Empleados = () => {
         let found = [];
         let lastErr = null;
 
-        // probamos uno por uno hasta encontrar data
         for (const idAny of unique) {
           try {
             const res = await apiFetch(`${API}/api/asistencia/empleado/${idAny}/ultimas?limit=10`);
@@ -254,6 +267,30 @@ const Empleados = () => {
       const apellidoNorm = (e.apellido || "").toLowerCase().trim();
       if (nombreNorm === "sin" && apellidoNorm === "asignar") return false;
       if (nombreNorm === "system" && apellidoNorm === "unassigned") return false;
+
+      // ✅ OCULTAR Master_Admin (solo visible para sí mismo)
+      const empRoleLow = String(e.rol || "").trim().toLowerCase();
+      const esMasterAdmin = empRoleLow === "master_admin" || empRoleLow.includes("master_admin");
+
+      if (esMasterAdmin) {
+        // si NO soy master_admin -> ocultar siempre
+        if (currentUserRoleLow !== "master_admin") return false;
+
+        // si soy master_admin, mostrar SOLO si coincide el usuario (si tenemos ID)
+        if (currentUserId != null) {
+          const cand = [
+            e?.ID_USUARIO,
+            e?.id_usuario,
+            e?.usuario_id,
+            e?.id, // a veces id coincide con usuario
+          ]
+            .map(toNum)
+            .filter((v) => v != null);
+
+          if (!cand.includes(currentUserId)) return false;
+        }
+      }
+
       if (ordenPendiente && Number(e.ID_DEPOSITO) !== Number(ordenPendiente.deposito_id)) return false;
       if (!searchTerm) return true;
 
@@ -273,7 +310,7 @@ const Empleados = () => {
           return true;
       }
     });
-  }, [empleados, depositos, ordenPendiente, searchTerm, searchType]);
+  }, [empleados, depositos, ordenPendiente, searchTerm, searchType, currentUserRoleLow, currentUserId]);
 
   return (
     <div className="fade-in">
@@ -404,7 +441,6 @@ const Empleados = () => {
           onClose={() => setSelectedEmployee(null)}
           onSave={handleSaveEmployee}
           onToggleStatus={handleToggleStatus}
-          // ✅ props asistencia
           asistencias={asistenciasEmpleado}
           asistenciasLoading={asistenciasEmpleadoLoading}
           asistenciasError={asistenciasEmpleadoError}

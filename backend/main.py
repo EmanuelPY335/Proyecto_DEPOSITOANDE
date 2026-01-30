@@ -34,6 +34,43 @@ from db import (
 # 🔧 CONFIGURACIÓN PRINCIPAL
 # -----------------------------------------------------------------
 app = Flask(__name__)
+from werkzeug.exceptions import HTTPException
+
+ALLOWED_ORIGINS = {
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+}
+
+# CORS normal (para /api)
+CORS(
+    app,
+    resources={r"/api/*": {"origins": list(ALLOWED_ORIGINS)}},
+    supports_credentials=True,
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"]
+)
+
+# ✅ Fallback: asegura CORS incluso cuando hay error 500
+@app.after_request
+def add_cors_headers(resp):
+    origin = request.headers.get("Origin")
+    if origin in ALLOWED_ORIGINS:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Vary"] = "Origin"
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        resp.headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type"
+        resp.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
+    return resp
+
+# ✅ Para que el frontend vea el motivo real del 500 en JSON
+@app.errorhandler(Exception)
+def handle_any_error(e):
+    code = 500
+    if isinstance(e, HTTPException):
+        code = e.code
+    return jsonify({"error": str(e), "type": e.__class__.__name__}), code
 
 # --- REGISTRO DE BLUEPRINTS ---
 app.register_blueprint(ordenes_bp, url_prefix="/api")
@@ -53,20 +90,7 @@ app.register_blueprint(buzon_bp)
 app.register_blueprint(vehiculos_bp, url_prefix="/api")
 
 # --- CORS (Con soporte para React y Raspberry Pi) ---
-CORS(
-    app,
-    resources={r"/*": {
-        "origins": [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://192.168.100.*",
-            "http://192.168.0.*"
-        ]
-    }},
-    supports_credentials=True,
-    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"]
-)
+# --- CORS (Con soporte para React y Raspberry Pi) ---
 
 # --- JWT ---
 app.config["JWT_SECRET_KEY"] = "clave_super_segura_sisdepo_2025"

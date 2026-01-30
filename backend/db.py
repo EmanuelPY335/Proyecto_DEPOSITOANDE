@@ -184,23 +184,34 @@ class Inventario(db.Model):
     ID_ESTADO_INVENTARIO = db.Column(db.Integer, db.ForeignKey('estado_inventario.ID_ESTADO_INVENTARIO'), nullable=False)
     CANTIDAD_ACTUAL = db.Column(db.Float, default=0)
 
+    # ✅ NUEVO: ubicación física dentro del depósito
+    ID_SECTOR_ACTUAL = db.Column(db.Integer, db.ForeignKey('deposito_sector.ID_SECTOR'), nullable=True)
+    UBICACION_DETALLE = db.Column(db.String(80), nullable=True)  # Ej: Estante 3
+
     # Relaciones
-    # Deposito backref definido arriba
     lote = db.relationship('Lote', backref='inventarios')
-    # CAMBIO IMPORTANTE: Usamos ID_ESTADO en lugar de texto
     estado = db.relationship('EstadoInventario')
+    sector = db.relationship('DepositoSector')
 
     def to_dict(self):
+        mat = self.lote.material if (self.lote and self.lote.material) else None
         return {
             "id_inventario": self.ID_INVENTARIO,
-            "material": self.lote.material.NOMBRE,
-            "codigo": self.lote.material.CODIGO_UNICO,
+            "material": mat.NOMBRE if mat else None,
+            "codigo": mat.CODIGO_UNICO if mat else None,
             "lote_id": self.ID_LOTE,
-            "fecha_ingreso": self.lote.FECHA_INGRESO.strftime('%Y-%m-%d') if self.lote.FECHA_INGRESO else None,
-            "deposito": self.deposito.NOMBRE,
+            "fecha_ingreso": self.lote.FECHA_INGRESO.strftime('%Y-%m-%d') if (self.lote and self.lote.FECHA_INGRESO) else None,
+            "deposito": self.deposito.NOMBRE if self.deposito else None,
+            "deposito_id": self.ID_DEPOSITO,
             "cantidad": self.CANTIDAD_ACTUAL,
-            "estado": self.estado.ESTADO_INVENTARIO if self.estado else "Desconocido"
+            "estado": self.estado.ESTADO_INVENTARIO if self.estado else "Desconocido",
+
+            # ✅ NUEVO (para tu JSON esperado)
+            "sector_codigo": self.sector.CODIGO if self.sector else None,
+            "sector_nombre": self.sector.NOMBRE if self.sector else None,
+            "ubicacion_detalle": self.UBICACION_DETALLE
         }
+
 
 # ---------------------------------------------------------
 # MODELOS DE MOVIMIENTOS
@@ -311,39 +322,54 @@ class EstadoOrden(db.Model):
 class OrdenTrabajo(db.Model):
     __tablename__ = 'orden_trabajo'
     ID_ORDEN = db.Column(db.Integer, primary_key=True)
-    
-    # Relaciones
+
     ID_ESTADO_ORDEN = db.Column(db.Integer, db.ForeignKey('estado_orden.ID_ESTADO_ORDEN'), nullable=False)
     ID_DEPOSITO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
-    ID_EMPLEADO = db.Column(db.Integer, db.ForeignKey('empleado.ID_EMPLEADO'), nullable=False)
-    
-    # Datos Generales
+
+    # ✅ IMPORTANTE: vos creás órdenes sin empleado asignado
+    ID_EMPLEADO = db.Column(db.Integer, db.ForeignKey('empleado.ID_EMPLEADO'), nullable=True)
+
     TITULO = db.Column(db.String(100), nullable=False)
-    DESCRIPCION = db.Column(db.Text) 
-    PRIORIDAD = db.Column(db.String(20), default="Media") 
-    
-    FECHA_INICIO = db.Column(db.DateTime) 
-    FECHA_CIERRE = db.Column(db.DateTime) 
-    FECHA_LIMITE = db.Column(db.DateTime, nullable=True) 
+    DESCRIPCION = db.Column(db.Text)
+    PRIORIDAD = db.Column(db.String(20), default="Media")
+
+    FECHA_INICIO = db.Column(db.DateTime)
+    FECHA_CIERRE = db.Column(db.DateTime)
+    FECHA_LIMITE = db.Column(db.DateTime, nullable=True)
 
     HERRAMIENTAS = db.Column(db.Text, nullable=True)
     TIEMPO_EMPLEADO = db.Column(db.String(50), nullable=True)
     ELIMINADA = db.Column(db.Boolean, default=False)
 
-    # --- NUEVOS CAMPOS PARA MOVIMIENTOS (AQUÍ ESTABA EL ERROR) ---
+    # Movimiento interno
     TIPO_ORDEN = db.Column(db.String(20), default="General")
     ID_LOTE_OBJETIVO = db.Column(db.Integer, db.ForeignKey('lote.ID_LOTE'), nullable=True)
     CANTIDAD_MOVIMIENTO = db.Column(db.Float, default=0)
     NUEVA_UBICACION = db.Column(db.String(100), nullable=True)
-    # -------------------------------------------------------------
+    ID_SECTOR_DESTINO = db.Column(db.Integer, db.ForeignKey('deposito_sector.ID_SECTOR'), nullable=True)
+    # ✅ NUEVO: maquinaria
+    ID_MAQUINARIA = db.Column(db.Integer, db.ForeignKey('maquinaria.ID_MAQUINARIA'), nullable=True)
 
-    # Relaciones SQL
+    # (Opcional recomendado) si querés destino estructurado
+    # ID_SECTOR_DESTINO = db.Column(db.Integer, db.ForeignKey('deposito_sector.ID_SECTOR'), nullable=True)
+    # UBICACION_DESTINO_DETALLE = db.Column(db.String(80), nullable=True)
+
     estado = db.relationship('EstadoOrden')
     deposito = db.relationship('Deposito')
     empleado = db.relationship('Empleado', backref='ordenes_asignadas')
     avances = db.relationship('AvanceOrden', backref='orden', cascade="all, delete-orphan")
 
+    maquinaria = db.relationship('Maquinaria')
+
     def to_dict(self):
+        emp_nombre = "Sin asignar"
+        emp_id = None
+        emp_avatar = None
+        if self.empleado:
+            emp_nombre = f"{self.empleado.NOMBRE} {self.empleado.APELLIDO}"
+            emp_id = self.ID_EMPLEADO
+            emp_avatar = self.empleado.usuario.AVATAR if self.empleado.usuario else None
+
         return {
             "id": self.ID_ORDEN,
             "titulo": self.TITULO,
@@ -359,14 +385,18 @@ class OrdenTrabajo(db.Model):
             "tiempo_empleado": self.TIEMPO_EMPLEADO or "",
             "deposito": self.deposito.NOMBRE if self.deposito else "-",
             "deposito_id": self.ID_DEPOSITO,
-            "empleado_nombre": f"{self.empleado.NOMBRE} {self.empleado.APELLIDO}" if self.empleado else "Sin asignar",
-            "empleado_id": self.ID_EMPLEADO,
-            "empleado_avatar": self.empleado.usuario.AVATAR if (self.empleado and self.empleado.usuario) else None,
-            
-            # Datos Movimiento
+            "empleado_nombre": emp_nombre,
+            "empleado_id": emp_id,
+            "empleado_avatar": emp_avatar,
+
             "tipo_orden": self.TIPO_ORDEN,
             "cantidad_mov": self.CANTIDAD_MOVIMIENTO,
-            "nueva_ubicacion": self.NUEVA_UBICACION
+            "nueva_ubicacion": self.NUEVA_UBICACION,
+
+            # ✅ nuevo dato
+            "maquinaria_id": self.ID_MAQUINARIA,
+            "maquinaria_nombre": self.maquinaria.NOMBRE_MAQUI if self.maquinaria else None,
+            "maquinaria_tipo": self.maquinaria.TIPO_MAQUI if self.maquinaria else None,
         }
 
 class AvanceOrden(db.Model):
@@ -566,33 +596,24 @@ class CategoriaGasto(db.Model):
 class Gasto(db.Model):
     __tablename__ = 'gasto'
     ID_GASTO = db.Column(db.Integer, primary_key=True)
-    
-    # Detalles
+
     TITULO = db.Column(db.String(100), nullable=False)
     DESCRIPCION = db.Column(db.String(255))
     MONTO = db.Column(db.Float, nullable=False)
     FECHA = db.Column(db.DateTime, default=datetime.datetime.now)
-    
-    # Relaciones
+
     ID_CATEGORIA = db.Column(db.Integer, db.ForeignKey('categoria_gasto.ID_CATEGORIA'), nullable=False)
     ID_USUARIO = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=False)
     ID_DEPOSITO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=True)
-    
-    # --- [NUEVO CAMPO] ---
-    ID_VEHICULO = db.Column(db.Integer, db.ForeignKey('vehiculo.ID_VEHICULO'), nullable=True)
-    # ---------------------
 
-    # Opcional: Comprobante
+    ID_VEHICULO = db.Column(db.Integer, db.ForeignKey('vehiculo.ID_VEHICULO'), nullable=True)
+
     COMPROBANTE = db.Column(db.String(255), nullable=True)
-    
-    # Objetos Relacionales
+
     categoria = db.relationship('CategoriaGasto')
     usuario = db.relationship('Usuario')
     deposito = db.relationship('Deposito')
-    
-    # --- [NUEVA RELACIÓN] ---
     vehiculo = db.relationship('Vehiculo')
-    # ------------------------
 
     def to_dict(self):
         return {
@@ -600,14 +621,64 @@ class Gasto(db.Model):
             "titulo": self.TITULO,
             "descripcion": self.DESCRIPCION,
             "monto": self.MONTO,
-            "fecha": self.FECHA.strftime('%Y-%m-%d %H:%M'),
-            "fecha_iso": self.FECHA.strftime('%Y-%m-%d'),
+            "fecha": self.FECHA.strftime('%Y-%m-%d %H:%M') if self.FECHA else "",
+            "fecha_iso": self.FECHA.strftime('%Y-%m-%d') if self.FECHA else "",
             "categoria": self.categoria.NOMBRE if self.categoria else "General",
             "color": self.categoria.COLOR if self.categoria else "#ccc",
-            "autor": f"{self.usuario.empleado.NOMBRE} {self.usuario.empleado.APELLIDO}" if self.usuario and self.usuario.empleado else self.usuario.CORREO,
+            "autor": (
+                f"{self.usuario.empleado.NOMBRE} {self.usuario.empleado.APELLIDO}"
+                if (self.usuario and self.usuario.empleado) else (self.usuario.CORREO if self.usuario else "")
+            ),
             "deposito": self.deposito.NOMBRE if self.deposito else "General",
-            # --- [NUEVO DATO EN JSON] ---
-            "vehiculo": f"{self.vehiculo.MARCA} ({self.vehiculo.MATRICULA})" if self.vehiculo else None,
+            "vehiculo": (
+                f"{self.vehiculo.MARCA} ({self.vehiculo.MATRICULA})"
+                if self.vehiculo else None
+            ),
             "vehiculo_id": self.ID_VEHICULO
-            # ----------------------------
         }
+
+    
+class DepositoSector(db.Model):
+    __tablename__ = 'deposito_sector'
+    ID_SECTOR = db.Column(db.Integer, primary_key=True)
+    ID_DEPOSITO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
+
+    CODIGO = db.Column(db.String(10), nullable=False)   # Ej: A, B, C
+    NOMBRE = db.Column(db.String(60), nullable=False)   # Ej: Pasillo B
+    ACTIVO = db.Column(db.Boolean, default=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('ID_DEPOSITO', 'CODIGO', name='uq_sector_dep_codigo'),
+    )
+
+    deposito = db.relationship('Deposito', backref=db.backref('sectores', lazy=True))
+
+class Maquinaria(db.Model):
+    __tablename__ = 'maquinaria'
+    ID_MAQUINARIA = db.Column(db.Integer, primary_key=True)
+    ID_DEPOSITO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=False)
+
+    NOMBRE_MAQUI = db.Column(db.String(80), nullable=False)
+    TIPO_MAQUI = db.Column(db.String(60), nullable=True)
+
+    ACTIVA_MAQUI = db.Column(db.Boolean, default=True)
+
+    # ✅ ALIAS para que tu código viejo (ACTIVA) NO rompa
+    ACTIVA = db.synonym('ACTIVA_MAQUI')
+    NOMBRE = db.synonym('NOMBRE_MAQUI')
+    TIPO = db.synonym('TIPO_MAQUI')
+    
+    OBSERVACIONES_MAQUI = db.Column(db.String(254), nullable=True)
+
+    deposito = db.relationship('Deposito', backref=db.backref('maquinarias', lazy=True))
+
+    def to_dict(self):
+        return {
+            "id": self.ID_MAQUINARIA,
+            "deposito_id": self.ID_DEPOSITO,
+            "nombre": self.NOMBRE_MAQUI,
+            "tipo": self.TIPO_MAQUI,
+            "activa": bool(self.ACTIVA_MAQUI),
+            "observaciones": self.OBSERVACIONES_MAQUI or ""
+        }
+

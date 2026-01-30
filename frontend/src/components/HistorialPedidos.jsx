@@ -10,8 +10,12 @@ const HistorialPedidos = ({ defaultView = "solicitudes", onAtenderPedido }) => {
   const [loading, setLoading] = useState(true);
 
   const navigate = useNavigate();
-  const userRole = sessionStorage.getItem("user_rol") || "";
-  const canManage = ["Master_Admin", "Admin"].includes(userRole);
+  const rawRole =
+    sessionStorage.getItem("user_rol") ||
+    sessionStorage.getItem("rol_nombre") ||
+    "";
+  const userRole = rawRole.trim().toLowerCase();
+  const canManage = ["master_admin", "admin", "administrador"].includes(userRole);
 
   const fetchData = async () => {
     setLoading(true);

@@ -51,6 +51,9 @@ const Materiales = () => {
   const [rolUser, setRolUser] = useState("");
   const [hasAccess, setHasAccess] = useState(false);
 
+  // ✅ NUEVA VARIABLE: Controla quién puede ver el botón de borrar
+  const canDelete = ["Master_Admin", "Admin"].includes(rolUser);
+
   const [formData, setFormData] = useState({
     codigo_unico: "",
     nombre: "",
@@ -447,8 +450,8 @@ const Materiales = () => {
                         <Edit size={18} />
                       </button>
 
-                      {/* ELIMINAR */}
-                      {hasAccess && (
+                      {/* ELIMINAR (SOLO SI TIENE PERMISO) */}
+                      {canDelete && (
                         <button
                           className="btn-icon danger"
                           onClick={() => handleDelete(m.ID_MATERIAL)}

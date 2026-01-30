@@ -12,6 +12,8 @@ import {
   Box,
   FileText,
   Trash2,
+  History,
+  Info // ✅ Nuevo icono importado
 } from "lucide-react";
 import "../styles/LotesModal.css";
 
@@ -26,6 +28,11 @@ const LotesModal = ({ material, onClose, depositos }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEstado] = useState("Todos");
   const [filterDeposito, setFilterDeposito] = useState("Todos");
+
+  // ✅ Estados para el modal de detalle (Info)
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [infoData, setInfoData] = useState(null);
+  const [loadingInfo, setLoadingInfo] = useState(false);
 
   const todayISO = () => new Date().toISOString().split("T")[0];
 
@@ -73,15 +80,34 @@ const LotesModal = ({ material, onClose, depositos }) => {
     if (!material?.ID_MATERIAL) return;
     setLoading(true);
     try {
-      const data = await apiFetch(
-        `${API_URL}/api/materiales/${material.ID_MATERIAL}/lotes`
-      );
+      const data = await apiFetch(`${API_URL}/api/materiales/${material.ID_MATERIAL}/lotes`);
       setLotes(data || []);
     } catch (error) {
       console.error(error);
       setLotes([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ✅ Función para abrir el modal de Info
+  const handleOpenInfo = async (lote) => {
+    const idInv = lote.id_inventario;
+    if (!idInv) return;
+
+    setShowInfoModal(true);
+    setInfoData(null);
+    setLoadingInfo(true);
+
+    try {
+      // Reutilizamos el endpoint de detalle de inventario
+      const data = await apiFetch(`${API_URL}/api/recursos/inventario-detalle/${idInv}`);
+      setInfoData(data || null);
+    } catch (e) {
+      console.error(e);
+      setInfoData(null); // Fallback si falla
+    } finally {
+      setLoadingInfo(false);
     }
   };
 
@@ -99,8 +125,7 @@ const LotesModal = ({ material, onClose, depositos }) => {
       const matchEstado = filterEstado === "Todos" || lote.estado === filterEstado;
 
       const matchDeposito =
-        filterDeposito === "Todos" ||
-        String(lote.deposito_id) === String(filterDeposito);
+        filterDeposito === "Todos" || String(lote.deposito_id) === String(filterDeposito);
 
       return matchTexto && matchEstado && matchDeposito;
     });
@@ -139,26 +164,37 @@ const LotesModal = ({ material, onClose, depositos }) => {
         observaciones: "",
       }));
     } catch (error) {
-      alert("Error: " + error.message);
+      alert("Error: " + (error?.message || "No se pudo registrar el lote"));
     }
   };
 
-  const handleToggleEstado = async (lote) => {
-    const nuevoEstado = lote.estado === "Dañado" ? "Disponible" : "Dañado";
-    if (!window.confirm(`¿Cambiar a ${nuevoEstado}?`)) return;
+  const setEstadoLote = async (lote, nuevoEstado) => {
+    const idInv = lote?.id_inventario;
+    if (!idInv) return alert("Este lote no tiene id_inventario, no puedo cambiarle el estado.");
+
+    if (!window.confirm(`¿Cambiar estado a "${nuevoEstado}"?`)) return;
 
     try {
-      await apiFetch(`${API_URL}/api/inventario/${lote.id_inventario}/estado`, {
+      await apiFetch(`${API_URL}/api/inventario/${idInv}/estado`, {
         method: "PUT",
         body: JSON.stringify({ estado: nuevoEstado }),
       });
-      loadLotes();
+      await loadLotes();
     } catch (e) {
-      alert(e.message);
+      alert(e?.message || "Error cambiando estado");
     }
   };
 
-  // ✅ DELETE: Master -> perma, otros -> soft
+  const handleToggleDanado = (lote) => {
+    const nuevoEstado = lote.estado === "Dañado" ? "Disponible" : "Dañado";
+    setEstadoLote(lote, nuevoEstado);
+  };
+
+  const handleToggleAntiguo = (lote) => {
+    const nuevoEstado = lote.estado === "Antiguo" ? "Disponible" : "Antiguo";
+    setEstadoLote(lote, nuevoEstado);
+  };
+
   const handleDeleteLote = async (lote) => {
     const idInv = lote?.id_inventario;
     if (!idInv) return alert("Este lote no tiene id_inventario, no puedo borrarlo.");
@@ -181,9 +217,9 @@ const LotesModal = ({ material, onClose, depositos }) => {
       await apiFetch(url, { method: "DELETE" });
 
       alert(esMaster ? "🗑️ Lote eliminado permanentemente." : "🧺 Lote enviado a papelera.");
-      loadLotes();
+      await loadLotes();
     } catch (e) {
-      alert("Error: " + e.message);
+      alert("Error: " + (e?.message || "No se pudo borrar el lote"));
     }
   };
 
@@ -210,6 +246,28 @@ const LotesModal = ({ material, onClose, depositos }) => {
         {cat}
       </span>
     );
+  };
+
+  const estadoStyles = (estado) => {
+    if (estado === "Dañado") {
+      return { bg: "#fee2e2", fg: "#991b1b" };
+    }
+    if (estado === "Antiguo") {
+      return { bg: "#fef3c7", fg: "#92400e" };
+    }
+    return { bg: "#dcfce7", fg: "#166534" };
+  };
+
+  const qtyColor = (estado) => {
+    if (estado === "Dañado") return "#ef4444";
+    if (estado === "Antiguo") return "#f59e0b";
+    return "#10b981";
+  };
+
+  const rowBg = (estado) => {
+    if (estado === "Dañado") return "#fef2f2";
+    if (estado === "Antiguo") return "#fffbeb";
+    return "transparent";
   };
 
   return (
@@ -293,9 +351,7 @@ const LotesModal = ({ material, onClose, depositos }) => {
                   type="date"
                   required
                   value={newIngreso.fecha_ingreso}
-                  onChange={(e) =>
-                    setNewIngreso({ ...newIngreso, fecha_ingreso: e.target.value })
-                  }
+                  onChange={(e) => setNewIngreso({ ...newIngreso, fecha_ingreso: e.target.value })}
                   className="input-dark"
                 />
               </div>
@@ -330,9 +386,7 @@ const LotesModal = ({ material, onClose, depositos }) => {
                 <div className={`obs-input-container ${obsOpen ? "open" : ""}`}>
                   <textarea
                     value={newIngreso.observaciones}
-                    onChange={(e) =>
-                      setNewIngreso({ ...newIngreso, observaciones: e.target.value })
-                    }
+                    onChange={(e) => setNewIngreso({ ...newIngreso, observaciones: e.target.value })}
                     className="input-dark obs-input"
                     placeholder="Haz clic para escribir tu observación..."
                     onFocus={() => setObsOpen(true)}
@@ -410,114 +464,200 @@ const LotesModal = ({ material, onClose, depositos }) => {
                     <th>Depósito</th>
                     <th>Cantidad</th>
                     <th>Estado</th>
-                    <th>Observación</th>
+                    {/* ❌ Columna Observación eliminada */}
                     <th style={{ textAlign: "right" }}>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan="7" style={{ textAlign: "center", padding: "30px" }}>
+                      <td colSpan="6" style={{ textAlign: "center", padding: "30px" }}>
                         Cargando lotes...
                       </td>
                     </tr>
                   ) : filteredLotes.length === 0 ? (
                     <tr>
-                      <td colSpan="7" style={{ textAlign: "center", padding: "30px", color: "#94a3b8" }}>
+                      <td colSpan="6" style={{ textAlign: "center", padding: "30px", color: "#94a3b8" }}>
                         No hay lotes registrados para este filtro.
                       </td>
                     </tr>
                   ) : (
-                    filteredLotes.map((lote, idx) => (
-                      <tr
-                        key={idx}
-                        style={{ backgroundColor: lote.estado === "Dañado" ? "#fef2f2" : "transparent" }}
-                      >
-                        <td style={{ fontFamily: "monospace", fontWeight: "700", color: "#6366f1" }}>
-                          {lote.codigo || "S/C"}
-                        </td>
-                        <td>{lote.fecha_ingreso}</td>
-                        <td style={{ fontWeight: "600" }}>{lote.deposito}</td>
-                        <td
-                          style={{
-                            fontWeight: "700",
-                            color: lote.estado === "Dañado" ? "#ef4444" : "#10b981",
-                          }}
-                        >
-                          {lote.cantidad} {material?.UNIDAD || material?.UNIDAD_MEDIDA}
-                        </td>
-                        <td>
-                          <span
-                            style={{
-                              backgroundColor: lote.estado === "Dañado" ? "#fee2e2" : "#dcfce7",
-                              color: lote.estado === "Dañado" ? "#991b1b" : "#166534",
-                              padding: "4px 8px",
-                              borderRadius: "6px",
-                              fontWeight: "700",
-                              fontSize: "0.75rem",
-                            }}
-                          >
-                            {lote.estado}
-                          </span>
-                        </td>
-                        <td
-                          style={{
-                            fontSize: "0.85rem",
-                            color: "#64748b",
-                            maxWidth: "200px",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                          title={lote.observaciones || ""}
-                        >
-                          {lote.observaciones || "-"}
-                        </td>
-                        <td style={{ textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                          {/* Toggle estado */}
-                          <button
-                            style={{
-                              backgroundColor: lote.estado === "Dañado" ? "#22c55e" : "#ef4444",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "6px",
-                              padding: "6px",
-                              cursor: "pointer",
-                              display: "inline-flex",
-                            }}
-                            onClick={() => handleToggleEstado(lote)}
-                            title={lote.estado === "Dañado" ? "Marcar como Disponible" : "Marcar como Dañado"}
-                          >
-                            {lote.estado === "Dañado" ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
-                          </button>
+                    filteredLotes.map((lote, idx) => {
+                      const key = lote?.id_inventario || lote?.codigo || idx;
+                      const st = estadoStyles(lote.estado);
 
-                          {/* Delete (Master perma / otros soft) */}
-                          <button
+                      return (
+                        <tr
+                          key={key}
+                          style={{ backgroundColor: rowBg(lote.estado) }}
+                        >
+                          <td style={{ fontFamily: "monospace", fontWeight: "700", color: "#6366f1" }}>
+                            {lote.codigo || "S/C"}
+                          </td>
+                          <td>{lote.fecha_ingreso}</td>
+                          <td style={{ fontWeight: "600" }}>{lote.deposito}</td>
+                          <td
                             style={{
-                              backgroundColor: "#111827",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "6px",
-                              padding: "6px",
-                              cursor: "pointer",
-                              display: "inline-flex",
+                              fontWeight: "700",
+                              color: qtyColor(lote.estado),
                             }}
-                            onClick={() => handleDeleteLote(lote)}
-                            title="Borrar lote"
                           >
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                            {lote.cantidad} {material?.UNIDAD || material?.UNIDAD_MEDIDA}
+                          </td>
+                          <td>
+                            <span
+                              style={{
+                                backgroundColor: st.bg,
+                                color: st.fg,
+                                padding: "4px 8px",
+                                borderRadius: "6px",
+                                fontWeight: "700",
+                                fontSize: "0.75rem",
+                              }}
+                            >
+                              {lote.estado}
+                            </span>
+                          </td>
+                          {/* ❌ Celda Observación eliminada */}
+                          <td style={{ textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                            
+                            {/* ✅ Botón INFO (Ver Detalles) */}
+                            <button
+                                style={{
+                                    backgroundColor: "#3b82f6", // Azul info
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    padding: "6px",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                }}
+                                onClick={() => handleOpenInfo(lote)}
+                                title="Ver Detalles del Lote"
+                            >
+                                <Info size={16} />
+                            </button>
+
+                            {/* Toggle Dañado/Disponible */}
+                            <button
+                              style={{
+                                backgroundColor: lote.estado === "Dañado" ? "#22c55e" : "#ef4444",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "6px",
+                                padding: "6px",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                              }}
+                              onClick={() => handleToggleDanado(lote)}
+                              title={lote.estado === "Dañado" ? "Marcar como Disponible" : "Marcar como Dañado"}
+                            >
+                              {lote.estado === "Dañado" ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
+                            </button>
+
+                            {/* Toggle Antiguo/Disponible */}
+                            <button
+                              style={{
+                                backgroundColor: lote.estado === "Antiguo" ? "#22c55e" : "#f59e0b",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "6px",
+                                padding: "6px",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                              }}
+                              onClick={() => handleToggleAntiguo(lote)}
+                              title={lote.estado === "Antiguo" ? "Quitar Antiguo (Disponible)" : "Marcar como Antiguo"}
+                            >
+                              <History size={16} />
+                            </button>
+
+                            {/* Delete */}
+                            <button
+                              style={{
+                                backgroundColor: "#111827",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "6px",
+                                padding: "6px",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                              }}
+                              onClick={() => handleDeleteLote(lote)}
+                              title="Borrar lote"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
             </div>
           </div>
-
         </div>
       </div>
+
+      {/* ✅ MODAL DE INFO (DETALLES DEL LOTE) */}
+      {showInfoModal && (
+        <div className="lotes-modal-overlay" style={{zIndex: 1100}} onClick={() => setShowInfoModal(false)}>
+            <div className="lotes-modal-content" style={{ width: 500, height: "auto", maxHeight: "90vh" }} onClick={(e) => e.stopPropagation()}>
+                <div className="lotes-modal-header" style={{ borderBottom: "1px solid #eee", paddingBottom: 10 }}>
+                    <h2 style={{ margin: 0, fontSize: "1.1rem" }}>Detalle del Lote</h2>
+                    <button className="lotes-close-btn" onClick={() => setShowInfoModal(false)}>
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div style={{ padding: "20px", color: "#334155" }}>
+                    {loadingInfo ? (
+                        <div style={{ textAlign: "center", color: "#64748b" }}>Cargando información...</div>
+                    ) : !infoData ? (
+                        <div style={{ textAlign: "center", color: "#64748b" }}>No se encontró información.</div>
+                    ) : (
+                        <div style={{ display: "grid", gap: "12px" }}>
+                            <div><b>Material:</b> {infoData.material || "—"}</div>
+                            <div><b>Código material:</b> <span style={{ fontFamily: "monospace" }}>{infoData.codigo_material || "—"}</span></div>
+                            <div><b>Lote:</b> <span style={{ fontFamily: "monospace", fontWeight: "bold", color: "#6366f1" }}>{infoData.lote_codigo || infoData.id_lote}</span></div>
+                            <div><b>Estado:</b> {infoData.estado || "Disponible"}</div>
+                            <div><b>Disponible:</b> {infoData.cantidad_disponible} {infoData.unidad}</div>
+                            <div>
+                                <b>Sector actual:</b>{" "}
+                                {infoData.sector_codigo ? `${infoData.sector_codigo} - ${infoData.sector_nombre || ""}` : "—"}
+                                {infoData.ubicacion_detalle ? ` (${infoData.ubicacion_detalle})` : ""}
+                            </div>
+                            <div><b>Fecha ingreso:</b> {infoData.fecha_ingreso || "—"}</div>
+                            
+                            <div style={{ 
+                                marginTop: "10px", 
+                                background: "#f1f5f9", 
+                                padding: "10px", 
+                                borderRadius: "6px",
+                                borderLeft: "4px solid #cbd5e1"
+                            }}>
+                                <b>Observación:</b>
+                                <p style={{ margin: "5px 0 0 0", fontSize: "0.9rem", color: "#475569" }}>
+                                    {infoData.obs_lote || "Sin observaciones."}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div style={{ padding: "15px 20px", borderTop: "1px solid #eee", display: "flex", justifyContent: "flex-end" }}>
+                    <button 
+                        className="lotes-close-btn" 
+                        style={{ position: "static", background: "#ef4444", color: "white", borderRadius: "6px", padding: "6px 12px", width: "auto", height: "auto" }} 
+                        onClick={() => setShowInfoModal(false)}
+                    >
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 };
