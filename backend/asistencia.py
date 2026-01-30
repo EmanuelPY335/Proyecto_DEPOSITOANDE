@@ -5,6 +5,7 @@ from datetime import datetime, date
 from sqlalchemy import func
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from db import db, Asistencia, Deposito, Empleado, Usuario
+from audit_service import registrar_auditoria
 
 asistencia_bp = Blueprint("asistencia", __name__)
 
@@ -131,7 +132,6 @@ def _asistencia_to_dict(a: Asistencia):
         "estado_hoy": "EN_JORNADA" if salida is None else "SALIO",
     }
 
-
 @asistencia_bp.route("/qr-marcar", methods=["POST"])
 @jwt_required()
 def marcar_asistencia():
@@ -156,17 +156,14 @@ def marcar_asistencia():
         if qr_leido != QR_SECRETO:
             return jsonify({"success": False, "msg": "Código QR incorrecto."}), 403
 
-        # Identificar Usuario
         usuario = Usuario.query.get(user_id_int)
         if not usuario:
             return jsonify({"success": False, "msg": "Usuario no encontrado."}), 404
 
-        # ✅ Resolver empleado de forma robusta
         empleado_obj = _get_empleado_from_usuario(usuario, fallback_id=user_id_int)
         if not empleado_obj:
             return jsonify({"success": False, "msg": "No tienes un perfil de empleado asociado."}), 404
 
-        # Depósito asignado (seguridad)
         deposito_asignado = getattr(empleado_obj, "deposito", None)
         if not deposito_asignado:
             return jsonify({"success": False, "msg": "No tienes un depósito asignado. Contacta a RRHH."}), 403
@@ -182,8 +179,6 @@ def marcar_asistencia():
 
         distancia = calcular_distancia(lat_usuario, lon_usuario, dep_lat, dep_lon)
 
-        print(f"DEBUG: Empleado: {getattr(empleado_obj,'NOMBRE', '')} | Deposito: {deposito_asignado.NOMBRE} | Dist: {distancia:.2f}m")
-
         if distancia > radio_permitido:
             return jsonify({
                 "success": False,
@@ -198,10 +193,15 @@ def marcar_asistencia():
             func.date(Asistencia.FECHA_HORA_ENTRADA) == hoy
         ).first()
 
+        tipo_accion = "ASISTENCIA_ENTRADA"
+        detalle_accion = f"Marcó entrada en {deposito_asignado.NOMBRE}"
+
         if registro:
             if registro.FECHA_HORA_SALIDA is None:
                 registro.FECHA_HORA_SALIDA = ahora_datetime
                 mensaje = f"👋 Salida registrada en {deposito_asignado.NOMBRE}. ¡Hasta mañana!"
+                tipo_accion = "ASISTENCIA_SALIDA"
+                detalle_accion = f"Marcó salida en {deposito_asignado.NOMBRE}"
             else:
                 return jsonify({"success": False, "msg": "Ya has completado tu jornada de hoy."}), 400
         else:
@@ -216,6 +216,17 @@ def marcar_asistencia():
             mensaje = f"🚀 Entrada registrada en {deposito_asignado.NOMBRE}. ¡Buen trabajo!"
 
         db.session.commit()
+
+        # ✅ AUDITORÍA INYECTADA
+        registrar_auditoria(
+            usuario_id=usuario.ID_USUARIO,
+            accion_corta=tipo_accion,
+            detalle_largo=detalle_accion,
+            tabla="asistencia",
+            id_registro=registro.ID_ASISTENCIA if registro else nuevo_registro.ID_ASISTENCIA,
+            id_deposito_force=deposito_asignado.ID_DEPOSITO
+        )
+
         return jsonify({"success": True, "msg": mensaje})
 
     except Exception as e:

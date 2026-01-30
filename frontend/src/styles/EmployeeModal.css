@@ -1,6 +1,6 @@
 /* src/styles/EmployeeModal.css */
 
-/* --- VARIABLES (Copiadas de ProfileNew para consistencia) --- */
+/* --- VARIABLES --- */
 :root {
   --primary: #5865F2;
   --primary-dark: #4752C4;
@@ -18,7 +18,7 @@
   --white: #FFFFFF;
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --radius: 0.5rem;
-  --radius-xl: 1.5rem; /* Bordes más redondeados como la tarjeta de perfil */
+  --radius-xl: 1.5rem;
 }
 
 /* --- FONDO (BACKDROP) --- */
@@ -28,8 +28,8 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(17, 24, 39, 0.6); /* Un poco más oscuro para resaltar el modal */
-    backdrop-filter: blur(5px); /* Efecto cristal */
+    background-color: rgba(17, 24, 39, 0.6);
+    backdrop-filter: blur(5px);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -37,20 +37,32 @@
     animation: fadeIn 0.2s ease-out;
 }
 
-/* --- CONTENEDOR PRINCIPAL (Estilo Tarjeta Perfil) --- */
+/* --- CONTENEDOR PRINCIPAL (CON SCROLL) --- */
 .employee-modal-content {
     background: var(--white);
-    padding: 2.5rem; /* Más espacio interno */
-    border-radius: var(--radius-xl); /* Borde muy redondeado (24px) */
+    padding: 0; /* El padding lo manejan los hijos */
+    border-radius: var(--radius-xl);
     box-shadow: var(--shadow-lg), 0 20px 40px rgba(0, 0, 0, 0.1);
     border: 1px solid var(--gray-200);
     width: 100%;
-    max-width: 550px; /* Un poco más ancho */
-    max-height: 90vh;
-    overflow-y: auto;
+    max-width: 550px;
+    
+    /* ✅ CLAVE PARA EL SCROLL: */
+    max-height: 90vh;       /* Altura máxima relativa a la pantalla */
+    overflow-y: auto;       /* Habilita el scroll vertical */
+    overflow-x: hidden;     /* Evita scroll horizontal */
+    display: block;         /* Flujo normal para que el scroll incluya al banner */
+    
     position: relative;
     transform: scale(1);
     animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --- WRAPPER DEL CONTENIDO (PADDING) --- */
+.modal-content-body {
+    padding: 2.5rem;
+    padding-top: 0; /* Espacio reservado por el margen negativo del header */
+    position: relative;
 }
 
 /* --- ANIMACIONES --- */
@@ -68,36 +80,44 @@
 .employee-modal-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start; /* Alineado arriba para el botón cerrar */
     margin-bottom: 2rem;
-    padding-bottom: 0; /* Quitamos la línea divisoria para hacerlo más limpio */
+    /* margin-top negativo se maneja en el inline style del componente */
 }
 
 .employee-modal-header h2 {
     margin: 0;
-    font-size: 1.75rem; /* Título más grande como en el perfil */
+    font-size: 1.75rem;
     color: var(--gray-900);
     font-weight: 700;
     letter-spacing: -0.025em;
 }
 
+/* Botón cerrar flotante */
 .btn-close-modal {
-    background: transparent;
+    background: rgba(255, 255, 255, 0.8);
     border: none;
     cursor: pointer;
-    color: var(--gray-400);
+    color: var(--gray-600);
     padding: 0.5rem;
-    border-radius: var(--radius);
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    
+    /* Posición absoluta para que flote sobre el banner */
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 10;
 }
 
 .btn-close-modal:hover {
-    background-color: var(--gray-100);
-    color: var(--primary); /* Azul al pasar el mouse */
-    transform: rotate(90deg); /* Pequeña animación chula */
+    background-color: var(--white);
+    color: var(--primary);
+    transform: rotate(90deg);
 }
 
 /* --- FORMULARIO Y GRIDS --- */
@@ -124,7 +144,7 @@
     color: var(--gray-700);
 }
 
-/* --- INPUTS (Estilo idéntico a ProfileNew) --- */
+/* --- INPUTS --- */
 .form-input, .form-select {
     padding: 0.75rem 1rem;
     border: 1px solid var(--gray-300);
@@ -140,7 +160,7 @@
 
 .form-input:focus, .form-select:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.1); /* Anillo de enfoque azul */
+    box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.1);
 }
 
 .form-input:hover, .form-select:hover {
@@ -153,13 +173,13 @@
     display: flex;
     justify-content: flex-end;
     gap: 1rem;
-    padding-top: 0;
+    padding-bottom: 0.5rem;
 }
 
 .btn-cancel {
     padding: 0.75rem 1.5rem;
     border-radius: var(--radius);
-    border: 1px solid var(--gray-200); /* Borde sutil */
+    border: 1px solid var(--gray-200);
     background: var(--white);
     color: var(--gray-700);
     font-weight: 500;
@@ -173,30 +193,28 @@
     border-color: var(--gray-300);
 }
 
-/* Botón Guardar (Estilo Gradiente Verde del Perfil) */
 .btn-save {
     padding: 0.75rem 2rem;
     border-radius: var(--radius);
     border: none;
-    /* Mismo gradiente que el botón guardar del perfil */
-    background: linear-gradient(135deg, var(--success) 0%, #0D9488 100%);
+    /* El background se inyecta inline en el componente */
     color: var(--white);
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 .btn-save:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 12px -2px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.15);
 }
 
 .btn-save:active {
     transform: translateY(0);
 }
 
-/* --- Estado Toggle (Switch Moderno) --- */
+/* --- Estado Toggle --- */
 .status-toggle-wrapper {
     display: flex;
     align-items: center;
@@ -206,37 +224,4 @@
     background: var(--gray-50);
     border-radius: var(--radius);
     border: 1px solid var(--gray-200);
-}
-
-/* Si tienes un input type checkbox para el toggle, aquí hay un estilo base */
-.status-toggle-wrapper input[type="checkbox"] {
-    appearance: none;
-    width: 2.75rem;
-    height: 1.5rem;
-    background: var(--gray-300);
-    border-radius: 2rem;
-    position: relative;
-    cursor: pointer;
-    transition: background 0.3s;
-}
-
-.status-toggle-wrapper input[type="checkbox"]::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 1.25rem;
-    height: 1.25rem;
-    background: white;
-    border-radius: 50%;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
-    transition: transform 0.3s;
-}
-
-.status-toggle-wrapper input[type="checkbox"]:checked {
-    background: var(--success); /* Verde éxito al activar */
-}
-
-.status-toggle-wrapper input[type="checkbox"]:checked::after {
-    transform: translateX(1.25rem);
 }

@@ -4,6 +4,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import text, or_, bindparam
 from db import db, Material, Lote, Inventario, Deposito, EstadoInventario, Usuario
 from datetime import datetime
+from audit_service import registrar_auditoria
 
 materiales_bp = Blueprint("materiales", __name__)
 
@@ -150,13 +151,13 @@ def get_materiales():
         print(f"Error buscando materiales: {e}")
         return jsonify({"error": str(e)}), 500
 
-
 @materiales_bp.route("/materiales", methods=["POST"])
 @jwt_required()
 def create_material():
     if not tiene_permiso_materiales():
         return jsonify({"error": "Sin permisos"}), 403
     data = request.json
+    usuario = _get_usuario_actual()
     try:
         if Material.query.filter_by(CODIGO_UNICO=data.get("codigo_unico")).first():
             return jsonify({"error": "Código único ya existe"}), 400
@@ -171,6 +172,16 @@ def create_material():
         )
         db.session.add(nuevo)
         db.session.commit()
+
+        # ✅ AUDITORÍA
+        registrar_auditoria(
+            usuario_id=usuario.ID_USUARIO,
+            accion_corta="CREAR_MATERIAL",
+            detalle_largo=f"Creó material: {nuevo.NOMBRE} (Cód: {nuevo.CODIGO_UNICO})",
+            tabla="material",
+            id_registro=nuevo.ID_MATERIAL
+        )
+
         return jsonify({"success": True, "message": "Creado"}), 201
     except Exception as e:
         db.session.rollback()
@@ -182,6 +193,7 @@ def create_material():
 def modify_material(id):
     if not tiene_permiso_materiales():
         return jsonify({"error": "Sin permisos"}), 403
+    usuario = _get_usuario_actual()
     try:
         material = Material.query.get(id)
         if not material:
@@ -190,7 +202,16 @@ def modify_material(id):
         if request.method == "DELETE":
             db.session.delete(material)
             db.session.commit()
+
+            registrar_auditoria(
+                usuario_id=usuario.ID_USUARIO,
+                accion_corta="BORRAR_MATERIAL",
+                detalle_largo=f"Eliminó material: {material.NOMBRE}",
+                tabla="material",
+                id_registro=id
+            )
             return jsonify({"success": True, "message": "Eliminado"}), 200
+        
 
         data = request.json
         if "cantidad" in data:
@@ -204,7 +225,16 @@ def modify_material(id):
         if "stock_minimo" in data:
             material.STOCK_MINIMO = float(data["stock_minimo"])
         db.session.commit()
-        return jsonify({"success": True, "message": "Actualizado"}), 200
+        registrar_auditoria(
+                usuario_id=usuario.ID_USUARIO,
+                accion_corta="EDITAR_MATERIAL",
+                detalle_largo=f"Editó material: {material.NOMBRE}",
+                tabla="material",
+                id_registro=id
+            )
+        return jsonify({"success": True, "message": "Editado"}), 200
+    
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

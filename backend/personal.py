@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import text
 from db import db, Empleado, Usuario, Rol, Deposito
+from audit_service import registrar_auditoria
 
 personal_bp = Blueprint("personal", __name__)
 
@@ -145,7 +146,7 @@ def empleados_simple():
 def update_empleado(id_empleado):
     if not tiene_permiso_gestion_empleados():
         return jsonify({"message": "No tienes permisos para editar empleados."}), 403
-
+    current_user_id = get_jwt_identity()
     try:
         empleado = Empleado.query.get(id_empleado)
         if not empleado:
@@ -169,6 +170,14 @@ def update_empleado(id_empleado):
                     empleado.usuario.ID_ROL = nuevo_rol_id
 
         db.session.commit()
+        # ✅ AUDITORÍA
+        registrar_auditoria(
+            usuario_id=current_user_id,
+            accion_corta="EDITAR_EMPLEADO",
+            detalle_largo=f"Actualizó datos del empleado {empleado.NOMBRE} {empleado.APELLIDO}",
+            tabla="empleado",
+            id_registro=id_empleado
+        )
         return jsonify({"message": "Datos actualizados correctamente."}), 200
 
     except Exception as e:
@@ -184,7 +193,7 @@ def update_empleado(id_empleado):
 def toggle_estado_empleado(id_empleado):
     if not tiene_permiso_gestion_empleados():
         return jsonify({"message": "No tienes permisos para cambiar estado."}), 403
-
+    current_user_id = get_jwt_identity()
     try:
         empleado = Empleado.query.get(id_empleado)
         if not empleado:
@@ -194,6 +203,14 @@ def toggle_estado_empleado(id_empleado):
         db.session.commit()
         
         estado_str = "activado" if empleado.ESTADO_ACTIVO else "desactivado"
+        # ✅ AUDITORÍA
+        registrar_auditoria(
+            usuario_id=current_user_id,
+            accion_corta="CAMBIO_ESTADO_EMPLEADO",
+            detalle_largo=f"Empleado {empleado.NOMBRE} {empleado.APELLIDO} fue {estado_str}",
+            tabla="empleado",
+            id_registro=id_empleado
+        )
         return jsonify({"message": f"Empleado {estado_str} exitosamente."}), 200
 
     except Exception as e:

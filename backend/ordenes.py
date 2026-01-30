@@ -3,6 +3,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from datetime import datetime, date
 from sqlalchemy import text
+from audit_service import registrar_auditoria
 
 from db import (
     db,
@@ -471,6 +472,15 @@ def create_orden():
                 db.session.add(noti)
 
         db.session.commit()
+        # ✅ AUDITORÍA INYECTADA
+        registrar_auditoria(
+            usuario_id=user_id,
+            accion_corta="CREAR_ORDEN",
+            detalle_largo=f"Creó orden '{nueva_orden.TITULO}' ({nueva_orden.TIPO_ORDEN}).",
+            tabla="orden_trabajo",
+            id_registro=nueva_orden.ID_ORDEN,
+            id_deposito_force=id_deposito
+        )
         return jsonify({"success": True, "message": "Orden creada."}), 201
 
     except Exception as e:
@@ -486,12 +496,13 @@ def create_orden():
 def update_orden(id_orden):
     data = request.json or {}
     es_gestor = tiene_permiso_ordenes()
-
+    user_id = int(get_jwt_identity())
     try:
         orden = OrdenTrabajo.query.get(id_orden)
         if not orden:
             return jsonify({"error": "No encontrada"}), 404
-
+        audit_accion = "EDITAR_ORDEN"
+        audit_detalle = f"Editó orden #{id_orden}"
         # EDICIÓN INFO
         if data.get("accion") == "editar_info":
             if not es_gestor:
@@ -591,10 +602,12 @@ def update_orden(id_orden):
                 orden.PRIORIDAD = data.get("prioridad")
 
         db.session.commit()
+        registrar_auditoria(user_id, "EDITAR_ORDEN", f"Editó orden #{id_orden}", "orden_trabajo", id_orden, orden.ID_DEPOSITO)
         return jsonify({"success": True}), 200
 
     except Exception as e:
         db.session.rollback()
+
         return jsonify({"error": str(e)}), 500
 
 
@@ -639,6 +652,8 @@ def soft_delete_orden(id_orden):
         if o:
             o.ELIMINADA = True
             db.session.commit()
+            user_id = int(get_jwt_identity())
+            registrar_auditoria(user_id, "BORRAR_ORDEN", f"Envió a papelera la orden #{id_orden}", "orden_trabajo", id_orden, o.ID_DEPOSITO)
             return jsonify({"message": "Papelera"}), 200
     return jsonify({"error": "No autorizado"}), 403
 
@@ -648,11 +663,16 @@ def soft_delete_orden(id_orden):
 def perma_delete_orden(id_orden):
     if get_jwt().get("rol_nombre") != "Master_Admin":
         return jsonify({"error": "Solo Master Admin"}), 403
+    
     try:
+        orden = OrdenTrabajo.query.get(id_orden)
+        dep_id = orden.ID_DEPOSITO if orden else None
         Notificacion.query.filter_by(ID_ORDEN=id_orden).delete()
         AvanceOrden.query.filter_by(ID_ORDEN=id_orden).delete()
         OrdenTrabajo.query.filter_by(ID_ORDEN=id_orden).delete()
         db.session.commit()
+        user_id = int(get_jwt_identity())
+        registrar_auditoria(user_id, "ELIMINAR_ORDEN_PERMA", f"Eliminó permanentemente la orden #{id_orden}", "orden_trabajo", id_orden, dep_id)
         return jsonify({"message": "Eliminado permanentemente"}), 200
     except Exception as e:
         db.session.rollback()
@@ -679,7 +699,8 @@ def crear_orden_solicitud():
     data = request.json or {}
     id_solicitud = data.get('id_solicitud')
     id_empleado = data.get('id_empleado')
-
+    user_id = int(get_jwt_identity())
+    
     if not id_solicitud:
         return jsonify({"error": "Faltan datos (solicitud)"}), 400
 
@@ -735,7 +756,15 @@ def crear_orden_solicitud():
                 db.session.add(noti)
 
         db.session.commit()
-
+        # ✅ AUDITORÍA
+        registrar_auditoria(
+            usuario_id=user_id,
+            accion_corta="CREAR_ORDEN_SOLICITUD",
+            detalle_largo=f"Creó orden #{nueva_orden.ID_ORDEN} basada en Solicitud #{id_solicitud}",
+            tabla="orden_trabajo",
+            id_registro=nueva_orden.ID_ORDEN,
+            id_deposito_force=solicitud.ID_DEPOSITO_PROVEEDOR
+        )
         if usuario_empleado and 'noti' in locals():
             noti.ID_ORDEN = nueva_orden.ID_ORDEN
             db.session.commit()

@@ -5,7 +5,7 @@ from flask_cors import cross_origin
 from datetime import datetime
 import uuid
 import json
-
+from audit_service import registrar_auditoria
 from sqlalchemy import func, distinct
 from sqlalchemy.orm import aliased, joinedload
 
@@ -409,7 +409,14 @@ def crear_vale():
                 notificar_destino_recepcion_pendiente(vale)
 
         db.session.commit()
-
+        registrar_auditoria(
+        usuario_id=current_user_id,
+        accion_corta="CREAR_RUTA",
+        detalle_largo=f"Creó ruta {route_group_id} con {len(stops)} paradas",
+        tabla="vale",
+        id_registro=nuevo_vale.ID_VALE, # Opcional, es un grupo
+        id_deposito_force=id_origen
+    )
         return jsonify({
             "success": True,
             "message": "Ruta generada." + (" Aprobada." if estado_inicial == 2 else " Pendiente de aprobación."),
@@ -491,6 +498,14 @@ def aprobar_salida(id_vale):
         notificar_destino_recepcion_pendiente(vale)
 
         db.session.commit()
+        registrar_auditoria(
+        usuario_id=current_user_id,
+        accion_corta="APROBAR_SALIDA",
+        detalle_largo=f"Aprobó salida de vale #{id_vale}",
+        tabla="vale",
+        id_registro=id_vale,
+        id_deposito_force=vale.ID_DEPOSITO_ORIGEN
+    )
         return jsonify({"success": True, "message": "Salida aprobada."}), 200
 
     except Exception as e:
@@ -511,7 +526,7 @@ def rechazar_vale(id_vale):
         return jsonify({"error": "Vale no encontrado"}), 404
     if vale.ID_ESTADO_VALE != 1:
         return jsonify({"error": "El vale no está en estado pendiente"}), 400
-
+    current_user_id_si_tienes = get_jwt_identity()
     try:
         id_anulado = get_id_estado_vale_anulado()
         vale.ID_ESTADO_VALE = id_anulado
@@ -531,6 +546,14 @@ def rechazar_vale(id_vale):
         )
 
         db.session.commit()
+        # ✅ AUDITORÍA
+        registrar_auditoria(
+            usuario_id=current_user_id_si_tienes, # O sacar del token
+            accion_corta="RECHAZAR_VALE",
+            detalle_largo=f"Rechazó/Anuló vale #{id_vale}. Motivo: {motivo}",
+            tabla="vale",
+            id_registro=id_vale
+        )
         return jsonify({"success": True, "message": "Vale anulado correctamente."}), 200
 
     except Exception as e:
@@ -573,6 +596,15 @@ def confirmar_recepcion(id_vale):
                 vale.ID_USUARIO_RECEPTOR = current_user_id
 
             db.session.commit()
+            # ✅ AUDITORÍA
+            registrar_auditoria(
+                usuario_id=current_user_id,
+                accion_corta="RECEPCION_VALE",
+                detalle_largo=f"Recepcionó mercadería del vale #{id_vale}",
+                tabla="vale",
+                id_registro=id_vale,
+                id_deposito_force=vale.ID_DEPOSITO_DESTINO
+            )
             return jsonify({
                 "success": True,
                 "already_confirmed": True,

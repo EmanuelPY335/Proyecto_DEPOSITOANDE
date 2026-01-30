@@ -1,13 +1,16 @@
 // src/components/Sidebar.jsx
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom"; 
-// Importamos los iconos que faltaban: Map, Users, Clipboard
-import { Home, Settings, HelpCircle, FileText, Package, ArrowRightLeft, DollarSign, Map, Users, Clipboard } from "lucide-react"; 
+// ✅ 1. Importamos Activity
+import { Home, Settings, HelpCircle, FileText, Package, ArrowRightLeft, DollarSign, Map, Users, Clipboard, Activity } from "lucide-react"; 
 import { hasPermission } from "../utils/auth"; 
 
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
+
+  // ✅ 2. Definimos 'rol' obteniéndolo de la sesión
+  const rol = (sessionStorage.getItem("user_rol") || sessionStorage.getItem("rol_nombre") || "").trim();
 
   const handleLogout = () => {
     // 🔥 limpiar wizard persistido
@@ -16,15 +19,12 @@ const Sidebar = () => {
     localStorage.removeItem("wiz_stops");
     localStorage.removeItem("wiz_user");
 
-    // (opcional) si tenés otros flags en localStorage, los podés borrar también
-
     // limpiar sesión
     sessionStorage.clear();
 
     // navegar
     navigate("/", { replace: true });
   };
-
 
   const sidebarLinks = [];
 
@@ -43,7 +43,7 @@ const Sidebar = () => {
   if (hasPermission("gestion_materiales")) {
       sidebarLinks.push({ path: "/materiales", label: "Inventario", icon: <Package size={18} /> });
   }
-  
+   
   // 5. Movimientos (Protegido)
   if (hasPermission("gestion_movimientos")) {
       sidebarLinks.push({ path: "/movimientos", label: "Movimientos", icon: <ArrowRightLeft size={18} /> });
@@ -59,10 +59,6 @@ const Sidebar = () => {
       sidebarLinks.push({ path: "/empleados", label: "Empleados", icon: <Users size={18} /> });
   }
 
-  // 8. Informes (Protegido)
-  if (hasPermission("ver_reportes")) {
-      sidebarLinks.push({ path: "/reports", label: "Informes", icon: <FileText size={18} /> });
-  }
 
   // 9. Configuración
   if (hasPermission("gestion_roles")) {
@@ -86,13 +82,25 @@ const Sidebar = () => {
                 </Link>
               </li>
           ))}
+
+          {/* ✅ 3. Enlace de Auditoría corregido (Estilo sidebar-link y uso de variables definidas) */}
+          {(rol === "Master_Admin" || rol === "Admin") && (
+             <li>
+                <Link 
+                  to="/reportes" 
+                  className={`sidebar-link ${location.pathname === "/reportes" ? "active" : ""}`}
+                >
+                    <Activity size={18} />
+                    <span className="sidebar-label">Auditoría</span>
+                </Link>
+             </li>
+          )}
         </ul>
-        
-        {/* El style marginTop: 'auto' AHORA funcionará porque el padre es flex */}
+
+        {/* Botón Cerrar Sesión al fondo */}
         <ul style={{marginTop: 'auto', paddingBottom: '20px'}}> 
           <li>
               <button onClick={handleLogout} className="sidebar-link logout-btn">
-                {/* ... icono ... */}
                 <span className="sidebar-label">Cerrar Sesion</span>
               </button>
           </li>

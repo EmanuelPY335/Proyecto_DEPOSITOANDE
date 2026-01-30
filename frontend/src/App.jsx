@@ -18,6 +18,10 @@ import Materiales from "./pages/Materiales";
 import Movimientos from "./pages/Movimientos"; 
 import Layout from "./components/Layout";
 import Buzon from "./pages/Buzon";
+// src/App.jsx
+// ... imports
+import Reportes from "./pages/Reportes";
+
 
 // --- Lógica de Permisos ---
 const isLoggedIn = () => !!sessionStorage.getItem("access_token");
@@ -114,7 +118,8 @@ function App() {
               <Roles />
             </RoleRoute>
           } />
-
+// ... dentro de Routes
+          <Route path="/reportes" element={<ProtectedRoute fullWidth={true}><Reportes /></ProtectedRoute>} />
           {/* --- FALLBACK --- */}
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>

@@ -33,6 +33,9 @@ const normalizeEmpleado = (raw) => {
     rol: raw?.rol ?? raw?.ROL ?? raw?.rol_nombre ?? "",
     ID_DEPOSITO: raw?.ID_DEPOSITO ?? raw?.deposito_id ?? raw?.id_deposito ?? null,
     estado: raw?.estado ?? raw?.ESTADO ?? raw?.ESTADO_ACTIVO ?? raw?.ESTADO_ACTIVO_BOOL ?? raw?.ACTIVO ?? raw?.activo ?? raw?.ESTADO_ACTIVO === true,
+    // ✅ Aseguramos que banner_color esté disponible (o default)
+    banner_color: raw?.BANNER_COLOR || raw?.banner_color || "#5865F2",
+    avatar: raw?.AVATAR || raw?.avatar || null
   };
 };
 
@@ -187,28 +190,38 @@ const Empleados = () => {
       .join(" ");
   };
 
-  const getAvatarColor = (name) => {
-    const colors = ["#ef4444", "#f97316", "#f59e0b", "#10b981", "#3b82f6", "#6366f1", "#8b5cf6", "#ec4899"];
-    const charCode = name ? name.charCodeAt(0) : 0;
-    return colors[charCode % colors.length];
-  };
-
+  // ✅ ACTUALIZADO: Usa el BANNER_COLOR del empleado
   const renderAvatar = (empleado) => {
-    if (empleado.AVATAR) {
-      const imageUrl = `${API}${empleado.AVATAR}`;
+    const bannerColor = empleado.banner_color || "#5865F2"; // Fallback por si acaso
+
+    if (empleado.avatar) {
+      const imageUrl = `${API}${empleado.avatar}`;
       return (
-        <img
-          src={imageUrl}
-          alt={empleado.nombre}
-          className="avatar-img"
-          onError={(e) => {
-            e.target.style.display = "none";
-          }}
-        />
+        <div className="avatar-wrapper" style={{ borderColor: bannerColor }}>
+             <img
+            src={imageUrl}
+            alt={empleado.nombre}
+            className="avatar-img"
+            onError={(e) => {
+                e.target.style.display = "none";
+                e.target.parentElement.style.backgroundColor = bannerColor;
+                e.target.parentElement.classList.add("avatar-fallback");
+                e.target.parentElement.innerText = empleado.nombre ? empleado.nombre.charAt(0).toUpperCase() : "?";
+            }}
+            />
+        </div>
       );
     }
+    
+    // Si no hay avatar, usamos el BANNER_COLOR como fondo del placeholder
     return (
-      <div className="avatar-placeholder" style={{ backgroundColor: getAvatarColor(empleado.nombre) }}>
+      <div 
+        className="avatar-placeholder" 
+        style={{ 
+            backgroundColor: bannerColor,
+            boxShadow: `0 0 10px ${bannerColor}40` // Sombra suave del mismo color
+        }}
+      >
         {empleado.nombre ? empleado.nombre.charAt(0).toUpperCase() : <User size={16} />}
       </div>
     );

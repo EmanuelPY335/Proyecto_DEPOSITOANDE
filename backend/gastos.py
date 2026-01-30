@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from db import db, Gasto, CategoriaGasto, Vehiculo, Usuario, Deposito
 from sqlalchemy import extract, desc
 from roles_permisos import permission_required
+from audit_service import registrar_auditoria
 
 gastos_bp = Blueprint('gastos', __name__)
 
@@ -110,6 +111,7 @@ def get_auxiliares():
     }), 200
 
 # --- POST: CREAR GASTO ---
+# --- POST: CREAR GASTO (AUDITADO) ---
 @gastos_bp.route('/gastos', methods=['POST'])
 @permission_required("gestion_gastos")
 @jwt_required()
@@ -121,10 +123,7 @@ def create_gasto():
     if not data.get('titulo') or not data.get('monto') or not data.get('categoria_id'):
         return jsonify({"error": "Faltan datos obligatorios"}), 400
 
-    # Asignar automáticamente al depósito del usuario
     id_deposito_usuario = usuario.empleado.ID_DEPOSITO if usuario.empleado else None
-    
-    # Si es Master Admin y mandó un ID_DEPOSITO manual (futura mejora), úsalo. Si no, usa el suyo o 1.
     if usuario.rol.NOMBRE_ROL == "Master_Admin" and data.get('id_deposito'):
          id_deposito_usuario = data.get('id_deposito')
 
@@ -132,22 +131,33 @@ def create_gasto():
         TITULO=data['titulo'],
         DESCRIPCION=data.get('descripcion', ''),
         MONTO=data['monto'],
-        FECHA=db.func.current_timestamp(), # Fecha actual del servidor
+        FECHA=db.func.current_timestamp(),
         ID_CATEGORIA=data['categoria_id'],
         ID_USUARIO=current_user_id,
-        ID_DEPOSITO=id_deposito_usuario, # <--- SE GUARDA CON EL DEPÓSITO DEL USUARIO
+        ID_DEPOSITO=id_deposito_usuario,
         ID_VEHICULO=data.get('id_vehiculo') if data.get('id_vehiculo') else None
     )
 
     try:
         db.session.add(nuevo_gasto)
         db.session.commit()
+
+        # ✅ AUDITORÍA INYECTADA
+        registrar_auditoria(
+            usuario_id=current_user_id,
+            accion_corta="CREAR_GASTO",
+            detalle_largo=f"Registró gasto: {data['titulo']} por {data['monto']} Gs.",
+            tabla="gasto",
+            id_registro=nuevo_gasto.ID_GASTO,
+            id_deposito_force=id_deposito_usuario
+        )
+
         return jsonify({"message": "Gasto registrado"}), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-# --- DELETE: ELIMINAR GASTO ---
+# --- DELETE: ELIMINAR GASTO (AUDITADO) ---
 @gastos_bp.route('/gastos/<int:id>', methods=['DELETE'])
 @permission_required("gestion_gastos")
 @jwt_required()
@@ -157,7 +167,6 @@ def delete_gasto(id):
     
     gasto = Gasto.query.get_or_404(id)
 
-    # Seguridad: Solo borrar si es Master Admin O si el gasto pertenece a mi depósito
     es_master = usuario.rol.NOMBRE_ROL == "Master_Admin"
     es_mi_deposito = usuario.empleado and usuario.empleado.ID_DEPOSITO == gasto.ID_DEPOSITO
 
@@ -165,8 +174,22 @@ def delete_gasto(id):
         return jsonify({"error": "No tienes permiso para eliminar este gasto"}), 403
 
     try:
+        info_gasto = f"{gasto.TITULO} ({gasto.MONTO})"
+        id_dep_gasto = gasto.ID_DEPOSITO
+        
         db.session.delete(gasto)
         db.session.commit()
+
+        # ✅ AUDITORÍA INYECTADA
+        registrar_auditoria(
+            usuario_id=current_user_id,
+            accion_corta="BORRAR_GASTO",
+            detalle_largo=f"Eliminó el gasto: {info_gasto}",
+            tabla="gasto",
+            id_registro=id,
+            id_deposito_force=id_dep_gasto
+        )
+
         return jsonify({"message": "Eliminado"}), 200
     except Exception as e:
         db.session.rollback()

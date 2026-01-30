@@ -681,4 +681,47 @@ class Maquinaria(db.Model):
             "activa": bool(self.ACTIVA_MAQUI),
             "observaciones": self.OBSERVACIONES_MAQUI or ""
         }
+# [backend/db.py] - Agregar al final
 
+# [Al final de db.py]
+
+class Auditoria(db.Model):
+    __tablename__ = 'auditoria'
+    ID_AUDITORIA = db.Column(db.Integer, primary_key=True)
+    
+    ID_USUARIO = db.Column(db.Integer, db.ForeignKey('usuario.ID_USUARIO'), nullable=True)
+    NOMBRE_USUARIO = db.Column(db.String(100)) 
+    ROL_MOMENTO = db.Column(db.String(50))     
+    
+    ID_DEPOSITO = db.Column(db.Integer, db.ForeignKey('deposito.ID_DEPOSITO'), nullable=True)
+    NOMBRE_DEPOSITO = db.Column(db.String(60)) 
+    
+    ACCION_REALIZADA = db.Column(db.String(100))
+    DETALLE = db.Column(db.Text)
+    
+    TABLA_AFECTADA = db.Column(db.String(60))
+    ID_REGISTRO_AFECTADO = db.Column(db.Integer)
+    
+    IP_ADDRESS = db.Column(db.String(45), nullable=True)
+    FECHA_HORA = db.Column(db.DateTime, default=datetime.datetime.now)
+
+    usuario = db.relationship('Usuario')
+    deposito = db.relationship('Deposito')
+
+ # En backend/db.py, busca la clase Auditoria y actualiza el to_dict:
+
+    def to_dict(self):
+        return {
+            "id": self.ID_AUDITORIA,
+            "fecha": self.FECHA_HORA.strftime('%d/%m/%Y %H:%M') if self.FECHA_HORA else "-",
+            "usuario": self.NOMBRE_USUARIO,
+            "rol": self.ROL_MOMENTO,
+            "deposito": self.NOMBRE_DEPOSITO,
+            "accion": self.ACCION_REALIZADA,
+            "detalle": self.DETALLE,
+            
+            # ✅ DATOS TÉCNICOS AGREGADOS
+            "tabla": self.TABLA_AFECTADA,
+            "id_registro": self.ID_REGISTRO_AFECTADO,
+            "ip": self.IP_ADDRESS
+        }

@@ -29,6 +29,8 @@ from gastos import gastos_bp
 from db import (
     db, Usuario, Empleado, Deposito, PasswordResetToken, Rol, Permiso, permiso_x_rol
 )
+from reportes_routes import reportes_bp
+from audit_service import registrar_auditoria
 
 # -----------------------------------------------------------------
 # 🔧 CONFIGURACIÓN PRINCIPAL
@@ -88,6 +90,7 @@ app.register_blueprint(gastos_bp, url_prefix="/api")
 app.register_blueprint(depositos_bp)
 app.register_blueprint(buzon_bp)
 app.register_blueprint(vehiculos_bp, url_prefix="/api")
+app.register_blueprint(reportes_bp, url_prefix='/api')
 
 # --- CORS (Con soporte para React y Raspberry Pi) ---
 # --- CORS (Con soporte para React y Raspberry Pi) ---
@@ -190,6 +193,17 @@ def login():
                 "id_empleado": user.ID_EMPLEADO
             }
         )
+
+        # ✅ AUDITORÍA INYECTADA
+        # No bloqueamos el login si falla la auditoría, solo logueamos el error en consola
+        try:
+            registrar_auditoria(
+                usuario_id=user.ID_USUARIO,
+                accion_corta="LOGIN",
+                detalle_largo="Inicio de sesión exitoso"
+            )
+        except Exception as e:
+            print(f"⚠️ Error audit login: {e}")
 
         return jsonify({
             "message": "Login exitoso",
